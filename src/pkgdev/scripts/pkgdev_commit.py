@@ -4,6 +4,7 @@ import subprocess
 from collections import defaultdict
 
 from snakeoil.cli import arghparse
+from snakeoil.cli.exceptions import UserException
 from snakeoil.mappings import OrderedSet
 from pkgcore.repository import errors as repo_errors
 
@@ -21,16 +22,61 @@ commit.add_argument(
     help='pretend to create commit')
 
 
-def commit_msg_prefix(diff_changes):
+@commit.bind_delayed_default(999, 'repo')
+def _determine_repo(namespace, attr):
+    try:
+        repo = namespace.domain.find_repo(
+            os.getcwd(), config=namespace.config, configure=False)
+    except (repo_errors.InitializationError, IOError) as e:
+        commit.error(str(e))
+    setattr(namespace, attr, repo)
+
+
+@commit.bind_delayed_default(1000, 'changes')
+def _git_changes(namespace, attr):
+    diff_args = ['--name-only', '-z']
+    if not namespace.all:
+        # only check for staged changes
+        diff_args.append('--cached')
+
+    try:
+        p = subprocess.run(
+            ['git', 'diff-index'] + diff_args + ['HEAD'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            check=True, encoding='utf8')
+    except FileNotFoundError:
+        commit.error('git not found')
+    except subprocess.CalledProcessError as e:
+        error = e.stderr.splitlines()[0]
+        commit.error(error)
+
+    # if no changes exist, exit early
+    if not p.stdout:
+        changes_type = 'staged changes' if not namespace.all else 'changes'
+        raise UserException(f'no {changes_type} exist')
+
+    # parse changes
+    changes = defaultdict(OrderedSet)
+    for path in p.stdout.strip('\x00').split('\x00'):
+        path_components = path.split(os.sep)
+        if path_components[0] in namespace.repo.categories:
+            changes['pkgs'].add(os.sep.join(path_components[:2]))
+        else:
+            changes[path_components[0]].add(path)
+
+    setattr(namespace, attr, changes)
+
+
+def commit_msg_prefix(git_changes):
     """Determine commit message prefix using GLEP 66 as a guide.
 
     See https://www.gentoo.org/glep/glep-0066.html#commit-messages for
     details.
     """
     # changes limited to a single type
-    if len(diff_changes) == 1:
-        change_type = next(iter(diff_changes))
-        changes = diff_changes[change_type]
+    if len(git_changes) == 1:
+        change_type = next(iter(git_changes))
+        changes = git_changes[change_type]
         if len(changes) == 1:
             change = changes[0]
             # changes limited to a single object
@@ -59,46 +105,8 @@ def commit_msg_prefix(diff_changes):
 
 @commit.bind_main_func
 def _commit(options, out, err):
-    # determine repo
-    try:
-        repo = options.domain.find_repo(
-            os.getcwd(), config=options.config, configure=False)
-    except (repo_errors.InitializationError, IOError) as e:
-        commit.error(str(e))
-
-    diff_args = ['--name-only', '-z']
-    if not options.all:
-        # only check for staged changes
-        diff_args.append('--cached')
-
-    try:
-        p = subprocess.run(
-            ['git', 'diff-index'] + diff_args + ['HEAD'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            check=True, encoding='utf8')
-    except FileNotFoundError:
-        commit.error('git not found')
-    except subprocess.CalledProcessError as e:
-        error = e.stderr.splitlines()[0]
-        commit.error(error)
-
-    # if no changes exist, exit early
-    if not p.stdout:
-        changes = 'staged changes' if not options.all else 'changes'
-        out.write(f'{commit.prog}: no {changes} exist')
-        return 0
-
-    # parse changes
-    diff_changes = defaultdict(OrderedSet)
-    for path in p.stdout.strip('\x00').split('\x00'):
-        path_components = path.split(os.sep)
-        if path_components[0] in repo.categories:
-            diff_changes['pkgs'].add(os.sep.join(path_components[:2]))
-        else:
-            diff_changes[path_components[0]].add(path)
-
     commit_args = []
-    if repo.repo_id == 'gentoo':
+    if options.repo.repo_id == 'gentoo':
         # gentoo repo requires signoffs and signed commits
         commit_args.extend(['--signoff', '--gpg-sign'])
     if options.dry_run:
@@ -109,7 +117,7 @@ def _commit(options, out, err):
         commit_args.append('--all')
 
     # determine commit message prefix
-    msg_prefix = commit_msg_prefix(diff_changes)
+    msg_prefix = commit_msg_prefix(options.changes)
 
     if options.message:
         # ignore determined prefix when using custom prefix
