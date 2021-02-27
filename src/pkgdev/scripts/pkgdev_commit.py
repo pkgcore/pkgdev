@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+import tempfile
 from collections import defaultdict
 
 from pkgcore.ebuild.atom import atom as atom_cls
@@ -115,8 +116,13 @@ def _commit_args(namespace, attr):
             message = namespace.message
         args.extend(['-m', message])
     else:
-        # open editor for message using determined prefix
-        args.extend(['-m', msg_prefix, '-e'])
+        # open editor using determined prefix as commit template
+        template = tempfile.NamedTemporaryFile(mode='w')
+        template.write(msg_prefix)
+        template.flush()
+        args.extend(['-t', template.name])
+        # make sure tempfile isn't garbage collected until it's used
+        namespace.commit_template = template
 
     setattr(namespace, attr, args)
 
