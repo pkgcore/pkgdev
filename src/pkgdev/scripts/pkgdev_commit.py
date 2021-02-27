@@ -6,15 +6,14 @@ from collections import defaultdict
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
-from snakeoil.cli import arghparse
 from snakeoil.mappings import OrderedSet
 
-from .argparsers import cwd_repo_argparser, git_argparser
+from .argparsers import GitArgumentParser, cwd_repo_argparser
 
 
-commit = arghparse.ArgumentParser(
+commit = GitArgumentParser(
     prog='pkgdev commit', description='create git commit',
-    parents=(git_argparser, cwd_repo_argparser))
+    parents=(cwd_repo_argparser,))
 commit.add_argument(
     '-m', '--message',
     help='specify commit message')
@@ -34,23 +33,11 @@ add_actions.add_argument(
 @commit.bind_delayed_default(1000, 'changes')
 def _git_changes(namespace, attr):
     if namespace.git_add_arg:
-        try:
-            subprocess.run(
-                [namespace.git, 'add', namespace.git_add_arg, namespace.cwd],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                check=True, encoding='utf8')
-        except subprocess.CalledProcessError as e:
-            error = e.stderr.splitlines()[0]
-            commit.error(error)
+        commit.run_git(['add', namespace.git_add_arg, namespace.cwd])
 
-    try:
-        p = subprocess.run(
-            [namespace.git, 'diff-index', '--name-only', '--cached', '-z', 'HEAD'],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            check=True, encoding='utf8')
-    except subprocess.CalledProcessError as e:
-        error = e.stderr.splitlines()[0]
-        commit.error(error)
+    p = commit.run_git(
+        ['diff-index', '--name-only', '--cached', '-z', 'HEAD'],
+        stdout=subprocess.PIPE)
 
     # if no changes exist, exit early
     if not p.stdout:
@@ -146,22 +133,11 @@ def _commit(options, out, err):
             commit.error('failed generating manifests')
 
         # stage all Manifest files
-        try:
-            subprocess.run(
-                [options.git, 'add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                cwd=options.repo.location, check=True, encoding='utf8')
-        except subprocess.CalledProcessError as e:
-            error = e.stderr.splitlines()[0]
-            commit.error(error)
+        commit.run_git(
+            ['add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
+            cwd=options.repo.location)
 
     # create commit
-    try:
-        subprocess.run(
-            [options.git, 'commit'] + options.commit_args,
-            check=True, stderr=subprocess.PIPE, encoding='utf8')
-    except subprocess.CalledProcessError as e:
-        error = e.stderr.splitlines()[0]
-        commit.error(error)
+    commit.run_git(['commit'] + options.commit_args)
 
     return 0

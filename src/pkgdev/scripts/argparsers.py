@@ -1,22 +1,29 @@
 import os
+import subprocess
 
 from pkgcore.repository import errors as repo_errors
-from snakeoil.cli import arghparse
+from snakeoil.cli.arghparse import ArgumentParser
 from snakeoil.cli.exceptions import UserException
-from snakeoil.process import CommandNotFound, find_binary
 
 
-git_argparser = arghparse.ArgumentParser(suppress=True)
-cwd_repo_argparser = arghparse.ArgumentParser(suppress=True)
+class GitArgumentParser(ArgumentParser):
+    """Argument parser with extra git functionality."""
+
+    def run_git(self, *args, **kwargs):
+        """Wrapper for running git via subprocess.run()."""
+        kwargs.setdefault('check', True)
+        kwargs.setdefault('stderr', subprocess.PIPE)
+        kwargs.setdefault('text', True)
+        try:
+            return subprocess.run(['git'] + list(*args), **kwargs)
+        except FileNotFoundError:
+            raise UserException('git not found')
+        except subprocess.CalledProcessError as e:
+            error = e.stderr.splitlines()[0]
+            raise UserException(error)
 
 
-@git_argparser.bind_delayed_default(0, 'git')
-def _determine_git(namespace, attr):
-    # verify git exists on the system
-    try:
-        setattr(namespace, attr, find_binary('git'))
-    except CommandNotFound:
-        raise UserException('git not found')
+cwd_repo_argparser = ArgumentParser(suppress=True)
 
 
 @cwd_repo_argparser.bind_delayed_default(0, 'repo')
