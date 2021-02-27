@@ -96,8 +96,14 @@ def _commit(options, out, err):
         commit_args.append('--all')
 
     if options.message:
-        commit_args.extend(['-m', f'{msg_prefix}{options.message}'])
+        # ignore determined prefix when using custom prefix
+        if not re.match(r'^\S+: ', options.message):
+            message = msg_prefix + options.message
+        else:
+            message = options.message
+        commit_args.extend(['-m', message])
     else:
+        # open editor for message using determined prefix
         commit_args.extend(['-m', msg_prefix, '-e'])
 
     # create commit
