@@ -4,6 +4,7 @@ import subprocess
 from pkgcheck import reporters, scan
 from pkgcore.repository import errors as repo_errors
 from snakeoil.cli import arghparse
+from snakeoil.cli.exceptions import UserException
 
 
 push = arghparse.ArgumentParser(
@@ -22,15 +23,23 @@ push.add_argument(
     help='pretend to push the commits')
 
 
+@push.bind_delayed_default(999, 'repo')
+def _determine_repo(namespace, attr):
+    namespace.cwd = os.getcwd()
+    try:
+        repo = namespace.domain.find_repo(
+            namespace.cwd, config=namespace.config, configure=False)
+    except (repo_errors.InitializationError, IOError) as e:
+        raise UserException(str(e))
+
+    if repo is None:
+        raise UserException('current working directory not in ebuild repo')
+
+    setattr(namespace, attr, repo)
+
+
 @push.bind_main_func
 def _push(options, out, err):
-    # determine repo
-    try:
-        repo = options.domain.find_repo(
-            os.getcwd(), config=options.config, configure=False)
-    except (repo_errors.InitializationError, IOError) as e:
-        push.error(str(e))
-
     # scan commits for QA issues
     pipe = scan(['--exit', '--commits'])
     with reporters.FancyReporter(out) as reporter:
@@ -47,7 +56,7 @@ def _push(options, out, err):
             return 1
 
     git_args = []
-    if repo.repo_id == 'gentoo':
+    if options.repo.repo_id == 'gentoo':
         # gentoo repo requires signed pushes
         git_args.append('--signed')
     if options.dry_run:
@@ -59,7 +68,7 @@ def _push(options, out, err):
     try:
         subprocess.run(
             ['git', 'push'] + git_args,
-            cwd=repo.location, check=True,
+            cwd=options.repo.location, check=True,
             stderr=subprocess.PIPE, encoding='utf8')
     except FileNotFoundError:
         push.error('git not found')
