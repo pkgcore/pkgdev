@@ -1,6 +1,6 @@
-"""collection of tools for Gentoo development and maintenance
+"""collection of tools for Gentoo development
 
-pkgdev provides a collection of tools for Gentoo development and maintenance.
+pkgdev provides a collection of tools for Gentoo development.
 """
 
 from pkgcore.util import commandline

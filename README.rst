@@ -2,8 +2,7 @@
 pkgdev
 ======
 
-pkgdev provides a collection of tools for Gentoo development and maintenance
-including:
+pkgdev provides a collection of tools for Gentoo development including:
 
 **pkgdev commit**: commit to an ebuild repository
 

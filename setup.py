@@ -31,7 +31,7 @@ setup(**dict(
     license='BSD',
     author='Tim Harder',
     author_email='radhermit@gmail.com',
-    description='collection of tools for Gentoo development and maintenance',
+    description='collection of tools for Gentoo development',
     url='https://github.com/pkgcore/pkgdev',
     cmdclass=dict(
         pkgdist_cmds,
