@@ -1,3 +1,5 @@
+|test| |coverage|
+
 ======
 pkgdev
 ======
@@ -51,3 +53,8 @@ the following::
 .. _pkgcore: https://github.com/pkgcore/pkgcore
 .. _snakeoil: https://github.com/pkgcore/snakeoil
 .. _dependencies: https://github.com/pkgcore/pkgdev/blob/master/requirements/install.txt
+
+.. |test| image:: https://github.com/pkgcore/pkgdev/workflows/test/badge.svg
+    :target: https://github.com/pkgcore/pkgdev/actions?query=workflow%3A%22test%22
+.. |coverage| image:: https://codecov.io/gh/pkgcore/pkgdev/branch/master/graph/badge.svg
+    :target: https://codecov.io/gh/pkgcore/pkgdev
