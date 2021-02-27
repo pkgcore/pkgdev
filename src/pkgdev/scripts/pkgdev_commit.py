@@ -36,7 +36,11 @@ def _determine_repo(namespace, attr):
         repo = namespace.domain.find_repo(
             os.getcwd(), config=namespace.config, configure=False)
     except (repo_errors.InitializationError, IOError) as e:
-        commit.error(str(e))
+        raise UserException(str(e))
+
+    if repo is None:
+        raise UserException('current working directory not in ebuild repo')
+
     setattr(namespace, attr, repo)
 
 
