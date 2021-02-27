@@ -68,11 +68,16 @@ def _commit(options, out, err):
         change_type = next(iter(diff_changes))
         changes = diff_changes[change_type]
         if len(changes) == 1:
+            change = changes[0]
             # changes limited to a single object
             if change_type == 'pkgs':
-                msg_prefix = f'{changes[0]}: '
+                msg_prefix = f'{change}: '
+            elif change_type == 'eclass' and change.endswith('.eclass'):
+                # use eclass file name
+                msg_prefix = f'{os.path.basename(change)}: '
             else:
-                msg_prefix = f'{os.path.dirname(changes[0])}: '
+                # use change path's parent directory
+                msg_prefix = f'{os.path.dirname(change)}: '
         else:
             # multiple changes of the same object type
             common_path = os.path.commonpath(changes)
