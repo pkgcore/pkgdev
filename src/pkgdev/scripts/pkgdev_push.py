@@ -1,9 +1,11 @@
 from pkgcheck import reporters, scan
+from snakeoil.cli import arghparse
 
-from .argparsers import GitArgumentParser, cwd_repo_argparser
+from .argparsers import cwd_repo_argparser
+from .. import git
 
 
-push = GitArgumentParser(
+push = arghparse.ArgumentParser(
     prog='pkgdev push', description='run QA checks on commits and push them',
     parents=(cwd_repo_argparser,))
 push.add_argument(
@@ -47,6 +49,6 @@ def _push(options, out, err):
     git_args.extend([options.remote, options.refspec])
 
     # push commits upstream
-    push.run_git(['push'] + git_args, cwd=options.repo.location)
+    git.run(['push'] + git_args, cwd=options.repo.location)
 
     return 0

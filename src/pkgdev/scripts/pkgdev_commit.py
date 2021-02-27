@@ -6,12 +6,14 @@ from collections import defaultdict
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
+from snakeoil.cli import arghparse
 from snakeoil.mappings import OrderedSet
 
-from .argparsers import GitArgumentParser, cwd_repo_argparser
+from .argparsers import cwd_repo_argparser
+from .. import git
 
 
-commit = GitArgumentParser(
+commit = arghparse.ArgumentParser(
     prog='pkgdev commit', description='create git commit',
     parents=(cwd_repo_argparser,))
 commit.add_argument(
@@ -33,9 +35,9 @@ add_actions.add_argument(
 @commit.bind_delayed_default(1000, 'changes')
 def _git_changes(namespace, attr):
     if namespace.git_add_arg:
-        commit.run_git(['add', namespace.git_add_arg, namespace.cwd])
+        git.run(['add', namespace.git_add_arg, namespace.cwd])
 
-    p = commit.run_git(
+    p = git.run(
         ['diff-index', '--name-only', '--cached', '-z', 'HEAD'],
         stdout=subprocess.PIPE)
 
@@ -133,11 +135,11 @@ def _commit(options, out, err):
             commit.error('failed generating manifests')
 
         # stage all Manifest files
-        commit.run_git(
+        git.run(
             ['add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
             cwd=options.repo.location)
 
     # create commit
-    commit.run_git(['commit'] + options.commit_args)
+    git.run(['commit'] + options.commit_args)
 
     return 0
