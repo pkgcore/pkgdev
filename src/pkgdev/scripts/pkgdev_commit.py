@@ -12,14 +12,19 @@ from pkgcore.repository import errors as repo_errors
 commit = arghparse.ArgumentParser(
     prog='pkgdev commit', description='create git commit')
 commit.add_argument(
-    '-a', '--all', action='store_true',
-    help='automatically stage files')
-commit.add_argument(
     '-m', '--message',
     help='specify commit message')
 commit.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit')
+
+add_actions = commit.add_mutually_exclusive_group()
+add_actions.add_argument(
+    '-u', '--update', dest='git_add_arg', const='--update', action='store_const',
+    help='stage all changed files')
+add_actions.add_argument(
+    '-a', '--all', dest='git_add_arg', const='--all', action='store_const',
+    help='stage all changed/new/removed files')
 
 
 @commit.bind_delayed_default(999, 'repo')
@@ -34,14 +39,21 @@ def _determine_repo(namespace, attr):
 
 @commit.bind_delayed_default(1000, 'changes')
 def _git_changes(namespace, attr):
-    diff_args = ['--name-only', '-z']
-    if not namespace.all:
-        # only check for staged changes
-        diff_args.append('--cached')
+    if namespace.git_add_arg:
+        try:
+            p = subprocess.run(
+                ['git', 'add', namespace.git_add_arg, os.getcwd()],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                check=True, encoding='utf8')
+        except FileNotFoundError:
+            commit.error('git not found')
+        except subprocess.CalledProcessError as e:
+            error = e.stderr.splitlines()[0]
+            commit.error(error)
 
     try:
         p = subprocess.run(
-            ['git', 'diff-index'] + diff_args + ['HEAD'],
+            ['git', 'diff-index', '--name-only', '--cached', '-z', 'HEAD'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             check=True, encoding='utf8')
     except FileNotFoundError:
@@ -52,8 +64,7 @@ def _git_changes(namespace, attr):
 
     # if no changes exist, exit early
     if not p.stdout:
-        changes_type = 'staged changes' if not namespace.all else 'changes'
-        raise UserException(f'no {changes_type} exist')
+        raise UserException('no staged changes exist')
 
     # parse changes
     changes = defaultdict(OrderedSet)
@@ -113,8 +124,6 @@ def _commit_args(namespace, attr):
         args.append('--dry-run')
     if namespace.verbosity:
         args.append('-v')
-    if namespace.all:
-        args.append('--all')
 
     # determine commit message prefix
     msg_prefix = commit_msg_prefix(namespace.changes)
