@@ -10,8 +10,8 @@ def run(*args, **kwargs):
     kwargs.setdefault('text', True)
     try:
         return subprocess.run(['git'] + list(*args), **kwargs)
-    except FileNotFoundError:
-        raise UserException('git not found')
+    except FileNotFoundError as e:
+        raise UserException(str(e))
     except subprocess.CalledProcessError as e:
         error = e.stderr.splitlines()[0]
         raise UserException(error)
