@@ -3,17 +3,18 @@ import re
 import subprocess
 from collections import defaultdict
 
-from snakeoil.cli import arghparse
-from snakeoil.cli.exceptions import UserException
-from snakeoil.mappings import OrderedSet
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.operations import observer as observer_mod
-from pkgcore.repository import errors as repo_errors
 from pkgcore.restrictions import packages
+from snakeoil.cli import arghparse
+from snakeoil.mappings import OrderedSet
+
+from .argparsers import cwd_repo_argparser
 
 
 commit = arghparse.ArgumentParser(
-    prog='pkgdev commit', description='create git commit')
+    prog='pkgdev commit', description='create git commit',
+    parents=(cwd_repo_argparser,))
 commit.add_argument(
     '-m', '--message',
     help='specify commit message')
@@ -30,21 +31,6 @@ add_actions.add_argument(
     help='stage all changed/new/removed files')
 
 
-@commit.bind_delayed_default(999, 'repo')
-def _determine_repo(namespace, attr):
-    namespace.cwd = os.getcwd()
-    try:
-        repo = namespace.domain.find_repo(
-            namespace.cwd, config=namespace.config, configure=False)
-    except (repo_errors.InitializationError, IOError) as e:
-        raise UserException(str(e))
-
-    if repo is None:
-        raise UserException('current working directory not in ebuild repo')
-
-    setattr(namespace, attr, repo)
-
-
 @commit.bind_delayed_default(1000, 'changes')
 def _git_changes(namespace, attr):
     if namespace.git_add_arg:
@@ -53,8 +39,6 @@ def _git_changes(namespace, attr):
                 ['git', 'add', namespace.git_add_arg, namespace.cwd],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 check=True, encoding='utf8')
-        except FileNotFoundError:
-            commit.error('git not found')
         except subprocess.CalledProcessError as e:
             error = e.stderr.splitlines()[0]
             commit.error(error)
@@ -64,15 +48,13 @@ def _git_changes(namespace, attr):
             ['git', 'diff-index', '--name-only', '--cached', '-z', 'HEAD'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             check=True, encoding='utf8')
-    except FileNotFoundError:
-        commit.error('git not found')
     except subprocess.CalledProcessError as e:
         error = e.stderr.splitlines()[0]
         commit.error(error)
 
     # if no changes exist, exit early
     if not p.stdout:
-        raise UserException('no staged changes exist')
+        commit.error('no staged changes exist')
 
     # parse changes
     changes = defaultdict(OrderedSet)
@@ -169,8 +151,6 @@ def _commit(options, out, err):
                 ['git', 'add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=options.repo.location, check=True, encoding='utf8')
-        except FileNotFoundError:
-            commit.error('git not found')
         except subprocess.CalledProcessError as e:
             error = e.stderr.splitlines()[0]
             commit.error(error)
@@ -180,8 +160,6 @@ def _commit(options, out, err):
         subprocess.run(
             ['git', 'commit'] + options.commit_args,
             check=True, stderr=subprocess.PIPE, encoding='utf8')
-    except FileNotFoundError:
-        commit.error('git not found')
     except subprocess.CalledProcessError as e:
         error = e.stderr.splitlines()[0]
         commit.error(error)

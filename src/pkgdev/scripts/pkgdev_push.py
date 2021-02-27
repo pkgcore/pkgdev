@@ -1,14 +1,14 @@
-import os
 import subprocess
 
 from pkgcheck import reporters, scan
-from pkgcore.repository import errors as repo_errors
 from snakeoil.cli import arghparse
-from snakeoil.cli.exceptions import UserException
+
+from .argparsers import cwd_repo_argparser
 
 
 push = arghparse.ArgumentParser(
-    prog='pkgdev push', description='run QA checks on commits and push them')
+    prog='pkgdev push', description='run QA checks on commits and push them',
+    parents=(cwd_repo_argparser,))
 push.add_argument(
     'remote', nargs='?', default='origin',
     help='remote git repository (default: origin)')
@@ -21,21 +21,6 @@ push.add_argument(
 push.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to push the commits')
-
-
-@push.bind_delayed_default(999, 'repo')
-def _determine_repo(namespace, attr):
-    namespace.cwd = os.getcwd()
-    try:
-        repo = namespace.domain.find_repo(
-            namespace.cwd, config=namespace.config, configure=False)
-    except (repo_errors.InitializationError, IOError) as e:
-        raise UserException(str(e))
-
-    if repo is None:
-        raise UserException('current working directory not in ebuild repo')
-
-    setattr(namespace, attr, repo)
 
 
 @push.bind_main_func
@@ -70,8 +55,6 @@ def _push(options, out, err):
             ['git', 'push'] + git_args,
             cwd=options.repo.location, check=True,
             stderr=subprocess.PIPE, encoding='utf8')
-    except FileNotFoundError:
-        push.error('git not found')
     except subprocess.CalledProcessError as e:
         error = e.stderr.splitlines()[0]
         push.error(error)
