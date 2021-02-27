@@ -6,7 +6,10 @@ from collections import defaultdict
 from snakeoil.cli import arghparse
 from snakeoil.cli.exceptions import UserException
 from snakeoil.mappings import OrderedSet
+from pkgcore.ebuild.atom import atom as atom_cls
+from pkgcore.operations import observer as observer_mod
 from pkgcore.repository import errors as repo_errors
+from pkgcore.restrictions import packages
 
 
 commit = arghparse.ArgumentParser(
@@ -41,7 +44,7 @@ def _determine_repo(namespace, attr):
 def _git_changes(namespace, attr):
     if namespace.git_add_arg:
         try:
-            p = subprocess.run(
+            subprocess.run(
                 ['git', 'add', namespace.git_add_arg, os.getcwd()],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 check=True, encoding='utf8')
@@ -144,6 +147,30 @@ def _commit_args(namespace, attr):
 
 @commit.bind_main_func
 def _commit(options, out, err):
+    # manifest all changed packages
+    if pkgs := options.changes.get('pkgs'):
+        pkgs = [atom_cls(x) for x in pkgs]
+        restriction = packages.OrRestriction(*pkgs)
+        failed = options.repo.operations.digests(
+            domain=options.domain,
+            restriction=restriction,
+            observer=observer_mod.null_output())
+        if any(failed):
+            commit.error('failed generating manifests')
+
+        # stage all Manifest files
+        try:
+            subprocess.run(
+                ['git', 'add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=options.repo.location, check=True, encoding='utf8')
+        except FileNotFoundError:
+            commit.error('git not found')
+        except subprocess.CalledProcessError as e:
+            error = e.stderr.splitlines()[0]
+            commit.error(error)
+
+    # create commit
     try:
         subprocess.run(
             ['git', 'commit'] + options.commit_args,
