@@ -3,12 +3,12 @@ import subprocess
 from pkgcheck import reporters, scan
 from snakeoil.cli import arghparse
 
-from .argparsers import cwd_repo_argparser
+from .argparsers import cwd_repo_argparser, git_argparser
 
 
 push = arghparse.ArgumentParser(
     prog='pkgdev push', description='run QA checks on commits and push them',
-    parents=(cwd_repo_argparser,))
+    parents=(git_argparser, cwd_repo_argparser))
 push.add_argument(
     'remote', nargs='?', default='origin',
     help='remote git repository (default: origin)')
@@ -52,7 +52,7 @@ def _push(options, out, err):
     # push commits upstream
     try:
         subprocess.run(
-            ['git', 'push'] + git_args,
+            [options.git, 'push'] + git_args,
             cwd=options.repo.location, check=True,
             stderr=subprocess.PIPE, encoding='utf8')
     except subprocess.CalledProcessError as e:

@@ -9,12 +9,12 @@ from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
 from snakeoil.mappings import OrderedSet
 
-from .argparsers import cwd_repo_argparser
+from .argparsers import cwd_repo_argparser, git_argparser
 
 
 commit = arghparse.ArgumentParser(
     prog='pkgdev commit', description='create git commit',
-    parents=(cwd_repo_argparser,))
+    parents=(git_argparser, cwd_repo_argparser))
 commit.add_argument(
     '-m', '--message',
     help='specify commit message')
@@ -36,7 +36,7 @@ def _git_changes(namespace, attr):
     if namespace.git_add_arg:
         try:
             subprocess.run(
-                ['git', 'add', namespace.git_add_arg, namespace.cwd],
+                [namespace.git, 'add', namespace.git_add_arg, namespace.cwd],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 check=True, encoding='utf8')
         except subprocess.CalledProcessError as e:
@@ -45,7 +45,7 @@ def _git_changes(namespace, attr):
 
     try:
         p = subprocess.run(
-            ['git', 'diff-index', '--name-only', '--cached', '-z', 'HEAD'],
+            [namespace.git, 'diff-index', '--name-only', '--cached', '-z', 'HEAD'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             check=True, encoding='utf8')
     except subprocess.CalledProcessError as e:
@@ -148,7 +148,7 @@ def _commit(options, out, err):
         # stage all Manifest files
         try:
             subprocess.run(
-                ['git', 'add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
+                [options.git, 'add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=options.repo.location, check=True, encoding='utf8')
         except subprocess.CalledProcessError as e:
@@ -158,7 +158,7 @@ def _commit(options, out, err):
     # create commit
     try:
         subprocess.run(
-            ['git', 'commit'] + options.commit_args,
+            [options.git, 'commit'] + options.commit_args,
             check=True, stderr=subprocess.PIPE, encoding='utf8')
     except subprocess.CalledProcessError as e:
         error = e.stderr.splitlines()[0]
