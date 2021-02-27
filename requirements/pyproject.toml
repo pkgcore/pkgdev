@@ -1,0 +1,6 @@
+[build-system]
+requires = [
+	"wheel", "setuptools",
+	"snakeoil~=0.9.3",
+]
+build-backend = "setuptools.build_meta"

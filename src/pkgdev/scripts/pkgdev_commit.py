@@ -1,0 +1,114 @@
+import os
+import re
+import subprocess
+from collections import defaultdict
+
+from snakeoil.cli import arghparse
+from snakeoil.mappings import OrderedSet
+from pkgcore.repository import errors as repo_errors
+
+
+commit = arghparse.ArgumentParser(
+    prog='pkgdev commit', description='create git commit')
+commit.add_argument(
+    '-a', '--all', action='store_true',
+    help='automatically stage files')
+commit.add_argument(
+    '-m', '--message',
+    help='specify commit message')
+commit.add_argument(
+    '-n', '--dry-run', action='store_true',
+    help='pretend to create commit')
+
+
+@commit.bind_main_func
+def _commit(options, out, err):
+    # determine repo
+    try:
+        repo = options.domain.find_repo(
+            os.getcwd(), config=options.config, configure=False)
+    except (repo_errors.InitializationError, IOError) as e:
+        commit.error(str(e))
+
+    diff_args = ['--name-only', '-z']
+    if not options.all:
+        # only check for staged changes
+        diff_args.append('--cached')
+
+    try:
+        p = subprocess.run(
+            ['git', 'diff-index'] + diff_args + ['HEAD'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            check=True, encoding='utf8')
+    except FileNotFoundError:
+        commit.error('git not found')
+    except subprocess.CalledProcessError as e:
+        error = e.stderr.splitlines()[0]
+        commit.error(error)
+
+    # if no changes exist, exit early
+    if not p.stdout:
+        changes = 'staged changes' if not options.all else 'changes'
+        out.write(f'{commit.prog}: no {changes} exist')
+        return 0
+
+    # parse changes
+    diff_changes = defaultdict(OrderedSet)
+    for path in p.stdout.strip('\x00').split('\x00'):
+        path_components = path.split(os.sep)
+        if path_components[0] in repo.categories:
+            diff_changes['pkgs'].add(os.sep.join(path_components[:2]))
+        else:
+            diff_changes[path_components[0]].add(path)
+
+    # determine commit message prefix -- no prefix used for global changes
+    msg_prefix = ''
+    # changes limited to a single type
+    if len(diff_changes) == 1:
+        change_type = next(iter(diff_changes))
+        changes = diff_changes[change_type]
+        if len(changes) == 1:
+            # changes limited to a single object
+            if change_type == 'pkgs':
+                msg_prefix = f'{changes[0]}: '
+            else:
+                msg_prefix = f'{os.path.dirname(changes[0])}: '
+        else:
+            # multiple changes of the same object type
+            common_path = os.path.commonpath(changes)
+            if change_type == 'pkgs':
+                if common_path:
+                    msg_prefix = f'{common_path}/*: '
+                else:
+                    msg_prefix = '*/*: '
+            else:
+                msg_prefix = f'{common_path}: '
+
+    commit_args = []
+    if repo.repo_id == 'gentoo':
+        # gentoo repo requires signoffs and signed commits
+        commit_args.extend(['--signoff', '--gpg-sign'])
+    if options.dry_run:
+        commit_args.append('--dry-run')
+    if options.verbosity:
+        commit_args.append('-v')
+    if options.all:
+        commit_args.append('--all')
+
+    if options.message:
+        commit_args.extend(['-m', f'{msg_prefix}{options.message}'])
+    else:
+        commit_args.extend(['-m', msg_prefix, '-e'])
+
+    # create commit
+    try:
+        subprocess.run(
+            ['git', 'commit'] + commit_args,
+            check=True, stderr=subprocess.PIPE, encoding='utf8')
+    except FileNotFoundError:
+        commit.error('git not found')
+    except subprocess.CalledProcessError as e:
+        error = e.stderr.splitlines()[0]
+        commit.error(error)
+
+    return 0
