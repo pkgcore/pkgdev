@@ -21,6 +21,42 @@ commit.add_argument(
     help='pretend to create commit')
 
 
+def commit_msg_prefix(diff_changes):
+    """Determine commit message prefix using GLEP 66 as a guide.
+
+    See https://www.gentoo.org/glep/glep-0066.html#commit-messages for
+    details.
+    """
+    # changes limited to a single type
+    if len(diff_changes) == 1:
+        change_type = next(iter(diff_changes))
+        changes = diff_changes[change_type]
+        if len(changes) == 1:
+            change = changes[0]
+            # changes limited to a single object
+            if change_type == 'pkgs':
+                return f'{change}: '
+            elif change_type == 'eclass' and change.endswith('.eclass'):
+                # use eclass file name
+                return f'{os.path.basename(change)}: '
+            else:
+                # use change path's parent directory
+                return f'{os.path.dirname(change)}: '
+        else:
+            # multiple changes of the same object type
+            common_path = os.path.commonpath(changes)
+            if change_type == 'pkgs':
+                if common_path:
+                    return f'{common_path}/*: '
+                else:
+                    return '*/*: '
+            else:
+                return f'{common_path}: '
+
+    # no prefix used for global changes
+    return ''
+
+
 @commit.bind_main_func
 def _commit(options, out, err):
     # determine repo
@@ -61,34 +97,6 @@ def _commit(options, out, err):
         else:
             diff_changes[path_components[0]].add(path)
 
-    # determine commit message prefix -- no prefix used for global changes
-    msg_prefix = ''
-    # changes limited to a single type
-    if len(diff_changes) == 1:
-        change_type = next(iter(diff_changes))
-        changes = diff_changes[change_type]
-        if len(changes) == 1:
-            change = changes[0]
-            # changes limited to a single object
-            if change_type == 'pkgs':
-                msg_prefix = f'{change}: '
-            elif change_type == 'eclass' and change.endswith('.eclass'):
-                # use eclass file name
-                msg_prefix = f'{os.path.basename(change)}: '
-            else:
-                # use change path's parent directory
-                msg_prefix = f'{os.path.dirname(change)}: '
-        else:
-            # multiple changes of the same object type
-            common_path = os.path.commonpath(changes)
-            if change_type == 'pkgs':
-                if common_path:
-                    msg_prefix = f'{common_path}/*: '
-                else:
-                    msg_prefix = '*/*: '
-            else:
-                msg_prefix = f'{common_path}: '
-
     commit_args = []
     if repo.repo_id == 'gentoo':
         # gentoo repo requires signoffs and signed commits
@@ -99,6 +107,9 @@ def _commit(options, out, err):
         commit_args.append('-v')
     if options.all:
         commit_args.append('--all')
+
+    # determine commit message prefix
+    msg_prefix = commit_msg_prefix(diff_changes)
 
     if options.message:
         # ignore determined prefix when using custom prefix
