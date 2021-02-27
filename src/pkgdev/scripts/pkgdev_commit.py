@@ -103,37 +103,41 @@ def commit_msg_prefix(git_changes):
     return ''
 
 
-@commit.bind_main_func
-def _commit(options, out, err):
-    commit_args = []
-    if options.repo.repo_id == 'gentoo':
+@commit.bind_delayed_default(1001, 'commit_args')
+def _commit_args(namespace, attr):
+    args = []
+    if namespace.repo.repo_id == 'gentoo':
         # gentoo repo requires signoffs and signed commits
-        commit_args.extend(['--signoff', '--gpg-sign'])
-    if options.dry_run:
-        commit_args.append('--dry-run')
-    if options.verbosity:
-        commit_args.append('-v')
-    if options.all:
-        commit_args.append('--all')
+        args.extend(['--signoff', '--gpg-sign'])
+    if namespace.dry_run:
+        args.append('--dry-run')
+    if namespace.verbosity:
+        args.append('-v')
+    if namespace.all:
+        args.append('--all')
 
     # determine commit message prefix
-    msg_prefix = commit_msg_prefix(options.changes)
+    msg_prefix = commit_msg_prefix(namespace.changes)
 
-    if options.message:
+    if namespace.message:
         # ignore determined prefix when using custom prefix
-        if not re.match(r'^\S+: ', options.message):
-            message = msg_prefix + options.message
+        if not re.match(r'^\S+: ', namespace.message):
+            message = msg_prefix + namespace.message
         else:
-            message = options.message
-        commit_args.extend(['-m', message])
+            message = namespace.message
+        args.extend(['-m', message])
     else:
         # open editor for message using determined prefix
-        commit_args.extend(['-m', msg_prefix, '-e'])
+        args.extend(['-m', msg_prefix, '-e'])
 
-    # create commit
+    setattr(namespace, attr, args)
+
+
+@commit.bind_main_func
+def _commit(options, out, err):
     try:
         subprocess.run(
-            ['git', 'commit'] + commit_args,
+            ['git', 'commit'] + options.commit_args,
             check=True, stderr=subprocess.PIPE, encoding='utf8')
     except FileNotFoundError:
         commit.error('git not found')
