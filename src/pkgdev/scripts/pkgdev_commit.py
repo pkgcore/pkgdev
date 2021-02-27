@@ -32,9 +32,10 @@ add_actions.add_argument(
 
 @commit.bind_delayed_default(999, 'repo')
 def _determine_repo(namespace, attr):
+    namespace.cwd = os.getcwd()
     try:
         repo = namespace.domain.find_repo(
-            os.getcwd(), config=namespace.config, configure=False)
+            namespace.cwd, config=namespace.config, configure=False)
     except (repo_errors.InitializationError, IOError) as e:
         raise UserException(str(e))
 
@@ -49,7 +50,7 @@ def _git_changes(namespace, attr):
     if namespace.git_add_arg:
         try:
             subprocess.run(
-                ['git', 'add', namespace.git_add_arg, os.getcwd()],
+                ['git', 'add', namespace.git_add_arg, namespace.cwd],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 check=True, encoding='utf8')
         except FileNotFoundError:
