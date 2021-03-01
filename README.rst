@@ -8,6 +8,8 @@ pkgdev provides a collection of tools for Gentoo development including:
 
 **pkgdev commit**: commit to an ebuild repository
 
+**pkgdev manifest**: update package manifests
+
 **pkgdev push**: scan commits for QA issues before pushing upstream
 
 Dependencies
