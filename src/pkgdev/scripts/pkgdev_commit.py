@@ -26,7 +26,7 @@ commit.add_argument(
     help='pretend to create commit')
 commit.add_argument(
     '-s', '--scan', action='store_true',
-    help='run pkgcheck scan against staged changes')
+    help='run pkgcheck against staged changes')
 commit.add_argument(
     '-f', '--force', action='store_true',
     help='forcibly create commit with QA errors')
