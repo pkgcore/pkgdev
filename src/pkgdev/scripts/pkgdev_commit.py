@@ -2,7 +2,7 @@ import os
 import re
 import subprocess
 import tempfile
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import atom as atom_cls
@@ -156,7 +156,7 @@ def _commit(options, out, err):
     if options.scan:
         pipe = scan(['--exit', '--staged'])
         # force pkgcheck pipeline to run without displaying results
-        _ = list(pipe)
+        deque(pipe, maxlen=0)
         # fail on errors unless force committing
         if pipe.errors:
             with reporters.FancyReporter(out) as reporter:
