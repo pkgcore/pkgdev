@@ -42,25 +42,25 @@ add_actions.add_argument(
 
 @commit.bind_delayed_default(1000, 'changes')
 def _git_changes(namespace, attr):
+    # stage changes as requested
     if namespace.git_add_arg:
         git.run(['add', namespace.git_add_arg, namespace.cwd])
 
+    # determine staged changes
     p = git.run(
         ['diff-index', '--name-only', '--cached', '-z', 'HEAD'],
         stdout=subprocess.PIPE)
-
-    # if no changes exist, exit early
-    if not p.stdout:
-        commit.error('no staged changes exist')
-
-    # parse changes
     changes = defaultdict(OrderedSet)
-    for path in p.stdout.strip('\x00').split('\x00'):
+    for path in filter(None, p.stdout.strip('\x00').split('\x00')):
         path_components = path.split(os.sep)
         if path_components[0] in namespace.repo.categories:
             changes['pkgs'].add(os.sep.join(path_components[:2]))
         else:
             changes[path_components[0]].add(path)
+
+    # if no changes exist, exit early
+    if not changes:
+        commit.error('no staged changes exist')
 
     setattr(namespace, attr, changes)
 
