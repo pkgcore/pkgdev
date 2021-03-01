@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 from collections import defaultdict
 
+from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
@@ -23,6 +24,12 @@ commit.add_argument(
 commit.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit')
+commit.add_argument(
+    '-s', '--scan', action='store_true',
+    help='run pkgcheck scan against staged changes')
+commit.add_argument(
+    '-f', '--force', action='store_true',
+    help='forcibly create commit with QA errors')
 
 add_actions = commit.add_mutually_exclusive_group()
 add_actions.add_argument(
@@ -136,14 +143,28 @@ def _commit(options, out, err):
         failed = options.repo.operations.digests(
             domain=options.domain,
             restriction=restriction,
-            observer=observer_mod.null_output())
+            observer=observer_mod.formatter_output(out))
         if any(failed):
-            commit.error('failed generating manifests')
+            return 1
 
         # stage all Manifest files
         git.run(
             ['add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
             cwd=options.repo.location)
+
+    # scan staged changes for QA issues if requested
+    if options.scan:
+        pipe = scan(['--exit', '--staged'])
+        # force pkgcheck pipeline to run without displaying results
+        _ = list(pipe)
+        # fail on errors unless force committing
+        if pipe.errors:
+            with reporters.FancyReporter(out) as reporter:
+                out.write(out.bold, out.fg('red'), '\nFAILURES', out.reset)
+                for result in sorted(pipe.errors):
+                    reporter.report(result)
+            if not options.force:
+                return 1
 
     # create commit
     git.run(['commit'] + options.commit_args)
