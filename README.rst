@@ -27,7 +27,7 @@ Installing latest pypi release::
 
 Installing from git::
 
-    pip install https://github.com/pkgcore/pkgdev/archive/master.tar.gz
+    pip install https://github.com/pkgcore/pkgdev/archive/main.tar.gz
 
 Installing from a tarball::
 
@@ -52,9 +52,9 @@ the following::
 .. _pkgcheck: https://github.com/pkgcore/pkgcheck
 .. _pkgcore: https://github.com/pkgcore/pkgcore
 .. _snakeoil: https://github.com/pkgcore/snakeoil
-.. _dependencies: https://github.com/pkgcore/pkgdev/blob/master/requirements/install.txt
+.. _dependencies: https://github.com/pkgcore/pkgdev/blob/main/requirements/install.txt
 
 .. |test| image:: https://github.com/pkgcore/pkgdev/workflows/test/badge.svg
     :target: https://github.com/pkgcore/pkgdev/actions?query=workflow%3A%22test%22
-.. |coverage| image:: https://codecov.io/gh/pkgcore/pkgdev/branch/master/graph/badge.svg
+.. |coverage| image:: https://codecov.io/gh/pkgcore/pkgdev/branch/main/graph/badge.svg
     :target: https://codecov.io/gh/pkgcore/pkgdev
