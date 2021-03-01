@@ -2,7 +2,7 @@ import os
 import re
 import subprocess
 import tempfile
-from collections import defaultdict, deque
+from collections import defaultdict
 
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import atom as atom_cls
@@ -155,16 +155,12 @@ def _commit(options, out, err):
     # scan staged changes for QA issues if requested
     if options.scan:
         pipe = scan(['--exit', '--staged'])
-        # force pkgcheck pipeline to run without displaying results
-        deque(pipe, maxlen=0)
+        with reporters.FancyReporter(out) as reporter:
+            for result in pipe:
+                reporter.report(result)
         # fail on errors unless force committing
-        if pipe.errors:
-            with reporters.FancyReporter(out) as reporter:
-                out.write(out.bold, out.fg('red'), '\nFAILURES', out.reset)
-                for result in sorted(pipe.errors):
-                    reporter.report(result)
-            if not options.force:
-                return 1
+        if pipe.errors and not options.force:
+            return 1
 
     # create commit
     git.run(['commit'] + options.commit_args)
