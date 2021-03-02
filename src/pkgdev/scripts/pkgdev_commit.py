@@ -195,11 +195,8 @@ def _commit(options, out, err):
             return 1
 
         # include existing Manifest files for staging
-        manifests = filter(
-            os.path.exists,
-            (pjoin(repo.location, f'{x.cpvstr}/Manifest') for x in pkgs)
-        )
-        git_add_files.extend(manifests)
+        manifests = (pjoin(repo.location, f'{x.cpvstr}/Manifest') for x in pkgs)
+        git_add_files.extend(filter(os.path.exists, manifests))
 
     # mangle files
     git_add_files.extend(Mangler(options, options.paths))
