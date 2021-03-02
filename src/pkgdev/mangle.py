@@ -9,6 +9,8 @@ import sys
 import traceback
 from datetime import datetime
 
+from snakeoil.mappings import OrderedSet
+
 copyright_regex = re.compile(
     r'^# Copyright (?P<begin>\d{4}-)?(?P<end>\d{4}) (?P<holder>.+)$')
 
@@ -18,7 +20,7 @@ class Mangler:
 
     def __init__(self, options, paths):
         self.options = options
-        self.paths = paths
+        self.paths = OrderedSet(paths)
         self.jobs = os.cpu_count()
 
         # setup for parallelizing the mangling procedure across files
