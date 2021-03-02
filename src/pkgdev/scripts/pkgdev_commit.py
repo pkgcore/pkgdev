@@ -141,27 +141,32 @@ def _commit_args(namespace, attr):
 
 @commit.bind_main_func
 def _commit(options, out, err):
+    repo = options.repo
     git_add_files = []
 
     if pkgs := options.changes.get('pkgs'):
         pkgs = [atom_cls(x) for x in pkgs]
         # manifest all changed packages
-        failed = options.repo.operations.digests(
+        failed = repo.operations.digests(
             domain=options.domain,
             restriction=packages.OrRestriction(*pkgs),
             observer=observer_mod.formatter_output(out))
         if any(failed):
             return 1
 
-        # include Manifest files for staging
-        git_add_files.extend(f'{x.cpvstr}/Manifest' for x in pkgs)
+        # include existing Manifest files for staging
+        manifests = filter(
+            os.path.exists,
+            (pjoin(repo.location, f'{x.cpvstr}/Manifest') for x in pkgs)
+        )
+        git_add_files.extend(manifests)
 
     # mangle files
     git_add_files.extend(Mangler(options, options.paths))
 
     # stage modified files
     if git_add_files:
-        git.run(['add'] + git_add_files, cwd=options.repo.location)
+        git.run(['add'] + git_add_files, cwd=repo.location)
 
     # scan staged changes for QA issues if requested
     if options.scan:
