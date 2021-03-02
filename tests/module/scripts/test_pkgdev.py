@@ -2,6 +2,7 @@ from functools import partial
 from unittest.mock import patch
 
 import pytest
+
 from pkgdev import __title__ as project
 from pkgdev.scripts import run
 

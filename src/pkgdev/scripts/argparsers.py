@@ -4,7 +4,6 @@ from pkgcore.repository import errors as repo_errors
 from snakeoil.cli.arghparse import ArgumentParser
 from snakeoil.cli.exceptions import UserException
 
-
 cwd_repo_argparser = ArgumentParser(suppress=True)
 
 

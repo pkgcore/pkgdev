@@ -1,9 +1,8 @@
 from pkgcheck import reporters, scan
 from snakeoil.cli import arghparse
 
-from .argparsers import cwd_repo_argparser
 from .. import git
-
+from .argparsers import cwd_repo_argparser
 
 push = arghparse.ArgumentParser(
     prog='pkgdev push', description='run QA checks on commits and push them',

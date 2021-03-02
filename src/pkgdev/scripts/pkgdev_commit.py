@@ -14,10 +14,9 @@ from snakeoil.cli import arghparse
 from snakeoil.mappings import OrderedSet
 from snakeoil.osutils import pjoin
 
-from .argparsers import cwd_repo_argparser
 from .. import git
 from ..mangle import Mangler
-
+from .argparsers import cwd_repo_argparser
 
 commit = arghparse.ArgumentParser(
     prog='pkgdev commit', description='create git commit',

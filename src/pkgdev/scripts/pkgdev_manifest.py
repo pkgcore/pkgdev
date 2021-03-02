@@ -1,11 +1,10 @@
 import os
 
 from pkgcore.operations import observer as observer_mod
+from pkgcore.restrictions import packages
 from pkgcore.util import commandline
 from pkgcore.util.parserestrict import parse_match
-from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
-
 
 manifest = arghparse.ArgumentParser(
     prog='pkgdev manifest', description='update package manifests')
