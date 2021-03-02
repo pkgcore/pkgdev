@@ -3,8 +3,10 @@ import re
 import subprocess
 import tempfile
 from collections import defaultdict
+from itertools import zip_longest
 
 from pkgcheck import reporters, scan
+from pkgcore.ebuild.atom import MalformedAtom
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
@@ -42,6 +44,12 @@ add_actions.add_argument(
     help='stage all changed/new/removed files')
 
 
+def grouper(iterable, n, fillvalue=None):
+    """Iterate over a given iterable in n-size groups."""
+    args = [iter(iterable)] * n
+    return zip_longest(*args, fillvalue=fillvalue)
+
+
 @commit.bind_delayed_default(1000, 'changes')
 def _git_changes(namespace, attr):
     # stage changes as requested
@@ -50,15 +58,27 @@ def _git_changes(namespace, attr):
 
     # determine staged changes
     p = git.run(
-        ['diff-index', '--name-only', '--cached', '-z', 'HEAD'],
+        ['diff-index', '--name-status', '--cached', '-z', 'HEAD'],
         stdout=subprocess.PIPE)
 
-    paths = [x for x in p.stdout.strip('\x00').split('\x00') if x]
+    # ebuild path regex, validation is handled on instantiation
+    _ebuild_re = re.compile(r'^(?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
+
+    data = p.stdout.strip('\x00').split('\x00')
+    paths = []
+    pkgs = {}
     changes = defaultdict(OrderedSet)
-    for path in paths:
+    for status, path in grouper(data, 2):
+        paths.append(path)
         path_components = path.split(os.sep)
         if path_components[0] in namespace.repo.categories:
             changes['pkgs'].add(os.sep.join(path_components[:2]))
+            if mo := _ebuild_re.match(path):
+                try:
+                    atom = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
+                    pkgs[atom] = status
+                except MalformedAtom:
+                    pass
         else:
             changes[path_components[0]].add(path)
 
@@ -67,6 +87,7 @@ def _git_changes(namespace, attr):
         commit.error('no staged changes exist')
 
     namespace.paths = [pjoin(namespace.repo.location, x) for x in paths]
+    namespace.pkgs = pkgs
     setattr(namespace, attr, changes)
 
 
@@ -106,6 +127,24 @@ def commit_msg_prefix(git_changes):
     return ''
 
 
+def commit_msg_summary(repo, pkgs):
+    """Determine commit message summary."""
+    if len(pkgs) == 1:
+        # single ebuild change
+        atom, status = next(iter(pkgs.items()))
+        if status == 'A':
+            return f'bump to {atom.version}'
+        if status == 'D':
+            return f'remove {atom.version}'
+    elif len({f'{x.category}/{x.package}' for x in pkgs}) == 1:
+        # multiple ebuild changes for the same package
+        if len(set(pkgs.values())) == 1:
+            status = next(iter(pkgs.values()))
+            if status == 'D':
+                return 'remove old'
+    return ''
+
+
 @commit.bind_delayed_default(1001, 'commit_args')
 def _commit_args(namespace, attr):
     args = []
@@ -128,9 +167,10 @@ def _commit_args(namespace, attr):
             message = namespace.message
         args.extend(['-m', message])
     else:
-        # open editor using determined prefix as commit template
+        # open editor using determined commit message template
+        msg_summary = commit_msg_summary(namespace.repo, namespace.pkgs)
         template = tempfile.NamedTemporaryFile(mode='w')
-        template.write(msg_prefix)
+        template.write(msg_prefix + msg_summary)
         template.flush()
         args.extend(['-t', template.name])
         # make sure tempfile isn't garbage collected until it's used
