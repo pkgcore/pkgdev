@@ -127,14 +127,14 @@ def commit_msg_prefix(git_changes):
     return ''
 
 
-def commit_msg_summary(repo, pkgs):
+def commit_msg_summary(pkgs):
     """Determine commit message summary."""
     if len(pkgs) == 1:
         # single ebuild change
         atom, status = next(iter(pkgs.items()))
         if status == 'A':
             return f'bump to {atom.version}'
-        if status == 'D':
+        elif status == 'D':
             return f'remove {atom.version}'
     elif len({f'{x.category}/{x.package}' for x in pkgs}) == 1:
         # multiple ebuild changes for the same package
@@ -168,7 +168,7 @@ def _commit_args(namespace, attr):
         args.extend(['-m', message])
     else:
         # open editor using determined commit message template
-        msg_summary = commit_msg_summary(namespace.repo, namespace.pkgs)
+        msg_summary = commit_msg_summary(namespace.pkgs)
         template = tempfile.NamedTemporaryFile(mode='w')
         template.write(msg_prefix + msg_summary)
         template.flush()
