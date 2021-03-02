@@ -10,9 +10,11 @@ from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
 from snakeoil.mappings import OrderedSet
+from snakeoil.osutils import pjoin
 
 from .argparsers import cwd_repo_argparser
 from .. import git
+from ..mangle import Mangler
 
 
 commit = arghparse.ArgumentParser(
@@ -50,8 +52,10 @@ def _git_changes(namespace, attr):
     p = git.run(
         ['diff-index', '--name-only', '--cached', '-z', 'HEAD'],
         stdout=subprocess.PIPE)
+
+    paths = [x for x in p.stdout.strip('\x00').split('\x00') if x]
     changes = defaultdict(OrderedSet)
-    for path in filter(None, p.stdout.strip('\x00').split('\x00')):
+    for path in paths:
         path_components = path.split(os.sep)
         if path_components[0] in namespace.repo.categories:
             changes['pkgs'].add(os.sep.join(path_components[:2]))
@@ -62,6 +66,7 @@ def _git_changes(namespace, attr):
     if not changes:
         commit.error('no staged changes exist')
 
+    namespace.paths = [pjoin(namespace.repo.location, x) for x in paths]
     setattr(namespace, attr, changes)
 
 
@@ -129,28 +134,34 @@ def _commit_args(namespace, attr):
         template.flush()
         args.extend(['-t', template.name])
         # make sure tempfile isn't garbage collected until it's used
-        namespace.commit_template = template
+        namespace._commit_template = template
 
     setattr(namespace, attr, args)
 
 
 @commit.bind_main_func
 def _commit(options, out, err):
-    # manifest all changed packages
+    git_add_files = []
+
     if pkgs := options.changes.get('pkgs'):
         pkgs = [atom_cls(x) for x in pkgs]
-        restriction = packages.OrRestriction(*pkgs)
+        # manifest all changed packages
         failed = options.repo.operations.digests(
             domain=options.domain,
-            restriction=restriction,
+            restriction=packages.OrRestriction(*pkgs),
             observer=observer_mod.formatter_output(out))
         if any(failed):
             return 1
 
-        # stage all Manifest files
-        git.run(
-            ['add'] + [f'{x.cpvstr}/Manifest' for x in pkgs],
-            cwd=options.repo.location)
+        # include Manifest files for staging
+        git_add_files.extend(f'{x.cpvstr}/Manifest' for x in pkgs)
+
+    # mangle files
+    git_add_files.extend(Mangler(options, options.paths))
+
+    # stage modified files
+    if git_add_files:
+        git.run(['add'] + git_add_files, cwd=options.repo.location)
 
     # scan staged changes for QA issues if requested
     if options.scan:
