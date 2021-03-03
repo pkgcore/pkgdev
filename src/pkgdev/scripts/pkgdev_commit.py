@@ -63,6 +63,10 @@ def _git_changes(namespace, attr):
     # ebuild path regex, validation is handled on instantiation
     _ebuild_re = re.compile(r'^(?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
 
+    # if no changes exist, exit early
+    if not p.stdout:
+        commit.error('no staged changes exist')
+
     data = p.stdout.strip('\x00').split('\x00')
     paths = []
     pkgs = {}
@@ -80,10 +84,6 @@ def _git_changes(namespace, attr):
                     pass
         else:
             changes[path_components[0]].add(path)
-
-    # if no changes exist, exit early
-    if not changes:
-        commit.error('no staged changes exist')
 
     namespace.paths = [pjoin(namespace.repo.location, x) for x in paths]
     namespace.pkgs = pkgs
