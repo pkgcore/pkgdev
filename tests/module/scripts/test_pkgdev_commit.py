@@ -32,7 +32,7 @@ class TestPkgCommit:
             assert not out
             assert err.strip() == 'pkgdev commit: error: no staged changes exist'
 
-    def test_stage_changed_files(self, capsys, repo, make_git_repo, editor):
+    def test_stage_changed_files(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         ebuild_path = repo.create_ebuild('cat/pkg-0')
         git_repo.add_all('cat/pkg-0')
