@@ -130,3 +130,35 @@ class TestPkgCommit:
         # treeclean
         shutil.rmtree(pjoin(git_repo.path, 'cat/pkg'))
         assert commit() == ['cat/pkg: treeclean']
+
+    def test_non_gentoo_file_mangling(self, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        ebuild_path = repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+
+        def commit(args):
+            with patch('sys.argv', self.args + args), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 0
+
+        # append line missing EOF newline to ebuild
+        with open(ebuild_path, 'a+') as f:
+            f.write('# comment')
+        # verify file doesn't end with newline
+        with open(ebuild_path) as f:
+            assert f.read()[-1] != '\n'
+
+        # non-gentoo repos aren't mangled by default
+        commit(['-u', '-m', 'mangling'])
+        with open(ebuild_path) as f:
+            assert f.read()[-1] != '\n'
+
+        # but they can be forcibly mangled
+        with open(ebuild_path, 'a+') as f:
+            f.write('# comment')
+        commit(['-M', '-u', '-m', 'mangling'])
+        # mangled pre-commit, file now ends with newline
+        with open(ebuild_path) as f:
+            assert f.read()[-1] == '\n'
