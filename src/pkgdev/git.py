@@ -1,4 +1,5 @@
 import subprocess
+import sys
 
 from snakeoil.cli.exceptions import UserException
 
@@ -8,6 +9,12 @@ def run(*args, **kwargs):
     kwargs.setdefault('check', True)
     kwargs.setdefault('text', True)
     cmd = ['git'] + list(args)
+
+    # output git command that would be run to stderr
+    if '--dry-run' in args:
+        git_cmd = ' '.join(x for x in cmd if x != '--dry-run')
+        sys.stderr.write(f'{git_cmd}\n')
+
     try:
         return subprocess.run(cmd, **kwargs)
     except FileNotFoundError as e:
