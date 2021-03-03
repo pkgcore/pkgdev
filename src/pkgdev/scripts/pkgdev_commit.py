@@ -13,6 +13,7 @@ from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
 from snakeoil.mappings import OrderedSet
 from snakeoil.osutils import pjoin
+from snakeoil.strings import pluralism
 
 from .. import git
 from ..mangle import Mangler
@@ -128,22 +129,8 @@ def commit_msg_prefix(git_changes):
 
 def commit_msg_summary(repo, pkgs):
     """Determine commit message summary."""
-    if len(pkgs) == 1:
-        # single ebuild change
-        atom, status = next(iter(pkgs.items()))
-        pkg_matches = repo.match(atom.unversioned_atom)
-        if status == 'A':
-            if len(pkg_matches) > 1:
-                return f'version bump to {atom.version}'
-            else:
-                return 'initial import'
-        elif status == 'D':
-            if len(pkg_matches) >= 1:
-                return f'remove {atom.version}'
-            else:
-                return 'treeclean'
-    elif len({x.unversioned_atom for x in pkgs}) == 1:
-        # multiple ebuild changes for the same package
+    if len({x.unversioned_atom for x in pkgs}) == 1:
+        # all changes made on the same package
         atom = next(iter(pkgs)).unversioned_atom
         pkg_matches = repo.match(atom)
         if len(set(pkgs.values())) == 1:
@@ -152,8 +139,9 @@ def commit_msg_summary(repo, pkgs):
                 if len(pkg_matches) == len(pkgs):
                     return 'initial import'
                 else:
-                    versions = ', '.join(x.version for x in pkgs)
-                    return f'version bumps to {versions}'
+                    versions = [x.version for x in pkgs]
+                    s = pluralism(versions)
+                    return f"version bump{s} to {', '.join(versions)}"
             elif status == 'D':
                 if len(pkg_matches) >= 1:
                     return 'remove old'
