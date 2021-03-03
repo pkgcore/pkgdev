@@ -75,7 +75,7 @@ def _git_changes(namespace, attr):
     for status, path in grouper(data, 2):
         paths.append(path)
         path_components = path.split(os.sep)
-        if path_components[0] in namespace.repo.categories:
+        if path_components[0] in namespace.repo.categories and len(path_components) > 2:
             changes['pkgs'].add(os.sep.join(path_components[:2]))
             if mo := _ebuild_re.match(path):
                 try:
