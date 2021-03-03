@@ -134,20 +134,23 @@ def commit_msg_summary(repo, pkgs):
     """Determine commit message summary."""
     if len({x.unversioned_atom for x in pkgs}) == 1:
         # all changes made on the same package
+        versions = [x.version for x in pkgs]
         atom = next(iter(pkgs)).unversioned_atom
-        pkg_matches = repo.match(atom)
+        existing_pkgs = repo.match(atom)
         if len(set(pkgs.values())) == 1:
             status = next(iter(pkgs.values()))
             if status == 'A':
-                if len(pkg_matches) == len(pkgs):
+                if len(existing_pkgs) == len(pkgs):
                     return 'initial import'
                 else:
-                    versions = [x.version for x in pkgs]
                     s = pluralism(versions)
-                    return f"version bump{s} to {', '.join(versions)}"
+                    return f"version bump{s} {', '.join(versions)}"
             elif status == 'D':
-                if len(pkg_matches) >= 1:
-                    return 'remove old'
+                if existing_pkgs:
+                    if len(versions) == 1:
+                        return f'remove {versions[0]}'
+                    else:
+                        return 'remove old'
                 else:
                     return 'treeclean'
     return ''
