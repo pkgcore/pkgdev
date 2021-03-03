@@ -23,7 +23,7 @@ commit = arghparse.ArgumentParser(
     prog='pkgdev commit', description='create git commit',
     parents=(cwd_repo_argparser,))
 commit.add_argument(
-    '-m', '--message',
+    '-m', '--message', type=lambda x: x.strip(),
     help='specify commit message')
 commit.add_argument(
     '-e', '--edit', action='store_true',
@@ -170,16 +170,15 @@ def _commit_args(namespace, attr):
         args.append('--edit')
 
     # determine commit message
+    message = namespace.message
     msg_prefix = commit_msg_prefix(namespace.changes)
-    message = None
 
-    if msg := namespace.message.strip():
-        # ignore determined prefix when using custom prefix
-        if not re.match(r'^\S+: ', msg):
-            message = msg_prefix + msg
-        else:
-            message = msg
+    if message:
+        # ignore generated prefix when using custom prefix
+        if not re.match(r'^\S+: ', message):
+            message = msg_prefix + message
     elif msg_prefix:
+        # use generated summary if a generated prefix exists
         msg_summary = commit_msg_summary(namespace.repo, namespace.pkgs)
         message = msg_prefix + msg_summary
 
