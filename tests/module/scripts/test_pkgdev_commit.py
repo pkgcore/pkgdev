@@ -9,7 +9,28 @@ from snakeoil.contexts import chdir, os_environ
 from snakeoil.osutils import pjoin
 
 
-class TestPkgCommit:
+class TestPkgdevCommitParseArgs:
+
+    def test_non_repo_cwd(self, capsys, tool):
+        with pytest.raises(SystemExit) as excinfo:
+            tool.parse_args(['commit'])
+
+        assert excinfo.value.code == 2
+        out, err = capsys.readouterr()
+        err = err.strip().split('\n')
+        assert err == ['pkgdev commit: error: not in ebuild repo']
+
+    def test_non_git_repo_cwd(self, repo, capsys, tool):
+        with pytest.raises(SystemExit) as excinfo, \
+                chdir(repo.location):
+            tool.parse_args(['commit'])
+        assert excinfo.value.code == 2
+        out, err = capsys.readouterr()
+        err = err.strip().split('\n')
+        assert err == ['pkgdev commit: error: not in ebuild git repo']
+
+
+class TestPkgdevCommit:
 
     script = partial(run, 'pkgdev')
 

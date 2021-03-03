@@ -6,10 +6,9 @@ pytest_plugins = ['pkgcore']
 
 
 @pytest.fixture(scope="session")
-def tool(testconfig):
+def tool():
     """Generate a tool utility for running pkgdev."""
     tool = Tool(pkgdev.argparser)
-    tool.parser.set_defaults(override_config=testconfig)
     return tool
 
 
