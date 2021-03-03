@@ -162,3 +162,28 @@ class TestPkgCommit:
         # mangled pre-commit, file now ends with newline
         with open(ebuild_path) as f:
             assert f.read()[-1] == '\n'
+
+    def test_gentoo_file_mangling(self, make_repo, make_git_repo):
+        repo = make_repo(repo_id='gentoo')
+        git_repo = make_git_repo(repo.location)
+        ebuild_path = repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+
+        def commit(args):
+            with patch('sys.argv', self.args + args), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 0
+
+        # append line missing EOF newline to ebuild
+        with open(ebuild_path, 'a+') as f:
+            f.write('# comment')
+        # verify file doesn't end with newline
+        with open(ebuild_path) as f:
+            assert f.read()[-1] != '\n'
+
+        # gentoo repos are mangled by default
+        commit(['-n', '-u', '-m', 'mangling'])
+        with open(ebuild_path) as f:
+            assert f.read()[-1] == '\n'
