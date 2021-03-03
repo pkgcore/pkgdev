@@ -163,33 +163,34 @@ def _commit_args(namespace, attr):
         args.append('--dry-run')
     if namespace.verbosity:
         args.append('-v')
+    if namespace.edit:
+        args.append('--edit')
 
-    # determine commit message prefix
+    # determine commit message
     msg_prefix = commit_msg_prefix(namespace.changes)
+    message = None
 
-    if namespace.message:
+    if msg := namespace.message.strip():
         # ignore determined prefix when using custom prefix
-        if not re.match(r'^\S+: ', namespace.message):
-            message = msg_prefix + namespace.message
+        if not re.match(r'^\S+: ', msg):
+            message = msg_prefix + msg
         else:
-            message = namespace.message
-        args.extend(['-m', message])
+            message = msg
     elif msg_prefix:
         msg_summary = commit_msg_summary(namespace.repo, namespace.pkgs)
-        if msg_summary and not namespace.edit:
-            args.extend(['-m', msg_prefix + msg_summary])
+        message = msg_prefix + msg_summary
+
+    if message:
+        tmp = tempfile.NamedTemporaryFile(mode='w')
+        tmp.write(message)
+        tmp.flush()
+        if message.endswith(' '):
+            # force `git commit` to respect trailing prefix whitespace
+            args.extend(['-t', tmp.name])
         else:
-            # open editor using determined commit message template
-            template = tempfile.NamedTemporaryFile(mode='w')
-            template.write(msg_prefix + msg_summary)
-            template.flush()
-            if msg_summary:
-                args.extend(['-F', template.name, '-e'])
-            else:
-                # force `git commit` to respect trailing prefix whitespace
-                args.extend(['-t', template.name])
-            # make sure tempfile isn't garbage collected until it's used
-            namespace._commit_template = template
+            args.extend(['-F', tmp.name])
+        # make sure tempfile isn't garbage collected until it's used
+        namespace._commit_template = tmp
 
     setattr(namespace, attr, args)
 
