@@ -126,21 +126,39 @@ def commit_msg_prefix(git_changes):
     return ''
 
 
-def commit_msg_summary(pkgs):
+def commit_msg_summary(repo, pkgs):
     """Determine commit message summary."""
     if len(pkgs) == 1:
         # single ebuild change
         atom, status = next(iter(pkgs.items()))
+        pkg_matches = repo.match(atom.unversioned_atom)
         if status == 'A':
-            return f'bump to {atom.version}'
+            if len(pkg_matches) > 1:
+                return f'version bump to {atom.version}'
+            else:
+                return 'initial import'
         elif status == 'D':
-            return f'remove {atom.version}'
-    elif len({f'{x.category}/{x.package}' for x in pkgs}) == 1:
+            if len(pkg_matches) >= 1:
+                return f'remove {atom.version}'
+            else:
+                return 'treeclean'
+    elif len({x.unversioned_atom for x in pkgs}) == 1:
         # multiple ebuild changes for the same package
+        atom = next(iter(pkgs)).unversioned_atom
+        pkg_matches = repo.match(atom)
         if len(set(pkgs.values())) == 1:
             status = next(iter(pkgs.values()))
-            if status == 'D':
-                return 'remove old'
+            if status == 'A':
+                if len(pkg_matches) == len(pkgs):
+                    return 'initial import'
+                else:
+                    versions = ', '.join(x.version for x in pkgs)
+                    return f'version bumps to {versions}'
+            elif status == 'D':
+                if len(pkg_matches) >= 1:
+                    return 'remove old'
+                else:
+                    return 'treeclean'
     return ''
 
 
@@ -167,7 +185,7 @@ def _commit_args(namespace, attr):
         args.extend(['-m', message])
     else:
         # open editor using determined commit message template
-        msg_summary = commit_msg_summary(namespace.pkgs)
+        msg_summary = commit_msg_summary(namespace.repo, namespace.pkgs)
         template = tempfile.NamedTemporaryFile(mode='w')
         template.write(msg_prefix + msg_summary)
         template.flush()
