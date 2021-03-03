@@ -10,6 +10,7 @@ import traceback
 from datetime import datetime
 
 from snakeoil.mappings import OrderedSet
+from snakeoil.osutils import pjoin
 
 copyright_regex = re.compile(
     r'^# Copyright (?P<begin>\d{4}-)?(?P<end>\d{4}) (?P<holder>.+)$')
@@ -110,7 +111,7 @@ class Mangler:
 
         # queue paths for processing
         for path in self.paths:
-            work_q.put(path)
+            work_q.put(pjoin(self.options.repo.location, path))
         # notify consumers that no more work exists
         for i in range(self.jobs):
             work_q.put(None)

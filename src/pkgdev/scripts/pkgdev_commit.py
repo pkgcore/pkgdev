@@ -90,7 +90,7 @@ def _git_changes(namespace, attr):
         else:
             changes[path_components[0]].add(path)
 
-    namespace.paths = [pjoin(namespace.repo.location, x) for x in paths]
+    namespace.paths = paths
     namespace.pkgs = pkgs
     setattr(namespace, attr, changes)
 
