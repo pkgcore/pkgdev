@@ -55,6 +55,7 @@ def grouper(iterable, n, fillvalue=None):
 
 @commit.bind_delayed_default(1000, 'changes')
 def _git_changes(namespace, attr):
+    """Determine changes staged in git."""
     # stage changes as requested
     if namespace.git_add_arg:
         git.run(['add', namespace.git_add_arg, namespace.cwd])
@@ -158,6 +159,7 @@ def commit_msg_summary(repo, pkgs):
 
 @commit.bind_delayed_default(1001, 'commit_args')
 def _commit_args(namespace, attr):
+    """Determine arguments used with `git commit`."""
     args = []
     if namespace.repo.repo_id == 'gentoo':
         # gentoo repo requires signoffs and signed commits
