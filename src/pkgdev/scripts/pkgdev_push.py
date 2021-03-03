@@ -48,6 +48,6 @@ def _push(options, out, err):
     git_args.extend([options.remote, options.refspec])
 
     # push commits upstream
-    git.run(['push'] + git_args, cwd=options.repo.location)
+    git.run('push', *git_args, cwd=options.repo.location)
 
     return 0

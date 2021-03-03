@@ -64,11 +64,11 @@ def _git_changes(namespace, attr):
     """Determine changes staged in git."""
     # stage changes as requested
     if namespace.git_add_arg:
-        git.run(['add', namespace.git_add_arg, namespace.cwd])
+        git.run('add', namespace.git_add_arg, namespace.cwd)
 
     # determine staged changes
     p = git.run(
-        ['diff-index', '--name-status', '--cached', '-z', 'HEAD'],
+        'diff-index', '--name-status', '--cached', '-z', 'HEAD',
         stdout=subprocess.PIPE)
 
     # ebuild path regex, validation is handled on instantiation
@@ -230,7 +230,7 @@ def _commit(options, out, err):
 
     # stage modified files
     if git_add_files:
-        git.run(['add'] + git_add_files, cwd=repo.location)
+        git.run('add', *git_add_files, cwd=repo.location)
 
     # scan staged changes for QA issues if requested
     if options.scan:
@@ -243,6 +243,6 @@ def _commit(options, out, err):
             return 1
 
     # create commit
-    git.run(['commit'] + options.commit_args)
+    git.run('commit', *options.commit_args)
 
     return 0
