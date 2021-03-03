@@ -21,8 +21,13 @@ class Mangler:
 
     def __init__(self, options, paths):
         self.options = options
-        self.paths = OrderedSet(paths)
         self.jobs = os.cpu_count()
+        # regex matching file paths to skip
+        _skip_regex = re.compile(r'^[^/]+/[^/]+/files/.+$')
+        self.paths = OrderedSet(
+            pjoin(self.options.repo.location, x)
+            for x in paths if not _skip_regex.match(x)
+        )
 
         # setup for parallelizing the mangling procedure across files
         self._mp_ctx = multiprocessing.get_context('fork')
@@ -37,7 +42,7 @@ class Mangler:
         # construct composed mangling function
         funcs = (getattr(self, x) for x in dir(self) if x.startswith('_mangle_'))
         # don't use gentoo repo specific mangling for non-gentoo repos
-        if options.repo.repo_id != 'gentoo':
+        if self.options.repo.repo_id != 'gentoo':
             funcs = (x for x in funcs if not x.__name__.endswith('_gentoo'))
         self.composed_func = functools.reduce(
             lambda f, g: lambda x: f(g(x)), funcs, lambda x: x)
@@ -111,7 +116,7 @@ class Mangler:
 
         # queue paths for processing
         for path in self.paths:
-            work_q.put(pjoin(self.options.repo.location, path))
+            work_q.put(path)
         # notify consumers that no more work exists
         for i in range(self.jobs):
             work_q.put(None)
