@@ -32,7 +32,43 @@ class TestPkgCommit:
             assert not out
             assert err.strip() == 'pkgdev commit: error: no staged changes exist'
 
-    def test_stage_changed_files(self, capsys, repo, make_git_repo):
+    def test_custom_unprefixed_message(self, capsys, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        ebuild_path = repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+        with open(ebuild_path, 'a+') as f:
+            f.write('# comment\n')
+
+        with patch('sys.argv', self.args + ['-u', '-m', 'msg']), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        assert excinfo.value.code == 0
+        out, err = capsys.readouterr()
+        assert err == out == ''
+
+        commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+        assert commit_msg == ['cat/pkg: msg']
+
+    def test_custom_prefixed_message(self, capsys, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        ebuild_path = repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+        with open(ebuild_path, 'a+') as f:
+            f.write('# comment\n')
+
+        with patch('sys.argv', self.args + ['-u', '-m', 'prefix: msg']), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        assert excinfo.value.code == 0
+        out, err = capsys.readouterr()
+        assert err == out == ''
+
+        commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+        assert commit_msg == ['prefix: msg']
+
+    def test_edited_commit_message(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         ebuild_path = repo.create_ebuild('cat/pkg-0')
         git_repo.add_all('cat/pkg-0')
