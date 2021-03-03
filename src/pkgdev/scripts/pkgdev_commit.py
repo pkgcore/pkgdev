@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import subprocess
@@ -22,6 +23,8 @@ from .argparsers import cwd_repo_argparser
 commit = arghparse.ArgumentParser(
     prog='pkgdev commit', description='create git commit',
     parents=(cwd_repo_argparser,))
+# custom `pkgcheck scan` args used for tests
+commit.add_argument('--scan-args', nargs=1, default=(), help=argparse.SUPPRESS)
 commit.add_argument(
     '-m', '--message', type=lambda x: x.strip(),
     help='specify commit message')
@@ -231,7 +234,7 @@ def _commit(options, out, err):
 
     # scan staged changes for QA issues if requested
     if options.scan:
-        pipe = scan(['--exit', '--staged'])
+        pipe = scan(['--exit', '--staged'] + list(options.scan_args))
         with reporters.FancyReporter(out) as reporter:
             for result in pipe:
                 reporter.report(result)
