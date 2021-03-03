@@ -8,9 +8,8 @@ omit =
 [paths]
 source =
 	src/pkgdev
-	build/lib/pkgdev
+	build/install/lib/python*/site-packages/pkgdev
 	.tox/*/lib/python*/site-packages/pkgdev
-	.tox/pypy*/site-packages/pkgdev
 
 [report]
 show_missing = True
