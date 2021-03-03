@@ -86,13 +86,13 @@ class Mangler:
             for path in iter(work_q.get, None):
                 try:
                     with open(path, 'r+') as f:
-                        orig_data = f.read()
-                        data = self.composed_func(orig_data)
-                        if data != orig_data:
-                            f.seek(0)
-                            f.truncate()
-                            f.write(data)
-                            self._altered_paths_q.put(path)
+                        if orig_data := f.read():
+                            data = self.composed_func(orig_data)
+                            if data != orig_data:
+                                f.seek(0)
+                                f.truncate()
+                                f.write(data)
+                                self._altered_paths_q.put(path)
                 except FileNotFoundError:
                     pass
         except Exception:  # pragma: no cover
