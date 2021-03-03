@@ -26,6 +26,9 @@ commit.add_argument(
     '-m', '--message',
     help='specify commit message')
 commit.add_argument(
+    '-e', '--edit', action='store_true',
+    help='open editor to alter commit message')
+commit.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit')
 commit.add_argument(
@@ -171,15 +174,22 @@ def _commit_args(namespace, attr):
         else:
             message = namespace.message
         args.extend(['-m', message])
-    else:
-        # open editor using determined commit message template
+    elif msg_prefix:
         msg_summary = commit_msg_summary(namespace.repo, namespace.pkgs)
-        template = tempfile.NamedTemporaryFile(mode='w')
-        template.write(msg_prefix + msg_summary)
-        template.flush()
-        args.extend(['-t', template.name])
-        # make sure tempfile isn't garbage collected until it's used
-        namespace._commit_template = template
+        if msg_summary and not namespace.edit:
+            args.extend(['-m', msg_prefix + msg_summary])
+        else:
+            # open editor using determined commit message template
+            template = tempfile.NamedTemporaryFile(mode='w')
+            template.write(msg_prefix + msg_summary)
+            template.flush()
+            if msg_summary:
+                args.extend(['-F', template.name, '-e'])
+            else:
+                # force `git commit` to respect trailing prefix whitespace
+                args.extend(['-t', template.name])
+            # make sure tempfile isn't garbage collected until it's used
+            namespace._commit_template = template
 
     setattr(namespace, attr, args)
 
