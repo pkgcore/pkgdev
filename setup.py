@@ -13,9 +13,6 @@ setup(**dict(
     author_email='radhermit@gmail.com',
     description='collection of tools for Gentoo development',
     url='https://github.com/pkgcore/pkgdev',
-    cmdclass=dict(
-        pkgdist_cmds,
-    ),
     classifiers=[
         'License :: OSI Approved :: BSD License',
         'Programming Language :: Python :: 3.8',
