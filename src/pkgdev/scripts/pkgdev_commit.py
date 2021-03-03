@@ -29,6 +29,9 @@ commit.add_argument(
     '-e', '--edit', action='store_true',
     help='open editor to alter commit message')
 commit.add_argument(
+    '-M', '--mangle', action='store_true',
+    help='forcibly mangle files before commit')
+commit.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit')
 commit.add_argument(
@@ -219,7 +222,8 @@ def _commit(options, out, err):
         git_add_files.extend(filter(os.path.exists, manifests))
 
     # mangle files
-    git_add_files.extend(Mangler(options, options.paths))
+    if repo.repo_id == 'gentoo' or options.mangle:
+        git_add_files.extend(Mangler(options, options.paths))
 
     # stage modified files
     if git_add_files:
