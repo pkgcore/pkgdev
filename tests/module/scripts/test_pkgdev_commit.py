@@ -1,9 +1,11 @@
 import os
 import shutil
+from datetime import datetime
 from functools import partial
 from unittest.mock import patch
 
 import pytest
+from pkgdev.mangle import copyright_regex
 from pkgdev.scripts import run
 from snakeoil.contexts import chdir, os_environ
 from snakeoil.osutils import pjoin
@@ -219,3 +221,24 @@ class TestPkgdevCommit:
         commit(['-n', '-u', '-m', 'mangling'])
         with open(ebuild_path) as f:
             assert f.read()[-1] == '\n'
+
+        for years, org in (
+                ('1999-2020', 'Gentoo Authors'),
+                ('1999-2020', 'Gentoo Foundation'),
+                ('2020', 'Gentoo Authors'),
+                ('2020', 'Gentoo Foundation'),
+                ):
+            # munge the copyright header
+            with open(ebuild_path, 'r+') as f:
+                lines = f.read().splitlines()
+                lines[0] = f'# Copyright {years} {org}\n'
+                f.seek(0)
+                f.truncate()
+                f.write('\n'.join(lines) + '\n')
+            commit(['-n', '-u', '-m', 'mangling'])
+            # verify file doesn't end with newline
+            with open(ebuild_path) as f:
+                lines = f.read().splitlines()
+                mo = copyright_regex.match(lines[0])
+                assert mo.group('end') == str(datetime.today().year)
+                assert mo.group('holder') == 'Gentoo Authors'
