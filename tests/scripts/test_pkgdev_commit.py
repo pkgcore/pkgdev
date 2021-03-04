@@ -14,33 +14,29 @@ from snakeoil.osutils import pjoin
 class TestPkgdevCommitParseArgs:
 
     def test_non_repo_cwd(self, capsys, tool):
-        with pytest.raises(SystemExit) as excinfo:
+        with pytest.raises(SystemExit):
             tool.parse_args(['commit'])
-
-        assert excinfo.value.code == 2
         out, err = capsys.readouterr()
-        err = err.strip().split('\n')
-        assert err == ['pkgdev commit: error: not in ebuild repo']
+        err = err.strip().split('\n')[-1]
+        assert err.endswith('error: not in ebuild repo')
 
     def test_non_git_repo_cwd(self, repo, capsys, tool):
-        with pytest.raises(SystemExit) as excinfo, \
+        with pytest.raises(SystemExit), \
                 chdir(repo.location):
             tool.parse_args(['commit'])
-        assert excinfo.value.code == 2
         out, err = capsys.readouterr()
-        err = err.strip().split('\n')
-        assert err == ['pkgdev commit: error: not in git repo']
+        err = err.strip().split('\n')[-1]
+        assert err.endswith('error: not in git repo')
 
     def test_non_ebuild_git_repo_cwd(self, make_repo, git_repo, capsys, tool):
         os.mkdir(pjoin(git_repo.path, 'repo'))
         repo = make_repo(pjoin(git_repo.path, 'repo'))
-        with pytest.raises(SystemExit) as excinfo, \
+        with pytest.raises(SystemExit), \
                 chdir(repo.location):
             tool.parse_args(['commit'])
-        assert excinfo.value.code == 2
         out, err = capsys.readouterr()
-        err = err.strip().split('\n')
-        assert err == ['pkgdev commit: error: not in ebuild git repo']
+        err = err.strip().split('\n')[-1]
+        assert err.endswith('error: not in ebuild git repo')
 
 
 class TestPkgdevCommit:

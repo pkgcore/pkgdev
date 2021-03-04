@@ -21,7 +21,17 @@ from .. import git
 from ..mangle import Mangler
 from .argparsers import cwd_repo_argparser, git_repo_argparser
 
-commit = arghparse.ArgumentParser(
+
+class ArgumentParser(arghparse.ArgumentParser):
+    """Parse all known arguments, passing unknown arguments to ``git commit``."""
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, args = super().parse_known_args(args, namespace)
+        namespace.commit_args.extend(args)
+        return namespace, []
+
+
+commit = ArgumentParser(
     prog='pkgdev commit', description='create git commit',
     parents=(cwd_repo_argparser, git_repo_argparser))
 # custom `pkgcheck scan` args used for tests

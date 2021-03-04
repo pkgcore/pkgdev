@@ -11,8 +11,8 @@ cwd_repo_argparser = ArgumentParser(suppress=True)
 git_repo_argparser = ArgumentParser(suppress=True)
 
 
-@cwd_repo_argparser.bind_delayed_default(0, 'repo')
-def _determine_cwd_repo(namespace, attr):
+@cwd_repo_argparser.bind_early_parse
+def _determine_cwd_repo(parser, namespace, args):
     namespace.cwd = os.getcwd()
     try:
         repo = namespace.domain.find_repo(
@@ -23,11 +23,12 @@ def _determine_cwd_repo(namespace, attr):
     if repo is None:
         raise UserException('not in ebuild repo')
 
-    setattr(namespace, attr, repo)
+    namespace.repo = repo
+    return namespace, args
 
 
-@git_repo_argparser.bind_delayed_default(1, 'git_repo')
-def _determine_git_repo(namespace, attr):
+@git_repo_argparser.bind_early_parse
+def _determine_git_repo(parser, namespace, args):
     try:
         p = git.run('rev-parse', '--show-toplevel', stdout=subprocess.PIPE)
         path = p.stdout.strip()
@@ -42,4 +43,5 @@ def _determine_git_repo(namespace, attr):
         # ebuild repo parser not enabled
         pass
 
-    setattr(namespace, attr, path)
+    namespace.git_repo = path
+    return namespace, args
