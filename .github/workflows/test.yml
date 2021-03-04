@@ -34,13 +34,14 @@ jobs:
         python -m pip install --upgrade pip coverage
         pip install -r requirements/dev.txt
         pip install -r requirements/test.txt
+        pip install -r requirements/ci.txt
 
     - name: Test with pytest
       # forcibly enable pytest colors
       env:
         PY_COLORS: 1
       run: |
-        coverage run -p setup.py test
+        pytest --cov -v
 
     - name: Report code coverage
       run: |
