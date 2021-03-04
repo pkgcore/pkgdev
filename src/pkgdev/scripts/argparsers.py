@@ -32,9 +32,14 @@ def _determine_git_repo(namespace, attr):
         p = git.run('rev-parse', '--show-toplevel', stdout=subprocess.PIPE)
         path = p.stdout.strip()
     except SystemExit:
-        path = None
+        raise UserException('not in git repo')
 
-    if path != namespace.repo.location:
-        raise UserException('not in ebuild git repo')
+    # verify the git and ebuild repo roots match when using both
+    try:
+        if namespace.repo.location != path:
+            raise UserException('not in ebuild git repo')
+    except AttributeError:
+        # ebuild repo parser not enabled
+        pass
 
     setattr(namespace, attr, path)

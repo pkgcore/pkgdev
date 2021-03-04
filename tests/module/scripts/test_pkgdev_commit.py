@@ -27,6 +27,17 @@ class TestPkgdevCommitParseArgs:
         assert excinfo.value.code == 2
         out, err = capsys.readouterr()
         err = err.strip().split('\n')
+        assert err == ['pkgdev commit: error: not in git repo']
+
+    def test_non_ebuild_git_repo_cwd(self, make_repo, git_repo, capsys, tool):
+        os.mkdir(pjoin(git_repo.path, 'repo'))
+        repo = make_repo(pjoin(git_repo.path, 'repo'))
+        with pytest.raises(SystemExit) as excinfo, \
+                chdir(repo.location):
+            tool.parse_args(['commit'])
+        assert excinfo.value.code == 2
+        out, err = capsys.readouterr()
+        err = err.strip().split('\n')
         assert err == ['pkgdev commit: error: not in ebuild git repo']
 
 
