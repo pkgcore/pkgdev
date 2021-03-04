@@ -245,8 +245,13 @@ def _commit(options, out, err):
             for result in pipe:
                 reporter.report(result)
         # fail on errors unless force committing
-        if pipe.errors and not options.force:
-            return 1
+        if pipe.errors:
+            with reporters.FancyReporter(out) as reporter:
+                out.write(out.bold, out.fg('red'), '\nFAILURES', out.reset)
+                for result in sorted(pipe.errors):
+                    reporter.report(result)
+            if not options.force:
+                return 1
 
     # create commit
     git.run('commit', *options.commit_args)
