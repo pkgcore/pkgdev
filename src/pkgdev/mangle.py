@@ -35,7 +35,7 @@ class Mangler:
         self._current_year = str(datetime.today().year)
 
         # initialize settings used by iterator support
-        self._pid = None
+        self._runner = None
         signal.signal(signal.SIGINT, self._kill_pipe)
         self._altered_paths = iter(self._altered_paths_q.get, None)
 
@@ -61,8 +61,8 @@ class Mangler:
 
     def _kill_pipe(self, *args, error=None):
         """Handle terminating the mangling process group."""
-        if self._pid is not None:
-            os.killpg(self._pid, signal.SIGKILL)
+        if self._runner is not None:
+            os.killpg(self._runner.pid, signal.SIGKILL)
         if error is not None:
             # output traceback for raised exception
             sys.stderr.write(error)
@@ -71,13 +71,16 @@ class Mangler:
 
     def __iter__(self):
         # start running the mangling processes
-        p = self._mp_ctx.Process(target=self._run)
-        p.start()
-        self._pid = p.pid
+        self._runner = self._mp_ctx.Process(target=self._run)
+        self._runner.start()
         return self
 
     def __next__(self):
-        path = next(self._altered_paths)
+        try:
+            path = next(self._altered_paths)
+        except StopIteration:
+            self._runner.join()
+            raise
 
         # Catch propagated, serialized exceptions, output their
         # traceback, and signal the scanning process to end.
