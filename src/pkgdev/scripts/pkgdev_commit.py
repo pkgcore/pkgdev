@@ -40,9 +40,6 @@ commit.add_argument(
     '-m', '--message', type=lambda x: x.strip(),
     help='specify commit message')
 commit.add_argument(
-    '-e', '--edit', action='store_true',
-    help='open editor to alter commit message')
-commit.add_argument(
     '-M', '--mangle', action='store_true',
     help='forcibly mangle files before commit')
 commit.add_argument(
@@ -185,8 +182,6 @@ def _commit_args(namespace, attr):
         args.append('--dry-run')
     if namespace.verbosity:
         args.append('-v')
-    if namespace.edit:
-        args.append('--edit')
 
     # determine commit message
     message = namespace.message
