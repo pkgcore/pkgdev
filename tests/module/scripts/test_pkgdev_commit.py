@@ -236,7 +236,7 @@ class TestPkgdevCommit:
                 f.truncate()
                 f.write('\n'.join(lines) + '\n')
             commit(['-n', '-u', '-m', 'mangling'])
-            # verify file doesn't end with newline
+            # verify the copyright header was updated
             with open(ebuild_path) as f:
                 lines = f.read().splitlines()
                 mo = copyright_regex.match(lines[0])
