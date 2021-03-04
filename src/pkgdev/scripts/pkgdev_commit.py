@@ -1,4 +1,5 @@
 import argparse
+import atexit
 import os
 import re
 import subprocess
@@ -199,8 +200,8 @@ def _commit_args(namespace, attr):
             args.extend(['-t', tmp.name])
         else:
             args.extend(['-F', tmp.name])
-        # make sure tempfile isn't garbage collected until it's used
-        namespace._commit_template = tmp
+        # explicitly close and delete tempfile on exit
+        atexit.register(tmp.close)
 
     setattr(namespace, attr, args)
 
