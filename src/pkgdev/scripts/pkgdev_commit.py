@@ -18,11 +18,11 @@ from snakeoil.strings import pluralism
 
 from .. import git
 from ..mangle import Mangler
-from .argparsers import cwd_repo_argparser
+from .argparsers import cwd_repo_argparser, git_repo_argparser
 
 commit = arghparse.ArgumentParser(
     prog='pkgdev commit', description='create git commit',
-    parents=(cwd_repo_argparser,))
+    parents=(cwd_repo_argparser, git_repo_argparser))
 # custom `pkgcheck scan` args used for tests
 commit.add_argument('--scan-args', nargs=1, default=(), help=argparse.SUPPRESS)
 commit.add_argument(

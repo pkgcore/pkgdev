@@ -2,11 +2,11 @@ from pkgcheck import reporters, scan
 from snakeoil.cli import arghparse
 
 from .. import git
-from .argparsers import cwd_repo_argparser
+from .argparsers import cwd_repo_argparser, git_repo_argparser
 
 push = arghparse.ArgumentParser(
     prog='pkgdev push', description='run QA checks on commits and push them',
-    parents=(cwd_repo_argparser,))
+    parents=(cwd_repo_argparser, git_repo_argparser))
 push.add_argument(
     'remote', nargs='?', default='origin',
     help='remote git repository (default: origin)')
