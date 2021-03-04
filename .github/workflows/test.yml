@@ -41,7 +41,7 @@ jobs:
       env:
         PY_COLORS: 1
       run: |
-        pytest -n auto --cov --cov-report=xml -v
+        pytest -n auto --cov --cov-report=term --cov-report=xml -v
 
     - name: Submit code coverage to codecov
       uses: codecov/codecov-action@v1
