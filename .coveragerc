@@ -1,15 +1,10 @@
 [run]
 source = pkgdev
 branch = True
-omit =
-	tests/*
-	*/_verinfo.py
 
 [paths]
 source =
-	src/pkgdev
-	build/install/lib/python*/site-packages/pkgdev
-	.tox/*/lib/python*/site-packages/pkgdev
+	**/site-packages/pkgdev
 
 [report]
 show_missing = True
