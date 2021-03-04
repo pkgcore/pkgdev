@@ -235,7 +235,7 @@ def _commit(options, out, err):
 
     # scan staged changes for QA issues if requested
     if options.scan:
-        pipe = scan(['--exit', '--staged'] + list(options.scan_args))
+        pipe = scan(['--exit', 'GentooCI', '--staged'] + list(options.scan_args))
         with reporters.FancyReporter(out) as reporter:
             for result in pipe:
                 reporter.report(result)

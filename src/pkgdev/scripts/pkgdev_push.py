@@ -24,7 +24,7 @@ push.add_argument(
 @push.bind_main_func
 def _push(options, out, err):
     # scan commits for QA issues
-    pipe = scan(['--exit', '--commits'])
+    pipe = scan(['--exit', 'GentooCI', '--commits'])
     with reporters.FancyReporter(out) as reporter:
         for result in pipe:
             reporter.report(result)
