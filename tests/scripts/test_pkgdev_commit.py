@@ -247,12 +247,12 @@ class TestPkgdevCommit:
 
         # single removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-3.ebuild'))
-        assert commit() == 'cat/pkg: remove 3'
+        assert commit() == 'cat/pkg: drop 3'
 
         # multiple removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-2.ebuild'))
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-1.ebuild'))
-        assert commit() == 'cat/pkg: remove old'
+        assert commit() == 'cat/pkg: drop old'
 
         # treeclean
         shutil.rmtree(pjoin(git_repo.path, 'cat/pkg'))

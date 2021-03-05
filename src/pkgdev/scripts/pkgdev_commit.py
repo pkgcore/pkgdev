@@ -164,9 +164,9 @@ def commit_msg_summary(repo, pkgs):
             elif status == 'D':
                 if existing_pkgs:
                     if len(versions) == 1:
-                        return f'remove {versions[0]}'
+                        return f'drop {versions[0]}'
                     else:
-                        return 'remove old'
+                        return 'drop old'
                 else:
                     return 'treeclean'
     return ''
