@@ -1,5 +1,6 @@
 import os
 import shutil
+import textwrap
 from datetime import datetime
 from functools import partial
 from unittest.mock import patch
@@ -331,3 +332,67 @@ class TestPkgdevCommit:
                 mo = copyright_regex.match(lines[0])
                 assert mo.group('end') == str(datetime.today().year)
                 assert mo.group('holder') == 'Gentoo Authors'
+
+    def test_scan(self, capsys, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+
+        for i, opt in enumerate(['-s', '--scan'], 1):
+            repo.create_ebuild(f'cat/pkg-{i}')
+            git_repo.add_all(f'cat/pkg-{i}', commit=False)
+            with patch('sys.argv', self.args + [opt]), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 0
+            out, err = capsys.readouterr()
+            assert err == out == ''
+            commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+            assert commit_msg == [f'cat/pkg: bump {i}']
+
+    def test_failed_scan(self, capsys, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+
+        # verify staged changes via `pkgcheck scan` before creating commit
+        repo.create_ebuild('cat/pkg-1', license='')
+        git_repo.add_all('cat/pkg-1', commit=False)
+        with patch('sys.argv', self.args + ['--scan']), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        assert excinfo.value.code == 1
+        out, err = capsys.readouterr()
+        assert not err
+        assert out == textwrap.dedent("""\
+            cat/pkg
+              MissingLicense: version 1: no license defined
+
+            FAILURES
+            cat/pkg
+              MissingLicense: version 1: no license defined
+        """)
+
+        # ignore failures to create the commit
+        with patch('sys.argv', self.args + ['--scan', '--ignore-failures']), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        assert excinfo.value.code == 0
+
+    def test_failed_manifest(self, capsys, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+        repo.create_ebuild('cat/pkg-1', eapi='-1')
+        git_repo.add_all('cat/pkg-1', commit=False)
+        with patch('sys.argv', self.args), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        assert excinfo.value.code == 1
+        out, err = capsys.readouterr()
+        assert not err
+        assert out == " * cat/pkg-1: invalid EAPI '-1'\n"
