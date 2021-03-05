@@ -160,7 +160,7 @@ def commit_msg_summary(repo, pkgs):
                     return 'initial import'
                 else:
                     s = pluralism(versions)
-                    return f"version bump{s} {', '.join(versions)}"
+                    return f"bump{s} {', '.join(versions)}"
             elif status == 'D':
                 if existing_pkgs:
                     if len(versions) == 1:

@@ -234,12 +234,12 @@ class TestPkgdevCommit:
 
         # single bump
         repo.create_ebuild('cat/pkg-1')
-        assert commit() == 'cat/pkg: version bump 1'
+        assert commit() == 'cat/pkg: bump 1'
 
         # multiple bumps
         repo.create_ebuild('cat/pkg-2')
         repo.create_ebuild('cat/pkg-3')
-        assert commit() == 'cat/pkg: version bumps 2, 3'
+        assert commit() == 'cat/pkg: bumps 2, 3'
 
         # single removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-3.ebuild'))
