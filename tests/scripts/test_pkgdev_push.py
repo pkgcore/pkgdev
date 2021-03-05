@@ -43,6 +43,15 @@ class TestPkgdevPushParseArgs:
             options, _ = tool.parse_args(['push', 'origin', 'master'])
         assert options.push_args == ['origin', 'master']
 
+    def test_gentoo_repo_git_push_args(self, make_repo, make_git_repo, tool):
+        """Unknown arguments for ``pkgdev push`` are passed to ``git push``."""
+        repo = make_repo(repo_id='gentoo')
+        git_repo = make_git_repo(repo.location)
+        with chdir(git_repo.path):
+            options, _ = tool.parse_args(['push', '-n'])
+        assert '--signed' in options.push_args
+        assert '--dry-run' in options.push_args
+
 
 class TestPkgdevPush:
 
@@ -71,7 +80,7 @@ class TestPkgdevPush:
         self.child_git_repo.run(['git', 'push', '-u', 'origin', 'master'])
         self.child_git_repo.run(['git', 'remote', 'set-head', 'origin', 'master'])
 
-    def test_push(self, capsys, repo, make_git_repo):
+    def test_push(self, capsys):
         self.child_repo.create_ebuild('cat/pkg-1')
         self.child_git_repo.add_all('cat/pkg-1')
 
@@ -81,7 +90,7 @@ class TestPkgdevPush:
             self.script()
         assert excinfo.value.code == 0
 
-    def test_failed_push(self, capsys, repo, make_git_repo):
+    def test_failed_push(self, capsys):
         self.child_repo.create_ebuild('cat/pkg-1', eapi='-1')
         self.child_git_repo.add_all('cat/pkg-1')
 
