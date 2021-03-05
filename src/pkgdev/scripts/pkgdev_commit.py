@@ -157,7 +157,7 @@ def commit_msg_summary(repo, pkgs):
                 if len(existing_pkgs) == len(pkgs):
                     return 'initial import'
                 else:
-                    msg = f"bump {', '.join(versions)}"
+                    msg = f"bump to {', '.join(versions)}"
                     if len(msg) <= 50:
                         return msg
                     else:

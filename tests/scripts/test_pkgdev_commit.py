@@ -235,13 +235,13 @@ class TestPkgdevCommit:
 
         # single bump
         repo.create_ebuild('cat/pkg-1')
-        assert commit() == 'cat/pkg: bump 1'
+        assert commit() == 'cat/pkg: bump to 1'
 
         # multiple bumps
         repo.create_ebuild('cat/pkg-2')
         repo.create_ebuild('cat/pkg-2-r1')
         repo.create_ebuild('cat/pkg-3')
-        assert commit() == 'cat/pkg: bump 2, 2-r1, 3'
+        assert commit() == 'cat/pkg: bump to 2, 2-r1, 3'
 
         # large number of bumps in a single commit
         for v in range(10000, 10010):
@@ -361,7 +361,7 @@ class TestPkgdevCommit:
             out, err = capsys.readouterr()
             assert err == out == ''
             commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
-            assert commit_msg == [f'cat/pkg: bump {i}']
+            assert commit_msg == [f'cat/pkg: bump to {i}']
 
     def test_failed_scan(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
