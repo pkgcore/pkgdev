@@ -70,7 +70,7 @@ class TestPkgdevCommit:
     @pytest.fixture(autouse=True)
     def _setup(self, tmp_path):
         self.cache_dir = str(tmp_path)
-        self.scan_args = ['--scan-args', f'--config no --cache-dir {self.cache_dir}']
+        self.scan_args = ['--pkgcheck-scan', f'--config no --cache-dir {self.cache_dir}']
         # args for running pkgdev like a script
         self.args = ['pkgdev', 'commit'] + self.scan_args
 

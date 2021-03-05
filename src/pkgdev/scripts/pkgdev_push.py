@@ -21,7 +21,7 @@ push = ArgumentParser(
     prog='pkgdev push', description='run QA checks on commits and push them',
     parents=(cwd_repo_argparser, git_repo_argparser))
 # custom `pkgcheck scan` args used for tests
-push.add_argument('--scan-args', default='', help=argparse.SUPPRESS)
+push.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 push.add_argument(
     '--ignore-failures', action='store_true',
     help='ignore QA failures before pushing')
@@ -39,14 +39,22 @@ def _push_args(namespace, attr):
         args.append('--signed')
     if namespace.dry_run:
         args.append('--dry-run')
+    setattr(namespace, attr, args)
 
+
+@push.bind_delayed_default(9999, 'scan_args')
+def _scan_args(namespace, attr):
+    args = []
+    if namespace.pkgcheck_scan:
+        args.extend(shlex.split(namespace.pkgcheck_scan))
+    args.extend(['--exit', 'GentooCI', '--commits'])
     setattr(namespace, attr, args)
 
 
 @push.bind_main_func
 def _push(options, out, err):
     # scan commits for QA issues
-    pipe = scan(shlex.split(options.scan_args) + ['--exit', 'GentooCI', '--commits'])
+    pipe = scan(options.scan_args)
     with reporters.FancyReporter(out) as reporter:
         for result in pipe:
             reporter.report(result)

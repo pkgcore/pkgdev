@@ -36,7 +36,7 @@ commit = ArgumentParser(
     prog='pkgdev commit', description='create git commit',
     parents=(cwd_repo_argparser, git_repo_argparser))
 # custom `pkgcheck scan` args used for tests
-commit.add_argument('--scan-args', default='', help=argparse.SUPPRESS)
+commit.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 commit.add_argument(
     '-m', '--message', type=lambda x: x.strip(),
     help='specify commit message')
@@ -212,6 +212,15 @@ def _commit_args(namespace, attr):
     setattr(namespace, attr, args)
 
 
+@commit.bind_delayed_default(9999, 'scan_args')
+def _scan_args(namespace, attr):
+    args = []
+    if namespace.pkgcheck_scan:
+        args.extend(shlex.split(namespace.pkgcheck_scan))
+    args.extend(['--exit', 'GentooCI', '--staged'])
+    setattr(namespace, attr, args)
+
+
 @commit.bind_main_func
 def _commit(options, out, err):
     repo = options.repo
@@ -241,7 +250,7 @@ def _commit(options, out, err):
 
     # scan staged changes for QA issues if requested
     if options.scan:
-        pipe = scan(shlex.split(options.scan_args) + ['--exit', 'GentooCI', '--staged'])
+        pipe = scan(options.scan_args)
         with reporters.FancyReporter(out) as reporter:
             for result in pipe:
                 reporter.report(result)

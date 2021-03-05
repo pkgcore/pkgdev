@@ -60,7 +60,7 @@ class TestPkgdevPush:
     @pytest.fixture(autouse=True)
     def _setup(self, tmp_path, make_repo, make_git_repo):
         self.cache_dir = str(tmp_path / 'cache')
-        self.scan_args = ['--scan-args', f'--config no --cache-dir {self.cache_dir}']
+        self.scan_args = ['--pkgcheck-scan', f'--config no --cache-dir {self.cache_dir}']
         # args for running pkgdev like a script
         self.args = ['pkgdev', 'push'] + self.scan_args
 
