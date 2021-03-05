@@ -76,7 +76,7 @@ def _git_changes(namespace, attr):
 
     # determine staged changes
     p = git.run(
-        'diff-index', '--name-status', '--cached', '-z', 'HEAD',
+        'diff', '--name-status', '--cached', '-z',
         stdout=subprocess.PIPE)
 
     # ebuild path regex, validation is handled on instantiation
