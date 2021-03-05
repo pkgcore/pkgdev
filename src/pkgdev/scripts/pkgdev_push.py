@@ -18,12 +18,6 @@ push = ArgumentParser(
     prog='pkgdev push', description='run QA checks on commits and push them',
     parents=(cwd_repo_argparser, git_repo_argparser))
 push.add_argument(
-    'remote', nargs='?', default='origin',
-    help='remote git repository (default: origin)')
-push.add_argument(
-    'refspec', nargs='?', default='master',
-    help='destination ref to update (default: master)')
-push.add_argument(
     '--ignore-failures', action='store_true',
     help='ignore QA failures before pushing')
 push.add_argument(
@@ -40,8 +34,6 @@ def _push_args(namespace, attr):
         args.append('--signed')
     if namespace.dry_run:
         args.append('--dry-run')
-
-    args.extend([namespace.remote, namespace.refspec])
 
     setattr(namespace, attr, args)
 
