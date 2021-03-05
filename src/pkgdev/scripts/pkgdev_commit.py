@@ -41,8 +41,8 @@ commit.add_argument(
     '-m', '--message', type=lambda x: x.strip(),
     help='specify commit message')
 commit.add_argument(
-    '-M', '--mangle', action='store_true',
-    help='forcibly mangle files before commit')
+    '-M', '--mangle', nargs='?', const=True, action=arghparse.StoreBool,
+    help='perform file mangling')
 commit.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit')
@@ -221,6 +221,13 @@ def _scan_args(namespace, attr):
     setattr(namespace, attr, args)
 
 
+@commit.bind_final_check
+def _commit_validate(parser, namespace):
+    # mangle files in the gentoo repo by default
+    if namespace.mangle is None and namespace.repo.repo_id == 'gentoo':
+        namespace.mangle = True
+
+
 @commit.bind_main_func
 def _commit(options, out, err):
     repo = options.repo
@@ -241,7 +248,7 @@ def _commit(options, out, err):
         git_add_files.extend(filter(os.path.exists, manifests))
 
     # mangle files
-    if repo.repo_id == 'gentoo' or options.mangle:
+    if options.mangle:
         git_add_files.extend(Mangler(options.repo, options.paths))
 
     # stage modified files
