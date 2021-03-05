@@ -148,7 +148,7 @@ def commit_msg_summary(repo, pkgs):
     """Determine commit message summary."""
     if len({x.unversioned_atom for x in pkgs}) == 1:
         # all changes made on the same package
-        versions = [x.version for x in sorted(pkgs)]
+        versions = [x.fullver for x in sorted(pkgs)]
         atom = next(iter(pkgs)).unversioned_atom
         existing_pkgs = repo.match(atom)
         if len(set(pkgs.values())) == 1:

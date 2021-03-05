@@ -239,8 +239,9 @@ class TestPkgdevCommit:
 
         # multiple bumps
         repo.create_ebuild('cat/pkg-2')
+        repo.create_ebuild('cat/pkg-2-r1')
         repo.create_ebuild('cat/pkg-3')
-        assert commit() == 'cat/pkg: bump 2, 3'
+        assert commit() == 'cat/pkg: bump 2, 2-r1, 3'
 
         # large number of bumps in a single commit
         for v in range(10000, 10010):
@@ -252,9 +253,10 @@ class TestPkgdevCommit:
         assert commit() == 'cat/pkg: drop 3'
 
         # multiple removal
+        os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-2-r1.ebuild'))
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-2.ebuild'))
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-1.ebuild'))
-        assert commit() == 'cat/pkg: drop 1, 2'
+        assert commit() == 'cat/pkg: drop 1, 2, 2-r1'
 
         # large number of removals in a single commit
         for v in range(10000, 10010):
