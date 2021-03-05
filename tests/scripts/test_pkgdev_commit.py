@@ -42,6 +42,21 @@ class TestPkgdevCommitParseArgs:
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
         git_repo.add_all('cat/pkg-0', commit=False)
+        with chdir(repo.location):
+            for opt, expected in (
+                    ('-n', '--dry-run'),
+                    ('--dry-run', '--dry-run'),
+                    ('-v', '-v'),
+                    ('--verbose', '-v'),
+                    ):
+                options, _ = tool.parse_args(['commit', opt])
+                assert expected in options.commit_args
+
+    def test_git_commit_args_passthrough(self, repo, make_git_repo, tool):
+        """Unknown arguments for ``pkgdev commit`` are passed to ``git commit``."""
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0', commit=False)
         author_opt = '--author="A U Thor <author@example.com>"'
         with chdir(repo.location):
             options, _ = tool.parse_args(['commit', author_opt])
