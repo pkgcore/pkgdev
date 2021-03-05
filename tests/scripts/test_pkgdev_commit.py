@@ -243,7 +243,12 @@ class TestPkgdevCommit:
         # multiple bumps
         repo.create_ebuild('cat/pkg-2')
         repo.create_ebuild('cat/pkg-3')
-        assert commit() == 'cat/pkg: bumps 2, 3'
+        assert commit() == 'cat/pkg: bump 2, 3'
+
+        # large number of bumps in a single commit
+        for v in range(10000, 10010):
+            repo.create_ebuild(f'cat/pkg-{v}')
+        assert commit() == 'cat/pkg: bump versions'
 
         # single removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-3.ebuild'))
@@ -252,7 +257,12 @@ class TestPkgdevCommit:
         # multiple removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-2.ebuild'))
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-1.ebuild'))
-        assert commit() == 'cat/pkg: drop old'
+        assert commit() == 'cat/pkg: drop 1, 2'
+
+        # large number of removals in a single commit
+        for v in range(10000, 10010):
+            os.remove(pjoin(git_repo.path, f'cat/pkg/pkg-{v}.ebuild'))
+        assert commit() == 'cat/pkg: drop versions'
 
         # treeclean
         shutil.rmtree(pjoin(git_repo.path, 'cat/pkg'))

@@ -16,7 +16,6 @@ from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
 from snakeoil.mappings import OrderedSet
 from snakeoil.osutils import pjoin
-from snakeoil.strings import pluralism
 
 from .. import git
 from ..mangle import Mangler
@@ -150,7 +149,7 @@ def commit_msg_summary(repo, pkgs):
     """Determine commit message summary."""
     if len({x.unversioned_atom for x in pkgs}) == 1:
         # all changes made on the same package
-        versions = [x.version for x in pkgs]
+        versions = [x.version for x in sorted(pkgs)]
         atom = next(iter(pkgs)).unversioned_atom
         existing_pkgs = repo.match(atom)
         if len(set(pkgs.values())) == 1:
@@ -159,14 +158,18 @@ def commit_msg_summary(repo, pkgs):
                 if len(existing_pkgs) == len(pkgs):
                     return 'initial import'
                 else:
-                    s = pluralism(versions)
-                    return f"bump{s} {', '.join(versions)}"
+                    msg = f"bump {', '.join(versions)}"
+                    if len(msg) <= 50:
+                        return msg
+                    else:
+                        return 'bump versions'
             elif status == 'D':
                 if existing_pkgs:
-                    if len(versions) == 1:
-                        return f'drop {versions[0]}'
+                    msg = f"drop {', '.join(versions)}"
+                    if len(msg) <= 50:
+                        return msg
                     else:
-                        return 'drop old'
+                        return 'drop versions'
                 else:
                     return 'treeclean'
     return ''
