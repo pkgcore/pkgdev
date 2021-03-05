@@ -140,6 +140,78 @@ class TestPkgdevCommit:
         commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
         assert commit_msg == ['cat/pkg: commit']
 
+    def test_generated_commit_prefixes(self, capsys, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+
+        def commit():
+            with patch('sys.argv', self.args + ['-a', '-m', 'msg']), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 0
+            out, err = capsys.readouterr()
+            assert err == out == ''
+            message = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+            return message[0]
+
+        # single package change
+        repo.create_ebuild('cat/newpkg-0')
+        assert commit().startswith('cat/newpkg: ')
+
+        # multiple package changes in the same category
+        repo.create_ebuild('cat/newpkg-1')
+        repo.create_ebuild('cat/pkg-1')
+        assert commit().startswith('cat/*: ')
+
+        # multiple package changes in various categories
+        repo.create_ebuild('cat/newpkg-2')
+        repo.create_ebuild('cat/pkg-2')
+        repo.create_ebuild('newcat/newpkg-1')
+        assert commit().startswith('*/*: ')
+
+        # single eclass change
+        with open(pjoin(repo.location, 'eclass', 'foo.eclass'), 'a+') as f:
+            f.write('# comment\n')
+        assert commit().startswith('foo.eclass: ')
+
+        # multiple eclass changes
+        for eclass in ('foo.eclass', 'bar.eclass'):
+            with open(pjoin(repo.location, 'eclass', eclass), 'a+') as f:
+                f.write('# comment\n')
+        assert commit().startswith('eclass: ')
+
+        # single profiles/package.mask change
+        with open(pjoin(repo.location, 'profiles', 'package.mask'), 'a+') as f:
+            f.write('# comment\n')
+        assert commit().startswith('profiles: ')
+
+        amd64 = pjoin(repo.location, 'profiles', 'arch', 'amd64')
+        os.makedirs(amd64)
+        arm64 = pjoin(repo.location, 'profiles', 'arch', 'arm64')
+        os.makedirs(arm64)
+
+        # multiple profiles file changes in the same subdir
+        for file in ('package.mask', 'package.mask'):
+            with open(pjoin(amd64, file), 'a+') as f:
+                f.write('# comment\n')
+        assert commit().startswith('profiles/arch/amd64: ')
+
+        # multiple profiles file changes in different subdirs
+        for path in (amd64, arm64):
+            with open(pjoin(path, 'package.use'), 'a+') as f:
+                f.write('# comment\n')
+        assert commit().startswith('profiles/arch: ')
+
+        # treewide changes (no commit message prefix)
+        repo.create_ebuild('foo/bar-1')
+        with open(pjoin(repo.location, 'eclass', 'foo.eclass'), 'a+') as f:
+            f.write('# comment\n')
+        with open(pjoin(repo.location, 'profiles', 'package.mask'), 'a+') as f:
+            f.write('# comment\n')
+        assert commit() == 'msg'
+
     def test_generated_commit_summaries(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
@@ -153,33 +225,34 @@ class TestPkgdevCommit:
             assert excinfo.value.code == 0
             out, err = capsys.readouterr()
             assert err == out == ''
-            return git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+            message = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+            return message[0]
 
         # initial package import
         repo.create_ebuild('cat/newpkg-0')
-        assert commit() == ['cat/newpkg: initial import']
+        assert commit() == 'cat/newpkg: initial import'
 
         # single bump
         repo.create_ebuild('cat/pkg-1')
-        assert commit() == ['cat/pkg: version bump 1']
+        assert commit() == 'cat/pkg: version bump 1'
 
         # multiple bumps
         repo.create_ebuild('cat/pkg-2')
         repo.create_ebuild('cat/pkg-3')
-        assert commit() == ['cat/pkg: version bumps 2, 3']
+        assert commit() == 'cat/pkg: version bumps 2, 3'
 
         # single removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-3.ebuild'))
-        assert commit() == ['cat/pkg: remove 3']
+        assert commit() == 'cat/pkg: remove 3'
 
         # multiple removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-2.ebuild'))
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-1.ebuild'))
-        assert commit() == ['cat/pkg: remove old']
+        assert commit() == 'cat/pkg: remove old'
 
         # treeclean
         shutil.rmtree(pjoin(git_repo.path, 'cat/pkg'))
-        assert commit() == ['cat/pkg: treeclean']
+        assert commit() == 'cat/pkg: treeclean'
 
     def test_non_gentoo_file_mangling(self, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
