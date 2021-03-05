@@ -2,6 +2,7 @@ import argparse
 import atexit
 import os
 import re
+import shlex
 import subprocess
 import tempfile
 from collections import defaultdict
@@ -35,7 +36,7 @@ commit = ArgumentParser(
     prog='pkgdev commit', description='create git commit',
     parents=(cwd_repo_argparser, git_repo_argparser))
 # custom `pkgcheck scan` args used for tests
-commit.add_argument('--scan-args', nargs=1, default=(), help=argparse.SUPPRESS)
+commit.add_argument('--scan-args', default='', help=argparse.SUPPRESS)
 commit.add_argument(
     '-m', '--message', type=lambda x: x.strip(),
     help='specify commit message')
@@ -240,7 +241,7 @@ def _commit(options, out, err):
 
     # scan staged changes for QA issues if requested
     if options.scan:
-        pipe = scan(['--exit', 'GentooCI', '--staged'] + list(options.scan_args))
+        pipe = scan(shlex.split(options.scan_args) + ['--exit', 'GentooCI', '--staged'])
         with reporters.FancyReporter(out) as reporter:
             for result in pipe:
                 reporter.report(result)

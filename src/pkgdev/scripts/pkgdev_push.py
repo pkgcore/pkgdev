@@ -1,3 +1,6 @@
+import argparse
+import shlex
+
 from pkgcheck import reporters, scan
 from snakeoil.cli import arghparse
 
@@ -17,6 +20,8 @@ class ArgumentParser(arghparse.ArgumentParser):
 push = ArgumentParser(
     prog='pkgdev push', description='run QA checks on commits and push them',
     parents=(cwd_repo_argparser, git_repo_argparser))
+# custom `pkgcheck scan` args used for tests
+push.add_argument('--scan-args', default='', help=argparse.SUPPRESS)
 push.add_argument(
     '--ignore-failures', action='store_true',
     help='ignore QA failures before pushing')
@@ -41,7 +46,7 @@ def _push_args(namespace, attr):
 @push.bind_main_func
 def _push(options, out, err):
     # scan commits for QA issues
-    pipe = scan(['--exit', 'GentooCI', '--commits'])
+    pipe = scan(shlex.split(options.scan_args) + ['--exit', 'GentooCI', '--commits'])
     with reporters.FancyReporter(out) as reporter:
         for result in pipe:
             reporter.report(result)
