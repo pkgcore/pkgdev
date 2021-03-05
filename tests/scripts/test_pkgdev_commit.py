@@ -59,20 +59,16 @@ class TestPkgdevCommit:
         # args for running pkgdev like a script
         self.args = ['pkgdev', 'commit'] + self.scan_args
 
-    def test_no_staged_changes(self, capsys, repo, make_git_repo):
+    def test_empty_repo(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
-        repo.create_ebuild('cat/pkg-0')
-        git_repo.add_all('cat/pkg-0')
-
-        for opt in ([], ['-u'], ['-a']):
-            with patch('sys.argv', self.args + opt), \
-                    pytest.raises(SystemExit) as excinfo, \
-                    chdir(git_repo.path):
-                self.script()
-            assert excinfo.value.code == 2
-            out, err = capsys.readouterr()
-            assert not out
-            assert err.strip() == 'pkgdev commit: error: no staged changes exist'
+        with patch('sys.argv', self.args), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        assert excinfo.value.code == 2
+        out, err = capsys.readouterr()
+        assert not out
+        assert err.strip() == 'pkgdev commit: error: no staged changes exist'
 
     def test_custom_unprefixed_message(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
