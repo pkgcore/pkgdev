@@ -38,6 +38,15 @@ class TestPkgdevCommitParseArgs:
         err = err.strip().split('\n')[-1]
         assert err.endswith('error: not in ebuild git repo')
 
+    def test_git_commit_args(self, repo, make_git_repo, tool):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0', commit=False)
+        author_opt = '--author="A U Thor <author@example.com>"'
+        with chdir(repo.location):
+            options, _ = tool.parse_args(['commit', author_opt])
+        assert options.commit_args == [author_opt]
+
 
 class TestPkgdevCommit:
 
