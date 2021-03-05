@@ -24,8 +24,8 @@ push.add_argument(
     'refspec', nargs='?', default='master',
     help='destination ref to update (default: master)')
 push.add_argument(
-    '-f', '--force', action='store_true',
-    help='forcibly push commits with QA errors')
+    '--ignore-failures', action='store_true',
+    help='ignore QA failures before pushing')
 push.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to push the commits')
@@ -54,13 +54,13 @@ def _push(options, out, err):
         for result in pipe:
             reporter.report(result)
 
-    # fail on errors unless force pushing
+    # fail on errors unless they're ignored
     if pipe.errors:
         with reporters.FancyReporter(out) as reporter:
             out.write(out.bold, out.fg('red'), '\nFAILURES', out.reset)
             for result in sorted(pipe.errors):
                 reporter.report(result)
-        if not options.force:
+        if not options.ignore_failures:
             return 1
 
     # push commits upstream

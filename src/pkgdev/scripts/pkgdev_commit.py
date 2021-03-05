@@ -49,7 +49,7 @@ commit.add_argument(
     '-s', '--scan', action='store_true',
     help='run pkgcheck against staged changes')
 commit.add_argument(
-    '-f', '--force', action='store_true',
+    '--ignore-failures', action='store_true',
     help='forcibly create commit with QA errors')
 
 add_actions = commit.add_mutually_exclusive_group()
@@ -244,13 +244,13 @@ def _commit(options, out, err):
         with reporters.FancyReporter(out) as reporter:
             for result in pipe:
                 reporter.report(result)
-        # fail on errors unless force committing
+        # fail on errors unless they're ignored
         if pipe.errors:
             with reporters.FancyReporter(out) as reporter:
                 out.write(out.bold, out.fg('red'), '\nFAILURES', out.reset)
                 for result in sorted(pipe.errors):
                     reporter.report(result)
-            if not options.force:
+            if not options.ignore_failures:
                 return 1
 
     # create commit
