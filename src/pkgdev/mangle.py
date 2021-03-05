@@ -5,12 +5,11 @@ import multiprocessing
 import os
 import re
 import signal
-import sys
 import traceback
 from datetime import datetime
 
+from snakeoil.cli.exceptions import UserException
 from snakeoil.mappings import OrderedSet
-from snakeoil.osutils import pjoin
 
 copyright_regex = re.compile(
     r'^# Copyright (?P<begin>\d{4}-)?(?P<end>\d{4}) (?P<holder>.+)$')
@@ -19,15 +18,11 @@ copyright_regex = re.compile(
 class Mangler:
     """File-mangling iterator using path-based parallelism."""
 
-    def __init__(self, options, paths):
-        self.options = options
+    def __init__(self, repo, paths):
         self.jobs = os.cpu_count()
         # regex matching file paths to skip
         _skip_regex = re.compile(r'^[^/]+/[^/]+/files/.+$')
-        self.paths = OrderedSet(
-            pjoin(self.options.repo.location, x)
-            for x in paths if not _skip_regex.match(x)
-        )
+        self.paths = OrderedSet(x for x in paths if not _skip_regex.match(x))
 
         # setup for parallelizing the mangling procedure across files
         self._mp_ctx = multiprocessing.get_context('fork')
@@ -42,7 +37,7 @@ class Mangler:
         # construct composed mangling function
         funcs = (getattr(self, x) for x in dir(self) if x.startswith('_mangle_'))
         # don't use gentoo repo specific mangling for non-gentoo repos
-        if self.options.repo.repo_id != 'gentoo':
+        if repo.repo_id != 'gentoo':
             funcs = (x for x in funcs if not x.__name__.endswith('_gentoo'))
         self.composed_func = functools.reduce(
             lambda f, g: lambda x: f(g(x)), funcs, lambda x: x)
@@ -64,9 +59,8 @@ class Mangler:
         if self._runner is not None:
             os.killpg(self._runner.pid, signal.SIGKILL)
         if error is not None:
-            # output traceback for raised exception
-            sys.stderr.write(error)
-            raise SystemExit(1)
+            # propagate exception raised during parallelized mangling
+            raise UserException(error)
         raise KeyboardInterrupt
 
     def __iter__(self):

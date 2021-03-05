@@ -92,7 +92,7 @@ def _git_changes(namespace, attr):
     pkgs = {}
     changes = defaultdict(OrderedSet)
     for status, path in grouper(data, 2):
-        paths.append(path)
+        paths.append(pjoin(namespace.repo.location, path))
         path_components = path.split(os.sep)
         if path_components[0] in namespace.repo.categories and len(path_components) > 2:
             changes['pkgs'].add(os.sep.join(path_components[:2]))
@@ -242,7 +242,7 @@ def _commit(options, out, err):
 
     # mangle files
     if repo.repo_id == 'gentoo' or options.mangle:
-        git_add_files.extend(Mangler(options, options.paths))
+        git_add_files.extend(Mangler(options.repo, options.paths))
 
     # stage modified files
     if git_add_files:
