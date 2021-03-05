@@ -4,7 +4,17 @@ from snakeoil.cli import arghparse
 from .. import git
 from .argparsers import cwd_repo_argparser, git_repo_argparser
 
-push = arghparse.ArgumentParser(
+
+class ArgumentParser(arghparse.ArgumentParser):
+    """Parse all known arguments, passing unknown arguments to ``git push``."""
+
+    def parse_known_args(self, args=None, namespace=None):
+        namespace, args = super().parse_known_args(args, namespace)
+        namespace.push_args.extend(args)
+        return namespace, []
+
+
+push = ArgumentParser(
     prog='pkgdev push', description='run QA checks on commits and push them',
     parents=(cwd_repo_argparser, git_repo_argparser))
 push.add_argument(
