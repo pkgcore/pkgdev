@@ -21,6 +21,21 @@ push.add_argument(
     help='pretend to push the commits')
 
 
+@push.bind_delayed_default(1000, 'push_args')
+def _push_args(namespace, attr):
+    """Determine arguments used with `git push`."""
+    args = []
+    if namespace.repo.repo_id == 'gentoo':
+        # gentoo repo requires signed pushes
+        args.append('--signed')
+    if namespace.dry_run:
+        args.append('--dry-run')
+
+    args.extend([namespace.remote, namespace.refspec])
+
+    setattr(namespace, attr, args)
+
+
 @push.bind_main_func
 def _push(options, out, err):
     # scan commits for QA issues
@@ -38,16 +53,7 @@ def _push(options, out, err):
         if not options.force:
             return 1
 
-    git_args = []
-    if options.repo.repo_id == 'gentoo':
-        # gentoo repo requires signed pushes
-        git_args.append('--signed')
-    if options.dry_run:
-        git_args.append('--dry-run')
-
-    git_args.extend([options.remote, options.refspec])
-
     # push commits upstream
-    git.run('push', *git_args, cwd=options.repo.location)
+    git.run('push', *options.push_args, cwd=options.repo.location)
 
     return 0
