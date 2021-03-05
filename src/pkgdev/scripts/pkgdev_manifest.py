@@ -54,14 +54,14 @@ def _manifest_validate(parser, namespace):
             except ValueError:
                 manifest.error(f'invalid atom: {target!r}')
 
-    namespace.restrictions = restrictions
+    namespace.restriction = packages.OrRestriction(*restrictions)
 
 
 @manifest.bind_main_func
 def _manifest(options, out, err):
     failed = options.repo.operations.digests(
         domain=options.domain,
-        restriction=packages.OrRestriction(*options.restrictions),
+        restriction=options.restriction,
         observer=observer_mod.formatter_output(out),
         mirrors=options.mirrors,
         force=options.force)

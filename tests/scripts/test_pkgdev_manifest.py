@@ -2,9 +2,9 @@ from functools import partial
 from unittest.mock import patch
 
 import pytest
-from pkgcore.ebuild.atom import atom as atom_cls
 from pkgdev.scripts import run
 from snakeoil.contexts import chdir
+from snakeoil.osutils import pjoin
 
 
 class TestPkgdevManifestParseArgs:
@@ -18,14 +18,40 @@ class TestPkgdevManifestParseArgs:
         assert err.endswith('error: not in ebuild repo')
 
     def test_repo_cwd(self, repo, capsys, tool):
+        repo.create_ebuild('cat/pkg-0')
         with chdir(repo.location):
             options, _ = tool.parse_args(['manifest'])
-        assert options.restrictions
+        matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
+        assert matches == ['cat/pkg-0']
+
+    def test_dir_target(self, repo, capsys, tool):
+        repo.create_ebuild('cat/pkg-0')
+        with chdir(repo.location):
+            options, _ = tool.parse_args(['manifest', pjoin(repo.location, 'cat')])
+        matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
+        assert matches == ['cat/pkg-0']
+
+    def test_ebuild_target(self, repo, capsys, tool):
+        path = repo.create_ebuild('cat/pkg-0')
+        with chdir(repo.location):
+            options, _ = tool.parse_args(['manifest', path])
+        matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
+        assert matches == ['cat/pkg-0']
 
     def test_atom_target(self, repo, capsys, tool):
+        repo.create_ebuild('cat/pkg-0')
         with chdir(repo.location):
             options, _ = tool.parse_args(['manifest', 'cat/pkg'])
-        assert options.restrictions == [atom_cls('cat/pkg')]
+        matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
+        assert matches == ['cat/pkg-0']
+
+    def test_non_repo_dir_target(self, tmp_path, repo, capsys, tool):
+        with pytest.raises(SystemExit) as excinfo, \
+                chdir(repo.location):
+            tool.parse_args(['manifest', str(tmp_path)])
+        assert excinfo.value.code == 2
+        out, err = capsys.readouterr()
+        assert err.startswith("pkgdev manifest: error: 'fake' repo doesn't contain:")
 
     def test_invalid_atom_target(self, repo, capsys, tool):
         with pytest.raises(SystemExit) as excinfo, \
@@ -33,7 +59,7 @@ class TestPkgdevManifestParseArgs:
             tool.parse_args(['manifest', '=cat/pkg'])
         assert excinfo.value.code == 2
         out, err = capsys.readouterr()
-        err == "pkgdev manifest: error: invalid atom: '=cat/pkg'"
+        assert err.startswith("pkgdev manifest: error: invalid atom: '=cat/pkg'")
 
 
 class TestPkgdevManifest:
