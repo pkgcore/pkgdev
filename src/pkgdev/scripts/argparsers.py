@@ -32,7 +32,7 @@ def _determine_git_repo(parser, namespace, args):
     try:
         p = git.run('rev-parse', '--show-toplevel', stdout=subprocess.PIPE)
         path = p.stdout.strip()
-    except SystemExit:
+    except git.GitError:
         raise UserException('not in git repo')
 
     # verify the git and ebuild repo roots match when using both

@@ -4,6 +4,10 @@ import sys
 from snakeoil.cli.exceptions import UserException
 
 
+class GitError(SystemExit):
+    """Generic error running a git command."""
+
+
 def run(*args, **kwargs):
     """Wrapper for running git via subprocess.run()."""
     kwargs.setdefault('check', True)
@@ -20,4 +24,4 @@ def run(*args, **kwargs):
     except FileNotFoundError as e:
         raise UserException(str(e))
     except subprocess.CalledProcessError as e:
-        raise SystemExit(e.returncode)
+        raise GitError(e.returncode)
