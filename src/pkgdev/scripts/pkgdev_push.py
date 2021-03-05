@@ -13,7 +13,7 @@ class ArgumentParser(arghparse.ArgumentParser):
 
     def parse_known_args(self, args=None, namespace=None):
         namespace, args = super().parse_known_args(args, namespace)
-        namespace.push_args.extend(args)
+        namespace.extended_push_args = args
         return namespace, []
 
 
@@ -30,8 +30,7 @@ push.add_argument(
     help='pretend to push the commits')
 
 
-@push.bind_delayed_default(1000, 'push_args')
-def _push_args(namespace, attr):
+def determine_push_args(namespace):
     """Determine arguments used with `git push`."""
     args = []
     if namespace.repo.repo_id == 'gentoo':
@@ -39,16 +38,19 @@ def _push_args(namespace, attr):
         args.append('--signed')
     if namespace.dry_run:
         args.append('--dry-run')
-    setattr(namespace, attr, args)
+    return args
 
 
-@push.bind_delayed_default(9999, 'scan_args')
-def _scan_args(namespace, attr):
-    args = []
+@push.bind_final_check
+def _commit_validate(parser, namespace):
+    # determine `git push` args
+    namespace.push_args = determine_push_args(namespace) + namespace.extended_push_args
+
+    # determine `pkgcheck scan` args
+    namespace.scan_args = []
     if namespace.pkgcheck_scan:
-        args.extend(shlex.split(namespace.pkgcheck_scan))
-    args.extend(['--exit', 'GentooCI', '--commits'])
-    setattr(namespace, attr, args)
+        namespace.scan_args.extend(shlex.split(namespace.pkgcheck_scan))
+    namespace.scan_args.extend(['--exit', 'GentooCI', '--commits'])
 
 
 @push.bind_main_func

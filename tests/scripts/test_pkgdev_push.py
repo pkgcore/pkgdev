@@ -15,16 +15,14 @@ class TestPkgdevPushParseArgs:
         with pytest.raises(SystemExit):
             tool.parse_args(['push'])
         out, err = capsys.readouterr()
-        err = err.strip().split('\n')[-1]
-        assert err.endswith('error: not in ebuild repo')
+        assert err.strip() == 'pkgdev push: error: not in ebuild repo'
 
     def test_non_git_repo_cwd(self, repo, capsys, tool):
         with pytest.raises(SystemExit), \
                 chdir(repo.location):
             tool.parse_args(['push'])
         out, err = capsys.readouterr()
-        err = err.strip().split('\n')[-1]
-        assert err.endswith('error: not in git repo')
+        assert err.strip() == 'pkgdev push: error: not in git repo'
 
     def test_non_ebuild_git_repo_cwd(self, make_repo, git_repo, capsys, tool):
         os.mkdir(pjoin(git_repo.path, 'repo'))
@@ -33,8 +31,7 @@ class TestPkgdevPushParseArgs:
                 chdir(repo.location):
             tool.parse_args(['push'])
         out, err = capsys.readouterr()
-        err = err.strip().split('\n')[-1]
-        assert err.endswith('error: not in ebuild git repo')
+        assert err.strip() == 'pkgdev push: error: not in ebuild git repo'
 
     def test_git_push_args_passthrough(self, repo, make_git_repo, tool):
         """Unknown arguments for ``pkgdev push`` are passed to ``git push``."""

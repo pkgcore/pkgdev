@@ -27,7 +27,7 @@ class ArgumentParser(arghparse.ArgumentParser):
 
     def parse_known_args(self, args=None, namespace=None):
         namespace, args = super().parse_known_args(args, namespace)
-        namespace.commit_args.extend(args)
+        namespace.extended_commit_args = args
         return namespace, []
 
 
@@ -67,8 +67,7 @@ def grouper(iterable, n, fillvalue=None):
     return zip_longest(*args, fillvalue=fillvalue)
 
 
-@commit.bind_delayed_default(1000, 'changes')
-def _git_changes(namespace, attr):
+def determine_git_changes(namespace):
     """Determine changes staged in git."""
     # stage changes as requested
     if namespace.git_add_arg:
@@ -106,7 +105,7 @@ def _git_changes(namespace, attr):
 
     namespace.paths = paths
     namespace.pkgs = pkgs
-    setattr(namespace, attr, changes)
+    return changes
 
 
 def commit_msg_prefix(git_changes):
@@ -175,8 +174,7 @@ def commit_msg_summary(repo, pkgs):
     return ''
 
 
-@commit.bind_delayed_default(1001, 'commit_args')
-def _commit_args(namespace, attr):
+def determine_commit_args(namespace):
     """Determine arguments used with `git commit`."""
     args = []
     if namespace.repo.repo_id == 'gentoo':
@@ -212,23 +210,25 @@ def _commit_args(namespace, attr):
         # explicitly close and delete tempfile on exit
         atexit.register(tmp.close)
 
-    setattr(namespace, attr, args)
-
-
-@commit.bind_delayed_default(9999, 'scan_args')
-def _scan_args(namespace, attr):
-    args = []
-    if namespace.pkgcheck_scan:
-        args.extend(shlex.split(namespace.pkgcheck_scan))
-    args.extend(['--exit', 'GentooCI', '--staged'])
-    setattr(namespace, attr, args)
+    return args
 
 
 @commit.bind_final_check
 def _commit_validate(parser, namespace):
+    # determine changes from staged files
+    namespace.changes = determine_git_changes(namespace)
+    # determine `git commit` args
+    namespace.commit_args = determine_commit_args(namespace) + namespace.extended_commit_args
+
     # mangle files in the gentoo repo by default
     if namespace.mangle is None and namespace.repo.repo_id == 'gentoo':
         namespace.mangle = True
+
+    # determine `pkgcheck scan` args
+    namespace.scan_args = []
+    if namespace.pkgcheck_scan:
+        namespace.scan_args.extend(shlex.split(namespace.pkgcheck_scan))
+    namespace.scan_args.extend(['--exit', 'GentooCI', '--staged'])
 
 
 @commit.bind_main_func

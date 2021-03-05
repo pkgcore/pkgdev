@@ -14,8 +14,7 @@ class TestPkgdevManifestParseArgs:
             tool.parse_args(['manifest'])
         assert excinfo.value.code == 2
         out, err = capsys.readouterr()
-        err = err.strip().split('\n')[-1]
-        assert err.endswith('error: not in ebuild repo')
+        assert err.strip() == 'pkgdev manifest: error: not in ebuild repo'
 
     def test_repo_cwd(self, repo, capsys, tool):
         repo.create_ebuild('cat/pkg-0')
