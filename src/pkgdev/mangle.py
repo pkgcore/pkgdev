@@ -115,10 +115,10 @@ class Mangler:
         except FileNotFoundError:
             pass
 
-    def _run_manglers(self, work_q):
+    def _run_manglers(self, paths_q):
         """Consumer that runs mangling functions, queuing mangled paths for output."""
         try:
-            for path in iter(work_q.get, None):
+            for path in iter(paths_q.get, None):
                 if mangled_path := self._mangle_file(path):
                     self._mangled_paths_q.put(mangled_path)
         except Exception:  # pragma: no cover
@@ -130,16 +130,16 @@ class Mangler:
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         os.setpgrp()
 
-        work_q = self._mp_ctx.SimpleQueue()
-        pool = self._mp_ctx.Pool(self.jobs, self._run_manglers, (work_q,))
+        paths_q = self._mp_ctx.SimpleQueue()
+        pool = self._mp_ctx.Pool(self.jobs, self._run_manglers, (paths_q,))
         pool.close()
 
         # queue paths for processing
         for path in self.paths:
-            work_q.put(path)
+            paths_q.put(path)
         # notify consumers that no more work exists
         for i in range(self.jobs):
-            work_q.put(None)
+            paths_q.put(None)
 
         pool.join()
         # notify iterator that no more results exist
