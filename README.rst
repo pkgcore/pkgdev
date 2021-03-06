@@ -1,4 +1,4 @@
-|test| |coverage|
+|pypi| |test| |coverage|
 
 ======
 pkgdev
@@ -56,6 +56,8 @@ the following::
 .. _snakeoil: https://github.com/pkgcore/snakeoil
 .. _dependencies: https://github.com/pkgcore/pkgdev/blob/main/requirements/install.txt
 
+.. |pypi| image:: https://img.shields.io/pypi/v/pkgdev.svg
+    :target: https://pypi.python.org/pypi/pkgdev
 .. |test| image:: https://github.com/pkgcore/pkgdev/workflows/test/badge.svg
     :target: https://github.com/pkgcore/pkgdev/actions?query=workflow%3A%22test%22
 .. |coverage| image:: https://codecov.io/gh/pkgcore/pkgdev/branch/main/graph/badge.svg
