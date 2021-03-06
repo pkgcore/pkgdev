@@ -44,7 +44,7 @@ class TestMangler:
         def _mangle_func(self, data):
             raise Exception('func failed')
 
-        with patch('pkgdev.mangle.Mangler._mangle_eof', _mangle_func):
+        with patch('pkgdev.mangle.Mangler._mangle_file', _mangle_func):
             with pytest.raises(UserException, match='Exception: func failed'):
                 list(Mangler(repo, [path]))
 

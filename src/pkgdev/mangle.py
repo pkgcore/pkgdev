@@ -83,21 +83,26 @@ class Mangler:
 
         return path
 
+    def _mangle_file(self, path):
+        """Run composed mangling function across a given file path."""
+        try:
+            with open(path, 'r+') as f:
+                if orig_data := f.read():
+                    data = self.composed_func(orig_data)
+                    if data != orig_data:
+                        f.seek(0)
+                        f.truncate()
+                        f.write(data)
+                        return path
+        except FileNotFoundError:
+            pass
+
     def _run_manglers(self, work_q):
         """Consumer that runs mangling functions, queuing altered paths for output."""
         try:
             for path in iter(work_q.get, None):
-                try:
-                    with open(path, 'r+') as f:
-                        if orig_data := f.read():
-                            data = self.composed_func(orig_data)
-                            if data != orig_data:
-                                f.seek(0)
-                                f.truncate()
-                                f.write(data)
-                                self._altered_paths_q.put(path)
-                except FileNotFoundError:
-                    pass
+                if mangled_path := self._mangle_file(path):
+                    self._altered_paths_q.put(mangled_path)
         except Exception:  # pragma: no cover
             # traceback can't be pickled so serialize it
             tb = traceback.format_exc()
