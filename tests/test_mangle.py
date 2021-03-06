@@ -7,76 +7,55 @@ from unittest.mock import patch
 from pkgdev.mangle import Mangler
 import pytest
 from snakeoil.cli.exceptions import UserException
-from snakeoil.fileutils import touch
 from snakeoil.osutils import pjoin
 
 
 class TestMangler:
 
-    def test_nonexistent_file(self, namespace, repo):
-        options = namespace
-        options.repo = repo
-        path = pjoin(repo.location, 'nonexistent')
-        assert list(Mangler(options, [path])) == []
+    def test_nonexistent_file(self, tmp_path):
+        path = tmp_path / 'nonexistent'
+        assert list(Mangler([str(path)])) == []
 
-    def test_empty_file(self, namespace, repo):
-        options = namespace
-        options.repo = repo
-        path = pjoin(repo.location, 'empty')
-        touch(path)
-        assert list(Mangler(options, [path])) == []
+    def test_empty_file(self, tmp_path):
+        path = tmp_path / 'empty'
+        path.touch()
+        assert list(Mangler([str(path)])) == []
 
-    def test_skipped_file(self, namespace, repo):
-        options = namespace
-        options.repo = repo
-        paths = [pjoin(repo.location, x) for x in ('file', 'file.patch')]
+    def test_skipped_file(self, tmp_path):
+        paths = [(tmp_path / x) for x in ('file', 'file.patch')]
         skip_regex = re.compile(r'.+\.patch$')
         for p in paths:
-            with open(p, 'w') as f:
-                f.write('# comment')
-        mangled_paths = list(Mangler(options, paths, skip_regex=skip_regex))
-        assert mangled_paths == [pjoin(repo.location, 'file')]
+            p.write_text('# comment')
+        mangled_paths = list(Mangler(map(str, paths), skip_regex=skip_regex))
+        assert mangled_paths == [str(tmp_path / 'file')]
 
-    def test_nonmangled_file(self, namespace, repo):
-        options = namespace
-        options.repo = repo
-        path = pjoin(repo.location, 'file')
-        with open(path, 'w') as f:
-            f.write('# comment\n')
-        assert list(Mangler(options, [path])) == []
+    def test_nonmangled_file(self, tmp_path):
+        path = tmp_path / 'file'
+        path.write_text('# comment\n')
+        assert list(Mangler([str(path)])) == []
 
-    def test_mangled_file(self, namespace, repo):
-        options = namespace
-        options.repo = repo
-        path = pjoin(repo.location, 'file')
-        with open(path, 'w') as f:
-            f.write('# comment')
-        assert list(Mangler(options, [path])) == [path]
-        with open(path, 'r') as f:
-            assert f.read() == '# comment\n'
+    def test_mangled_file(self, tmp_path):
+        path = tmp_path / 'file'
+        path.write_text('# comment')
+        assert list(Mangler([str(path)])) == [str(path)]
+        assert path.read_text() == '# comment\n'
 
-    def test_iterator_exceptions(self, namespace, repo):
+    def test_iterator_exceptions(self, tmp_path):
         """Test parallelized iterator against unhandled exceptions."""
-        options = namespace
-        options.repo = repo
-        path = pjoin(repo.location, 'file')
-        with open(path, 'w') as f:
-            f.write('# comment\n')
+        path = tmp_path / 'file'
+        path.write_text('# comment\n')
 
         def _mangle_func(self, data):
             raise Exception('func failed')
 
         with patch('pkgdev.mangle.Mangler._mangle_file', _mangle_func):
             with pytest.raises(UserException, match='Exception: func failed'):
-                list(Mangler(options, [path]))
+                list(Mangler([str(path)]))
 
-    def test_sigint_handling(self, namespace, repo):
+    def test_sigint_handling(self, tmp_path):
         """Verify SIGINT is properly handled by the parallelized pipeline."""
-        options = namespace
-        options.repo = repo
-        path = pjoin(repo.location, 'file')
-        with open(path, 'w') as f:
-            f.write('# comment\n')
+        path = tmp_path / 'file'
+        path.write_text('# comment\n')
 
         def run(queue):
             """Mangler run in a separate process that gets interrupted."""
@@ -95,7 +74,7 @@ class TestMangler:
             with patch('pkgdev.mangle.Mangler.__iter__') as fake_iter:
                 fake_iter.side_effect = partial(sleep)
                 try:
-                    iter(Mangler(options, [path]))
+                    iter(Mangler([str(path)]))
                 except KeyboardInterrupt:
                     queue.put(None)
                     sys.exit(0)

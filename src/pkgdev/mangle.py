@@ -15,7 +15,7 @@ copyright_regex = re.compile(
     r'^# Copyright (?P<begin>\d{4}-)?(?P<end>\d{4}) (?P<holder>.+)$')
 
 
-def mangle(name, enabled=lambda x: True):
+def mangle(name):
     """Decorator to register file mangling methods."""
 
     class decorator:
@@ -25,7 +25,7 @@ def mangle(name, enabled=lambda x: True):
             self.func = func
 
         def __set_name__(self, owner, name):
-            owner._mangle_funcs[name] = (self.func, enabled)
+            owner._mangle_funcs[name] = self.func
             setattr(owner, name, self.func)
 
     return decorator
@@ -37,7 +37,7 @@ class Mangler:
     # mapping of mangling types to functions
     _mangle_funcs = {}
 
-    def __init__(self, options, paths, skip_regex=None):
+    def __init__(self, paths, skip_regex=None):
         self.jobs = os.cpu_count()
         if skip_regex is not None:
             paths = (x for x in paths if not skip_regex.match(x))
@@ -54,18 +54,8 @@ class Mangler:
         self._mangled_paths = iter(self._mangled_paths_q.get, None)
 
         # construct composed mangling function
-        funcs = (f for f, enabled in self._mangle_funcs.values() if enabled(options))
         self.composed_func = functools.reduce(
-            lambda f, g: lambda x: f(g(self, x)), funcs, lambda x: x)
-
-    @mangle('copyright', enabled=lambda opts: opts.repo.repo_id == 'gentoo')
-    def _copyright(self, data):
-        """Fix copyright headers and dates."""
-        lines = data.splitlines()
-        if mo := copyright_regex.match(lines[0]):
-            lines[0] = re.sub(mo.group('end'), self._current_year, lines[0])
-            lines[0] = re.sub('Gentoo Foundation', 'Gentoo Authors', lines[0])
-        return '\n'.join(lines) + '\n'
+            lambda f, g: lambda x: f(g(self, x)), self._mangle_funcs.values(), lambda x: x)
 
     @mangle('EOF')
     def _eof(self, data):
@@ -144,3 +134,18 @@ class Mangler:
         pool.join()
         # notify iterator that no more results exist
         self._mangled_paths_q.put(None)
+
+
+class GentooMangler(Mangler):
+    """Gentoo repo specific file mangler."""
+
+    _mangle_funcs = Mangler._mangle_funcs.copy()
+
+    @mangle('copyright')
+    def _copyright(self, data):
+        """Fix copyright headers and dates."""
+        lines = data.splitlines()
+        if mo := copyright_regex.match(lines[0]):
+            lines[0] = re.sub(mo.group('end'), self._current_year, lines[0])
+            lines[0] = re.sub('Gentoo Foundation', 'Gentoo Authors', lines[0])
+        return '\n'.join(lines) + '\n'

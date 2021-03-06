@@ -18,7 +18,7 @@ from snakeoil.mappings import OrderedSet
 from snakeoil.osutils import pjoin
 
 from .. import git
-from ..mangle import Mangler
+from ..mangle import GentooMangler, Mangler
 from .argparsers import cwd_repo_argparser, git_repo_argparser
 
 
@@ -254,7 +254,8 @@ def _commit(options, out, err):
     if options.mangle:
         # don't mangle FILESDIR content
         skip_regex = re.compile(rf'^{repo.location}/[^/]+/[^/]+/files/.+$')
-        git_add_files.extend(Mangler(options, options.paths, skip_regex=skip_regex))
+        mangler = GentooMangler if repo.repo_id == 'gentoo' else Mangler
+        git_add_files.extend(mangler(options.paths, skip_regex=skip_regex))
 
     # stage modified files
     if git_add_files:
