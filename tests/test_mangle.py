@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+import re
 import signal
 from unittest.mock import patch
 
@@ -24,6 +25,17 @@ class TestMangler:
         path = pjoin(repo.location, 'empty')
         touch(path)
         assert list(Mangler(options, [path])) == []
+
+    def test_skipped_file(self, namespace, repo):
+        options = namespace
+        options.repo = repo
+        paths = [pjoin(repo.location, x) for x in ('file', 'file.patch')]
+        skip_regex = re.compile(r'.+\.patch$')
+        for p in paths:
+            with open(p, 'w') as f:
+                f.write('# comment')
+        mangled_paths = list(Mangler(options, paths, skip_regex=skip_regex))
+        assert mangled_paths == [pjoin(repo.location, 'file')]
 
     def test_nonmangled_file(self, namespace, repo):
         options = namespace
