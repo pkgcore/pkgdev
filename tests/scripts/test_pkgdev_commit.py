@@ -299,6 +299,15 @@ class TestPkgdevCommit:
         with open(ebuild_path) as f:
             assert f.read()[-1] == '\n'
 
+        # FILESDIR content is ignored even when forced
+        path = pjoin(os.path.dirname(ebuild_path), 'files', 'pkg.patch')
+        os.makedirs(os.path.dirname(path))
+        with open(path, 'w') as f:
+            f.write('# comment')
+        # verify file doesn't end with newline
+        with open(path) as f:
+            assert f.read()[-1] != '\n'
+
     def test_gentoo_file_mangling(self, make_repo, make_git_repo):
         repo = make_repo(repo_id='gentoo')
         git_repo = make_git_repo(repo.location)
@@ -323,6 +332,15 @@ class TestPkgdevCommit:
         commit(['-n', '-u', '-m', 'mangling'])
         with open(ebuild_path) as f:
             assert f.read()[-1] == '\n'
+
+        # FILESDIR content is ignored
+        path = pjoin(os.path.dirname(ebuild_path), 'files', 'pkg.patch')
+        os.makedirs(os.path.dirname(path))
+        with open(path, 'w') as f:
+            f.write('# comment')
+        # verify file doesn't end with newline
+        with open(path) as f:
+            assert f.read()[-1] != '\n'
 
         for years, org in (
                 ('1999-2020', 'Gentoo Authors'),
