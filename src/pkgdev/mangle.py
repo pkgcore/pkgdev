@@ -37,11 +37,11 @@ class Mangler:
     # mapping of mangling types to functions
     _mangle_funcs = {}
 
-    def __init__(self, options, paths):
+    def __init__(self, options, paths, skip_regex=None):
         self.jobs = os.cpu_count()
-        # regex matching file paths to skip
-        _skip_regex = re.compile(r'^[^/]+/[^/]+/files/.+$')
-        self.paths = OrderedSet(x for x in paths if not _skip_regex.match(x))
+        if skip_regex is not None:
+            paths = (x for x in paths if not skip_regex.match(x))
+        self.paths = OrderedSet(paths)
 
         # setup for parallelizing the mangling procedure across files
         self._mp_ctx = multiprocessing.get_context('fork')

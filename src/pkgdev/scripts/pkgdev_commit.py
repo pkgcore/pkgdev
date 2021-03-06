@@ -252,7 +252,9 @@ def _commit(options, out, err):
 
     # mangle files
     if options.mangle:
-        git_add_files.extend(Mangler(options, options.paths))
+        # don't mangle patches/files in FILESDIR
+        skip_regex = re.compile(rf'^{repo.location}/[^/]+/[^/]+/files/.+$')
+        git_add_files.extend(Mangler(options, options.paths, skip_regex=skip_regex))
 
     # stage modified files
     if git_add_files:
