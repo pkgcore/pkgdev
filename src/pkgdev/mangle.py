@@ -45,13 +45,13 @@ class Mangler:
 
         # setup for parallelizing the mangling procedure across files
         self._mp_ctx = multiprocessing.get_context('fork')
-        self._altered_paths_q = self._mp_ctx.SimpleQueue()
+        self._mangled_paths_q = self._mp_ctx.SimpleQueue()
         self._current_year = str(datetime.today().year)
 
         # initialize settings used by iterator support
         self._runner = None
         signal.signal(signal.SIGINT, self._kill_pipe)
-        self._altered_paths = iter(self._altered_paths_q.get, None)
+        self._mangled_paths = iter(self._mangled_paths_q.get, None)
 
         # construct composed mangling function
         funcs = (f for f, enabled in self._mangle_funcs.values() if enabled(options))
@@ -89,7 +89,7 @@ class Mangler:
 
     def __next__(self):
         try:
-            path = next(self._altered_paths)
+            path = next(self._mangled_paths)
         except StopIteration:
             self._runner.join()
             raise
@@ -116,15 +116,15 @@ class Mangler:
             pass
 
     def _run_manglers(self, work_q):
-        """Consumer that runs mangling functions, queuing altered paths for output."""
+        """Consumer that runs mangling functions, queuing mangled paths for output."""
         try:
             for path in iter(work_q.get, None):
                 if mangled_path := self._mangle_file(path):
-                    self._altered_paths_q.put(mangled_path)
+                    self._mangled_paths_q.put(mangled_path)
         except Exception:  # pragma: no cover
             # traceback can't be pickled so serialize it
             tb = traceback.format_exc()
-            self._altered_paths_q.put([tb])
+            self._mangled_paths_q.put([tb])
 
     def _run(self):
         signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -143,4 +143,4 @@ class Mangler:
 
         pool.join()
         # notify iterator that no more results exist
-        self._altered_paths_q.put(None)
+        self._mangled_paths_q.put(None)
