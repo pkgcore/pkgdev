@@ -233,20 +233,20 @@ class TestPkgdevCommit:
         repo.create_ebuild('cat/newpkg-0')
         assert commit() == 'cat/newpkg: initial import'
 
-        # single bump
+        # single addition
         repo.create_ebuild('cat/pkg-1')
-        assert commit() == 'cat/pkg: bump 1'
+        assert commit() == 'cat/pkg: add 1'
 
-        # multiple bumps
+        # multiple additions
         repo.create_ebuild('cat/pkg-2')
         repo.create_ebuild('cat/pkg-2-r1')
         repo.create_ebuild('cat/pkg-3')
-        assert commit() == 'cat/pkg: bump 2, 2-r1, 3'
+        assert commit() == 'cat/pkg: add 2, 2-r1, 3'
 
-        # large number of bumps in a single commit
+        # large number of additions in a single commit
         for v in range(10000, 10010):
             repo.create_ebuild(f'cat/pkg-{v}')
-        assert commit() == 'cat/pkg: bump versions'
+        assert commit() == 'cat/pkg: add versions'
 
         # single removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-3.ebuild'))
@@ -361,7 +361,7 @@ class TestPkgdevCommit:
             out, err = capsys.readouterr()
             assert err == out == ''
             commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
-            assert commit_msg == [f'cat/pkg: bump {i}']
+            assert commit_msg == [f'cat/pkg: add {i}']
 
     def test_failed_scan(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)

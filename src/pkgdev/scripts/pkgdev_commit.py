@@ -157,11 +157,11 @@ def commit_msg_summary(repo, pkgs):
                 if len(existing_pkgs) == len(pkgs):
                     return 'initial import'
                 else:
-                    msg = f"bump {', '.join(versions)}"
+                    msg = f"add {', '.join(versions)}"
                     if len(versions) == 1 or len(msg) <= 50:
                         return msg
                     else:
-                        return 'bump versions'
+                        return 'add versions'
             elif status == 'D':
                 if existing_pkgs:
                     msg = f"drop {', '.join(versions)}"
