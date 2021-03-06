@@ -23,11 +23,19 @@ class TestMangler:
 
     def test_skipped_file(self, tmp_path):
         paths = [(tmp_path / x) for x in ('file', 'file.patch')]
-        skip_regex = re.compile(r'.+\.patch$')
+
         for p in paths:
             p.write_text('# comment')
+        # skip patch files
+        skip_regex = re.compile(r'.+\.patch$')
         mangled_paths = list(Mangler(map(str, paths), skip_regex=skip_regex))
         assert mangled_paths == [str(tmp_path / 'file')]
+
+        for p in paths:
+            p.write_text('# comment')
+        # don't skip any files
+        mangled_paths = list(Mangler(map(str, paths)))
+        assert mangled_paths == list(map(str, paths))
 
     def test_nonmangled_file(self, tmp_path):
         path = tmp_path / 'file'
