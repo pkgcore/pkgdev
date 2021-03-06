@@ -12,31 +12,41 @@ from snakeoil.osutils import pjoin
 
 class TestMangler:
 
-    def test_nonexistent_file(self, repo):
+    def test_nonexistent_file(self, namespace, repo):
+        options = namespace
+        options.repo = repo
         path = pjoin(repo.location, 'nonexistent')
-        assert list(Mangler(repo, [path])) == []
+        assert list(Mangler(options, [path])) == []
 
-    def test_empty_file(self, repo):
+    def test_empty_file(self, namespace, repo):
+        options = namespace
+        options.repo = repo
         path = pjoin(repo.location, 'empty')
         touch(path)
-        assert list(Mangler(repo, [path])) == []
+        assert list(Mangler(options, [path])) == []
 
-    def test_nonmangled_file(self, repo):
+    def test_nonmangled_file(self, namespace, repo):
+        options = namespace
+        options.repo = repo
         path = pjoin(repo.location, 'file')
         with open(path, 'w') as f:
             f.write('# comment\n')
-        assert list(Mangler(repo, [path])) == []
+        assert list(Mangler(options, [path])) == []
 
-    def test_mangled_file(self, repo):
+    def test_mangled_file(self, namespace, repo):
+        options = namespace
+        options.repo = repo
         path = pjoin(repo.location, 'file')
         with open(path, 'w') as f:
             f.write('# comment')
-        assert list(Mangler(repo, [path])) == [path]
+        assert list(Mangler(options, [path])) == [path]
         with open(path, 'r') as f:
             assert f.read() == '# comment\n'
 
-    def test_iterator_exceptions(self, repo):
+    def test_iterator_exceptions(self, namespace, repo):
         """Test parallelized iterator against unhandled exceptions."""
+        options = namespace
+        options.repo = repo
         path = pjoin(repo.location, 'file')
         with open(path, 'w') as f:
             f.write('# comment\n')
@@ -46,10 +56,12 @@ class TestMangler:
 
         with patch('pkgdev.mangle.Mangler._mangle_file', _mangle_func):
             with pytest.raises(UserException, match='Exception: func failed'):
-                list(Mangler(repo, [path]))
+                list(Mangler(options, [path]))
 
-    def test_sigint_handling(self, repo):
+    def test_sigint_handling(self, namespace, repo):
         """Verify SIGINT is properly handled by the parallelized pipeline."""
+        options = namespace
+        options.repo = repo
         path = pjoin(repo.location, 'file')
         with open(path, 'w') as f:
             f.write('# comment\n')
@@ -71,7 +83,7 @@ class TestMangler:
             with patch('pkgdev.mangle.Mangler.__iter__') as fake_iter:
                 fake_iter.side_effect = partial(sleep)
                 try:
-                    iter(Mangler(repo, [path]))
+                    iter(Mangler(options, [path]))
                 except KeyboardInterrupt:
                     queue.put(None)
                     sys.exit(0)

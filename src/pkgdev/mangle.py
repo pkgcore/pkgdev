@@ -15,10 +15,29 @@ copyright_regex = re.compile(
     r'^# Copyright (?P<begin>\d{4}-)?(?P<end>\d{4}) (?P<holder>.+)$')
 
 
+def mangle(name, enabled=lambda x: True):
+    """Decorator to register file mangling methods."""
+
+    class decorator:
+        """Decorator with access to the class of a decorated function."""
+
+        def __init__(self, func):
+            self.func = func
+
+        def __set_name__(self, owner, name):
+            owner._mangle_funcs[name] = (self.func, enabled)
+            setattr(owner, name, self.func)
+
+    return decorator
+
+
 class Mangler:
     """File-mangling iterator using path-based parallelism."""
 
-    def __init__(self, repo, paths):
+    # mapping of mangling types to functions
+    _mangle_funcs = {}
+
+    def __init__(self, options, paths):
         self.jobs = os.cpu_count()
         # regex matching file paths to skip
         _skip_regex = re.compile(r'^[^/]+/[^/]+/files/.+$')
@@ -35,14 +54,12 @@ class Mangler:
         self._altered_paths = iter(self._altered_paths_q.get, None)
 
         # construct composed mangling function
-        funcs = (getattr(self, x) for x in dir(self) if x.startswith('_mangle_'))
-        # don't use gentoo repo specific mangling for non-gentoo repos
-        if repo.repo_id != 'gentoo':
-            funcs = (x for x in funcs if not x.__name__.endswith('_gentoo'))
+        funcs = (f for f, enabled in self._mangle_funcs.values() if enabled(options))
         self.composed_func = functools.reduce(
-            lambda f, g: lambda x: f(g(x)), funcs, lambda x: x)
+            lambda f, g: lambda x: f(g(self, x)), funcs, lambda x: x)
 
-    def _mangle_copyright_gentoo(self, data):
+    @mangle('copyright', enabled=lambda opts: opts.repo.repo_id == 'gentoo')
+    def _copyright(self, data):
         """Fix copyright headers and dates."""
         lines = data.splitlines()
         if mo := copyright_regex.match(lines[0]):
@@ -50,7 +67,8 @@ class Mangler:
             lines[0] = re.sub('Gentoo Foundation', 'Gentoo Authors', lines[0])
         return '\n'.join(lines) + '\n'
 
-    def _mangle_eof(self, data):
+    @mangle('EOF')
+    def _eof(self, data):
         """Drop EOF whitespace and forcibly add EOF newline."""
         return data.rstrip() + '\n'
 

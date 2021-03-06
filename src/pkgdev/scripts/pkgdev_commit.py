@@ -252,7 +252,7 @@ def _commit(options, out, err):
 
     # mangle files
     if options.mangle:
-        git_add_files.extend(Mangler(options.repo, options.paths))
+        git_add_files.extend(Mangler(options, options.paths))
 
     # stage modified files
     if git_add_files:
