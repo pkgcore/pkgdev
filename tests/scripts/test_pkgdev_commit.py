@@ -218,6 +218,17 @@ class TestPkgdevCommit:
                 f.write('# comment\n')
         assert commit().startswith('profiles/arch: ')
 
+        # single repo root file change
+        with open(pjoin(repo.location, 'skel.ebuild'), 'a+') as f:
+            f.write('# comment\n')
+        assert commit().startswith('skel.ebuild: ')
+
+        # multiple repo root file change (no commit message prefix)
+        for file in ('skel.ebuild', 'header.txt'):
+            with open(pjoin(repo.location, file), 'a+') as f:
+                f.write('# comment\n')
+        assert commit() == 'msg'
+
         # treewide changes (no commit message prefix)
         repo.create_ebuild('foo/bar-1')
         with open(pjoin(repo.location, 'eclass', 'foo.eclass'), 'a+') as f:
