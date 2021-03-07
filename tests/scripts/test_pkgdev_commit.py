@@ -261,6 +261,18 @@ class TestPkgdevCommit:
             repo.create_ebuild(f'cat/pkg-{v}')
         assert commit() == 'cat/pkg: add versions'
 
+        # create Manifest
+        with open(pjoin(git_repo.path, 'cat/pkg/Manifest'), 'w') as f:
+            f.write('DIST pkg-3.tar.gz 101 BLAKE2B deadbeef SHA512 deadbeef\n')
+        assert commit() == 'cat/pkg: update Manifest'
+        # update Manifest
+        with open(pjoin(git_repo.path, 'cat/pkg/Manifest'), 'a+') as f:
+            f.write('DIST pkg-2.tar.gz 101 BLAKE2B deadbeef SHA512 deadbeef\n')
+        assert commit() == 'cat/pkg: update Manifest'
+        # remove Manifest
+        os.remove(pjoin(git_repo.path, 'cat/pkg/Manifest'))
+        assert commit() == 'cat/pkg: update Manifest'
+
         # single removal
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-3.ebuild'))
         assert commit() == 'cat/pkg: drop 3'

@@ -159,32 +159,37 @@ class GitChanges(UserDict):
 
     def msg_summary(self, repo):
         """Determine commit message summary."""
-        pkgs = {x.atom: x.status for x in self.ebuilds}
-        if len({x.unversioned_atom for x in pkgs}) == 1:
-            # all changes made on the same package
-            versions = [x.fullver for x in sorted(pkgs)]
-            atom = next(iter(pkgs)).unversioned_atom
-            existing_pkgs = repo.match(atom)
-            if len(set(pkgs.values())) == 1:
-                status = next(iter(pkgs.values()))
-                if status == 'A':
-                    if len(existing_pkgs) == len(pkgs):
-                        return 'initial import'
-                    else:
-                        msg = f"add {', '.join(versions)}"
-                        if len(versions) == 1 or len(msg) <= 50:
-                            return msg
+        # all changes made on the same package
+        if len({x.atom.unversioned_atom for x in self.pkgs}) == 1:
+            if not self.ebuilds:
+                if len(self.pkgs) == 1 and self.pkgs[0].path.endswith('/Manifest'):
+                    return 'update Manifest'
+            else:
+                pkgs = {x.atom: x.status for x in self.ebuilds}
+                versions = [x.fullver for x in sorted(pkgs)]
+                atom = next(iter(pkgs)).unversioned_atom
+                existing_pkgs = repo.match(atom)
+                if len(set(pkgs.values())) == 1:
+                    status = next(iter(pkgs.values()))
+                    if status == 'A':
+                        if len(existing_pkgs) == len(pkgs):
+                            return 'initial import'
                         else:
-                            return 'add versions'
-                elif status == 'D':
-                    if existing_pkgs:
-                        msg = f"drop {', '.join(versions)}"
-                        if len(versions) == 1 or len(msg) <= 50:
-                            return msg
+                            msg = f"add {', '.join(versions)}"
+                            if len(versions) == 1 or len(msg) <= 50:
+                                return msg
+                            else:
+                                return 'add versions'
+                    elif status == 'D':
+                        if existing_pkgs:
+                            msg = f"drop {', '.join(versions)}"
+                            if len(versions) == 1 or len(msg) <= 50:
+                                return msg
+                            else:
+                                return 'drop versions'
                         else:
-                            return 'drop versions'
-                    else:
-                        return 'treeclean'
+                            return 'treeclean'
+
         return ''
 
 
