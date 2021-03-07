@@ -22,10 +22,11 @@ push = ArgumentParser(
     parents=(cwd_repo_argparser, git_repo_argparser))
 # custom `pkgcheck scan` args used for tests
 push.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
-push.add_argument(
+push_opts = push.add_argument_group('push options')
+push_opts.add_argument(
     '--ignore-failures', action='store_true',
     help='ignore QA failures before pushing')
-push.add_argument(
+push_opts.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to push the commits')
 

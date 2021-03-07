@@ -36,23 +36,24 @@ commit = ArgumentParser(
     parents=(cwd_repo_argparser, git_repo_argparser))
 # custom `pkgcheck scan` args used for tests
 commit.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
-commit.add_argument(
+commit_opts = commit.add_argument_group('commit options')
+commit_opts.add_argument(
     '-m', '--message', type=lambda x: x.strip(),
     help='specify commit message')
-commit.add_argument(
+commit_opts.add_argument(
     '-M', '--mangle', nargs='?', const=True, action=arghparse.StoreBool,
     help='perform file mangling')
-commit.add_argument(
+commit_opts.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit')
-commit.add_argument(
+commit_opts.add_argument(
     '-s', '--scan', action='store_true',
     help='run pkgcheck against staged changes')
-commit.add_argument(
+commit_opts.add_argument(
     '--ignore-failures', action='store_true',
     help='forcibly create commit with QA errors')
 
-add_actions = commit.add_mutually_exclusive_group()
+add_actions = commit_opts.add_mutually_exclusive_group()
 add_actions.add_argument(
     '-u', '--update', dest='git_add_arg', const='--update', action='store_const',
     help='stage all changed files')

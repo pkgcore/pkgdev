@@ -20,14 +20,15 @@ manifest.add_argument(
         ``pkgdev manifest`` is run within an ebuild's directory, all the
         ebuilds within that directory will be manifested.
     """)
-manifest.add_argument(
+manifest_opts = manifest.add_argument_group('manifest options')
+manifest_opts.add_argument(
     '-f', '--force', help='forcibly remanifest specified packages',
     action='store_true',
     docs="""
         Force package manifest files to be rewritten. Note that this requires
         downloading all distfiles.
     """)
-manifest.add_argument(
+manifest_opts.add_argument(
     '-m', '--mirrors', help='enable fetching from Gentoo mirrors',
     action='store_true',
     docs="""
