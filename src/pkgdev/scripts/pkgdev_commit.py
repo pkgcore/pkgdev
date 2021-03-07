@@ -5,8 +5,9 @@ import re
 import shlex
 import subprocess
 import tempfile
-from collections import defaultdict
-from itertools import zip_longest
+from collections import defaultdict, UserDict
+from dataclasses import dataclass
+from itertools import chain, zip_longest
 
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import MalformedAtom
@@ -14,6 +15,7 @@ from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
+from snakeoil.klass import jit_attr
 from snakeoil.mappings import OrderedSet
 from snakeoil.osutils import pjoin
 
@@ -68,7 +70,125 @@ def grouper(iterable, n, fillvalue=None):
     return zip_longest(*args, fillvalue=fillvalue)
 
 
-def determine_git_changes(namespace):
+@dataclass(frozen=True)
+class Change:
+    """Generic file change."""
+    status: str
+    path: str
+
+    @property
+    def prefix(self):
+        if os.sep in self.path:
+            # use change path's parent directory
+            return f'{os.path.dirname(self.path)}: '
+        else:
+            # use repo root file name
+            return f'{self.path}: '
+
+
+@dataclass(frozen=True)
+class EclassChange(Change):
+    """Eclass change."""
+    name: str
+
+    @property
+    def prefix(self):
+        return f'{self.name}: '
+
+
+@dataclass(frozen=True)
+class PkgChange(Change):
+    """Package change."""
+    atom: atom_cls
+    ebuild: bool
+
+    @property
+    def prefix(self):
+        return f'{self.atom.unversioned_atom}: '
+
+
+class GitChanges(UserDict):
+    """Mapping of change objects for staged git changes."""
+
+    @jit_attr
+    def pkgs(self):
+        """Tuple of all package change objects."""
+        return tuple(
+            change for k, v in self.data.items() for change in v
+            if k == PkgChange
+        )
+
+    @jit_attr
+    def ebuilds(self):
+        """Tuple of all ebuild change objects."""
+        return tuple(x for x in self.pkgs if x.ebuild)
+
+    @jit_attr
+    def paths(self):
+        """Tuple of all staged paths."""
+        return tuple(x.path for x in chain.from_iterable(self.data.values()))
+
+    def msg_prefix(self):
+        """Determine commit message prefix using GLEP 66 as a guide.
+
+        See https://www.gentoo.org/glep/glep-0066.html#commit-messages for
+        details.
+        """
+        # changes limited to a single type
+        if len(self.data) == 1:
+            change_type, change_objs = next(iter(self.data.items()))
+            if len(change_objs) == 1:
+                # changes limited to a single object
+                change = change_objs[0]
+                return change.prefix
+            else:
+                # multiple changes of the same object type
+                common_path = os.path.commonpath(x.path for x in change_objs)
+                if change_type == PkgChange:
+                    if os.sep in common_path:
+                        return f'{common_path}: '
+                    elif common_path:
+                        return f'{common_path}/*: '
+                    else:
+                        return '*/*: '
+                elif common_path:
+                    return f'{common_path}: '
+
+        # no prefix used for global changes
+        return ''
+
+    def msg_summary(self, repo):
+        """Determine commit message summary."""
+        pkgs = {x.atom: x.status for x in self.ebuilds}
+        if len({x.unversioned_atom for x in pkgs}) == 1:
+            # all changes made on the same package
+            versions = [x.fullver for x in sorted(pkgs)]
+            atom = next(iter(pkgs)).unversioned_atom
+            existing_pkgs = repo.match(atom)
+            if len(set(pkgs.values())) == 1:
+                status = next(iter(pkgs.values()))
+                if status == 'A':
+                    if len(existing_pkgs) == len(pkgs):
+                        return 'initial import'
+                    else:
+                        msg = f"add {', '.join(versions)}"
+                        if len(versions) == 1 or len(msg) <= 50:
+                            return msg
+                        else:
+                            return 'add versions'
+                elif status == 'D':
+                    if existing_pkgs:
+                        msg = f"drop {', '.join(versions)}"
+                        if len(versions) == 1 or len(msg) <= 50:
+                            return msg
+                        else:
+                            return 'drop versions'
+                    else:
+                        return 'treeclean'
+        return ''
+
+
+def determine_changes(namespace):
     """Determine changes staged in git."""
     # stage changes as requested
     if namespace.git_add_arg:
@@ -81,98 +201,34 @@ def determine_git_changes(namespace):
 
     # ebuild path regex, validation is handled on instantiation
     _ebuild_re = re.compile(r'^(?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
+    _eclass_re = re.compile(r'^eclass/(?P<name>[^/]+\.eclass)$')
 
     # if no changes exist, exit early
     if not p.stdout:
         commit.error('no staged changes exist')
 
     data = p.stdout.strip('\x00').split('\x00')
-    paths = []
-    pkgs = {}
     changes = defaultdict(OrderedSet)
     for status, path in grouper(data, 2):
-        paths.append(pjoin(namespace.repo.location, path))
         path_components = path.split(os.sep)
         if path_components[0] in namespace.repo.categories and len(path_components) > 2:
-            changes['pkgs'].add(os.sep.join(path_components[:2]))
             if mo := _ebuild_re.match(path):
+                # ebuild changes
                 try:
                     atom = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
-                    pkgs[atom] = status
+                    changes[PkgChange].add(PkgChange(status, path, atom, ebuild=True))
                 except MalformedAtom:
-                    pass
-        else:
-            changes[path_components[0]].add(path)
-
-    namespace.paths = paths
-    namespace.pkgs = pkgs
-    return changes
-
-
-def commit_msg_prefix(git_changes):
-    """Determine commit message prefix using GLEP 66 as a guide.
-
-    See https://www.gentoo.org/glep/glep-0066.html#commit-messages for
-    details.
-    """
-    # changes limited to a single type
-    if len(git_changes) == 1:
-        change_type = next(iter(git_changes))
-        changes = git_changes[change_type]
-        if len(changes) == 1:
-            change = changes[0]
-            # changes limited to a single object
-            if change_type == 'pkgs':
-                return f'{change}: '
-            elif change_type == 'eclass' and change.endswith('.eclass'):
-                # use eclass file name
-                return f'{os.path.basename(change)}: '
+                    continue
             else:
-                # use change path's parent directory
-                return f'{os.path.dirname(change)}: '
+                # non-ebuild package level changes
+                atom = atom_cls(os.sep.join(path_components[:2]))
+                changes[PkgChange].add(PkgChange(status, path, atom, ebuild=False))
+        elif mo := _eclass_re.match(path):
+            changes[EclassChange].add(EclassChange(status, path, mo.group('name')))
         else:
-            # multiple changes of the same object type
-            common_path = os.path.commonpath(changes)
-            if change_type == 'pkgs':
-                if common_path:
-                    return f'{common_path}/*: '
-                else:
-                    return '*/*: '
-            else:
-                return f'{common_path}: '
+            changes[path_components[0]].add(Change(status, path))
 
-    # no prefix used for global changes
-    return ''
-
-
-def commit_msg_summary(repo, pkgs):
-    """Determine commit message summary."""
-    if len({x.unversioned_atom for x in pkgs}) == 1:
-        # all changes made on the same package
-        versions = [x.fullver for x in sorted(pkgs)]
-        atom = next(iter(pkgs)).unversioned_atom
-        existing_pkgs = repo.match(atom)
-        if len(set(pkgs.values())) == 1:
-            status = next(iter(pkgs.values()))
-            if status == 'A':
-                if len(existing_pkgs) == len(pkgs):
-                    return 'initial import'
-                else:
-                    msg = f"add {', '.join(versions)}"
-                    if len(versions) == 1 or len(msg) <= 50:
-                        return msg
-                    else:
-                        return 'add versions'
-            elif status == 'D':
-                if existing_pkgs:
-                    msg = f"drop {', '.join(versions)}"
-                    if len(versions) == 1 or len(msg) <= 50:
-                        return msg
-                    else:
-                        return 'drop versions'
-                else:
-                    return 'treeclean'
-    return ''
+    return GitChanges(changes)
 
 
 def determine_commit_args(namespace):
@@ -188,7 +244,7 @@ def determine_commit_args(namespace):
 
     # determine commit message
     message = namespace.message
-    msg_prefix = commit_msg_prefix(namespace.changes)
+    msg_prefix = namespace.changes.msg_prefix()
 
     if message:
         # ignore generated prefix when using custom prefix
@@ -196,7 +252,7 @@ def determine_commit_args(namespace):
             message = msg_prefix + message
     elif msg_prefix:
         # use generated summary if a generated prefix exists
-        msg_summary = commit_msg_summary(namespace.repo, namespace.pkgs)
+        msg_summary = namespace.changes.msg_summary(namespace.repo)
         message = msg_prefix + msg_summary
 
     if message:
@@ -217,7 +273,7 @@ def determine_commit_args(namespace):
 @commit.bind_final_check
 def _commit_validate(parser, namespace):
     # determine changes from staged files
-    namespace.changes = determine_git_changes(namespace)
+    namespace.changes = determine_changes(namespace)
     # determine `git commit` args
     namespace.commit_args = determine_commit_args(namespace) + namespace.extended_commit_args
 
@@ -237,18 +293,17 @@ def _commit(options, out, err):
     repo = options.repo
     git_add_files = []
 
-    if pkgs := options.changes.get('pkgs'):
-        pkgs = [atom_cls(x) for x in pkgs]
+    if atoms := {x.atom.unversioned_atom for x in options.changes.ebuilds}:
         # manifest all changed packages
         failed = repo.operations.digests(
             domain=options.domain,
-            restriction=packages.OrRestriction(*pkgs),
+            restriction=packages.OrRestriction(*atoms),
             observer=observer_mod.formatter_output(out))
         if any(failed):
             return 1
 
         # include existing Manifest files for staging
-        manifests = (pjoin(repo.location, f'{x.cpvstr}/Manifest') for x in pkgs)
+        manifests = (pjoin(repo.location, f'{x.cpvstr}/Manifest') for x in atoms)
         git_add_files.extend(filter(os.path.exists, manifests))
 
     # mangle files
@@ -256,7 +311,8 @@ def _commit(options, out, err):
         # don't mangle FILESDIR content
         skip_regex = re.compile(rf'^{repo.location}/[^/]+/[^/]+/files/.+$')
         mangler = GentooMangler if repo.repo_id == 'gentoo' else Mangler
-        git_add_files.extend(mangler(options.paths, skip_regex=skip_regex))
+        paths = (pjoin(repo.location, x) for x in options.changes.paths)
+        git_add_files.extend(mangler(paths, skip_regex=skip_regex))
 
     # stage modified files
     if git_add_files:
