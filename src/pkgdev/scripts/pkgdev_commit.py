@@ -115,7 +115,7 @@ class GitChanges(UserDict):
         """Tuple of all package change objects."""
         return tuple(
             change for k, v in self.data.items() for change in v
-            if k == PkgChange
+            if k is PkgChange
         )
 
     @jit_attr
@@ -144,7 +144,7 @@ class GitChanges(UserDict):
             else:
                 # multiple changes of the same object type
                 common_path = os.path.commonpath(x.path for x in change_objs)
-                if change_type == PkgChange:
+                if change_type is PkgChange:
                     if os.sep in common_path:
                         return f'{common_path}: '
                     elif common_path:
