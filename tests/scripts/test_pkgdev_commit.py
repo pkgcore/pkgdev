@@ -63,6 +63,19 @@ class TestPkgdevCommitParseArgs:
             options, _ = tool.parse_args(['commit', author_opt])
         assert options.commit_args == [author_opt]
 
+    def test_scan_args(self, repo, make_git_repo, tool):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0', commit=False)
+        # pkgcheck isn't run in verbose mode by default
+        with chdir(repo.location):
+            options, _ = tool.parse_args(['commit'])
+        assert '-v' not in options.scan_args
+        # verbosity level is passed down to pkgcheck
+        with chdir(repo.location):
+            options, _ = tool.parse_args(['commit', '-v'])
+        assert '-v' in options.scan_args
+
 
 class TestPkgdevCommit:
 
