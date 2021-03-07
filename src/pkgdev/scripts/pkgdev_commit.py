@@ -6,9 +6,9 @@ import shlex
 import subprocess
 import tempfile
 import textwrap
-from collections import defaultdict, UserDict
+from collections import defaultdict, deque, UserDict
 from dataclasses import dataclass
-from itertools import chain, zip_longest
+from itertools import chain
 
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import MalformedAtom
@@ -63,12 +63,6 @@ add_actions.add_argument(
 add_actions.add_argument(
     '-a', '--all', dest='git_add_arg', const='--all', action='store_const',
     help='stage all changed/new/removed files')
-
-
-def grouper(iterable, n, fillvalue=None):
-    """Iterate over a given iterable in n-size groups."""
-    args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)
 
 
 @dataclass(frozen=True)
@@ -218,9 +212,15 @@ def determine_changes(namespace):
     if not p.stdout:
         commit.error('no staged changes exist')
 
-    data = p.stdout.strip('\x00').split('\x00')
+    data = deque(p.stdout.strip('\x00').split('\x00'))
     changes = defaultdict(OrderedSet)
-    for status, path in grouper(data, 2):
+    while data:
+        status = data.popleft()
+        if status.startswith('R'):
+            status = 'R'
+            # discard old path for rename
+            data.popleft()
+        path = data.popleft()
         path_components = path.split(os.sep)
         if path_components[0] in namespace.repo.categories and len(path_components) > 2:
             if mo := _ebuild_re.match(path):
