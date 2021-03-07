@@ -167,14 +167,14 @@ class GitChanges(UserDict):
             else:
                 pkgs = {x.atom: x.status for x in self.ebuilds}
                 versions = [x.fullver for x in sorted(pkgs)]
-                atom = next(iter(pkgs)).unversioned_atom
-                existing_pkgs = repo.match(atom)
+                revbump = any(x.revision for x in pkgs)
+                existing_pkgs = repo.match(next(iter(pkgs)).unversioned_atom)
                 if len(set(pkgs.values())) == 1:
                     status = next(iter(pkgs.values()))
                     if status == 'A':
                         if len(existing_pkgs) == len(pkgs):
                             return 'initial import'
-                        else:
+                        elif not revbump:
                             msg = f"add {', '.join(versions)}"
                             if len(versions) == 1 or len(msg) <= 50:
                                 return msg
