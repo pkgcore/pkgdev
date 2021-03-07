@@ -94,7 +94,7 @@ class Mangler:
     def _mangle_file(self, path):
         """Run composed mangling function across a given file path."""
         try:
-            with open(path, 'r+') as f:
+            with open(path, 'r+', encoding='utf-8') as f:
                 if orig_data := f.read():
                     data = self.composed_func(orig_data)
                     if data != orig_data:
@@ -102,7 +102,7 @@ class Mangler:
                         f.truncate()
                         f.write(data)
                         return path
-        except FileNotFoundError:
+        except (FileNotFoundError, UnicodeDecodeError):
             pass
 
     def _run_manglers(self, paths_q):
