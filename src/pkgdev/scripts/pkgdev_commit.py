@@ -5,6 +5,7 @@ import re
 import shlex
 import subprocess
 import tempfile
+import textwrap
 from collections import defaultdict, UserDict
 from dataclasses import dataclass
 from itertools import chain, zip_longest
@@ -40,7 +41,7 @@ commit = ArgumentParser(
 commit.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 commit_opts = commit.add_argument_group('commit options')
 commit_opts.add_argument(
-    '-m', '--message', type=lambda x: x.strip(),
+    '-m', '--message', action='append',
     help='specify commit message')
 commit_opts.add_argument(
     '-M', '--mangle', nargs='?', const=True, action=arghparse.StoreBool,
@@ -252,27 +253,33 @@ def determine_commit_args(namespace):
     if namespace.verbosity:
         args.append('-v')
 
-    # determine commit message
-    message = namespace.message
-    prefix = namespace.changes.prefix
+    changes = namespace.changes
+    message = [] if namespace.message is None else namespace.message
 
+    # determine commit message
     if message:
         # ignore generated prefix when using custom prefix
-        if not re.match(r'^\S+: ', message):
-            message = prefix + message
-    elif prefix:
+        if not re.match(r'^\S+: ', message[0]):
+            message[0] = changes.prefix + message[0]
+    elif changes.prefix:
         # use generated summary if a generated prefix exists
-        message = prefix + namespace.changes.summary
+        message.append(changes.prefix + namespace.changes.summary)
 
     if message:
         tmp = tempfile.NamedTemporaryFile(mode='w')
-        tmp.write(message)
+        tmp.write(message[0])
+        if len(message) > 1:
+            # wrap body paragraphs at 100 chars
+            body = ('\n'.join(textwrap.wrap(x, width=100)) for x in message[1:])
+            tmp.write('\n\n' + '\n\n'.join(body))
         tmp.flush()
-        if message.endswith(' '):
-            # force `git commit` to respect trailing prefix whitespace
+
+        # force `git commit` to open an editor for uncompleted summary
+        if not message[0] or message[0].endswith(' '):
             args.extend(['-t', tmp.name])
         else:
             args.extend(['-F', tmp.name])
+
         # explicitly close and delete tempfile on exit
         atexit.register(tmp.close)
 
