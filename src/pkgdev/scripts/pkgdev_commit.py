@@ -110,6 +110,10 @@ class PkgChange(Change):
 class GitChanges(UserDict):
     """Mapping of change objects for staged git changes."""
 
+    def __init__(self, changes, repo):
+        super().__init__(changes)
+        self._repo = repo
+
     @jit_attr
     def pkgs(self):
         """Tuple of all package change objects."""
@@ -128,7 +132,8 @@ class GitChanges(UserDict):
         """Tuple of all staged paths."""
         return tuple(x.path for x in chain.from_iterable(self.data.values()))
 
-    def msg_prefix(self):
+    @jit_attr
+    def prefix(self):
         """Determine commit message prefix using GLEP 66 as a guide.
 
         See https://www.gentoo.org/glep/glep-0066.html#commit-messages for
@@ -139,8 +144,7 @@ class GitChanges(UserDict):
             change_type, change_objs = next(iter(self.data.items()))
             if len(change_objs) == 1:
                 # changes limited to a single object
-                change = change_objs[0]
-                return change.prefix
+                return change_objs[0].prefix
             else:
                 # multiple changes of the same object type
                 common_path = os.path.commonpath(x.path for x in change_objs)
@@ -157,7 +161,8 @@ class GitChanges(UserDict):
         # no prefix used for global changes
         return ''
 
-    def msg_summary(self, repo):
+    @jit_attr
+    def summary(self):
         """Determine commit message summary."""
         # all changes made on the same package
         if len({x.atom.unversioned_atom for x in self.pkgs}) == 1:
@@ -168,7 +173,7 @@ class GitChanges(UserDict):
                 pkgs = {x.atom: x.status for x in self.ebuilds}
                 versions = [x.fullver for x in sorted(pkgs)]
                 revbump = any(x.revision for x in pkgs)
-                existing_pkgs = repo.match(next(iter(pkgs)).unversioned_atom)
+                existing_pkgs = self._repo.match(next(iter(pkgs)).unversioned_atom)
                 if len(set(pkgs.values())) == 1:
                     status = next(iter(pkgs.values()))
                     if status == 'A':
@@ -233,7 +238,7 @@ def determine_changes(namespace):
         else:
             changes[path_components[0]].add(Change(status, path))
 
-    return GitChanges(changes)
+    return GitChanges(changes, namespace.repo)
 
 
 def determine_commit_args(namespace):
@@ -249,16 +254,15 @@ def determine_commit_args(namespace):
 
     # determine commit message
     message = namespace.message
-    msg_prefix = namespace.changes.msg_prefix()
+    prefix = namespace.changes.prefix
 
     if message:
         # ignore generated prefix when using custom prefix
         if not re.match(r'^\S+: ', message):
-            message = msg_prefix + message
-    elif msg_prefix:
+            message = prefix + message
+    elif prefix:
         # use generated summary if a generated prefix exists
-        msg_summary = namespace.changes.msg_summary(namespace.repo)
-        message = msg_prefix + msg_summary
+        message = prefix + namespace.changes.summary
 
     if message:
         tmp = tempfile.NamedTemporaryFile(mode='w')
