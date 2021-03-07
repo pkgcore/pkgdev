@@ -47,7 +47,7 @@ def _commit_validate(parser, namespace):
     namespace.push_args = determine_push_args(namespace) + namespace.extended_push_args
 
     # determine `pkgcheck scan` args
-    namespace.scan_args = []
+    namespace.scan_args = ['-v'] * namespace.verbosity
     if namespace.pkgcheck_scan:
         namespace.scan_args.extend(shlex.split(namespace.pkgcheck_scan))
     namespace.scan_args.extend(['--exit', 'GentooCI', '--commits'])
