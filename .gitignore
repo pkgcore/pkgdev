@@ -1,11 +1,10 @@
 *.pyc
 *.pyo
-.tox
-/cache
+*.egg-info
+/.coverage
+/.tox
 /build
 /dist
-/.coverage
-/*.egg-info
 
 # docs
 /doc/_build
