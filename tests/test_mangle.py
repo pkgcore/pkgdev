@@ -7,7 +7,6 @@ from unittest.mock import patch
 from pkgdev.mangle import Mangler
 import pytest
 from snakeoil.cli.exceptions import UserException
-from snakeoil.osutils import pjoin
 
 
 class TestMangler:
@@ -28,14 +27,14 @@ class TestMangler:
             p.write_text('# comment')
         # skip patch files
         skip_regex = re.compile(r'.+\.patch$')
-        mangled_paths = list(Mangler(map(str, paths), skip_regex=skip_regex))
-        assert mangled_paths == [str(tmp_path / 'file')]
+        mangled_paths = set(Mangler(map(str, paths), skip_regex=skip_regex))
+        assert mangled_paths == {str(tmp_path / 'file')}
 
         for p in paths:
             p.write_text('# comment')
         # don't skip any files
-        mangled_paths = list(Mangler(map(str, paths)))
-        assert mangled_paths == list(map(str, paths))
+        mangled_paths = set(Mangler(map(str, paths)))
+        assert mangled_paths == set(map(str, paths))
 
     def test_nonmangled_file(self, tmp_path):
         path = tmp_path / 'file'
