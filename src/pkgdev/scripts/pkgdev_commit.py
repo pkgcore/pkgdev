@@ -110,43 +110,6 @@ add_actions.add_argument(
     help='stage all changed/new/removed files')
 
 
-@dataclass(frozen=True)
-class Change:
-    """Generic file change."""
-    status: str
-    path: str
-
-    @property
-    def prefix(self):
-        if os.sep in self.path:
-            # use change path's parent directory
-            return f'{os.path.dirname(self.path)}: '
-        else:
-            # use repo root file name
-            return f'{self.path}: '
-
-
-@dataclass(frozen=True)
-class EclassChange(Change):
-    """Eclass change."""
-    name: str
-
-    @property
-    def prefix(self):
-        return f'{self.name}: '
-
-
-@dataclass(frozen=True)
-class PkgChange(Change):
-    """Package change."""
-    atom: atom_cls
-    ebuild: bool
-
-    @property
-    def prefix(self):
-        return f'{self.atom.unversioned_atom}: '
-
-
 class GitChanges(UserDict):
     """Mapping of change objects for staged git changes."""
 
@@ -157,10 +120,7 @@ class GitChanges(UserDict):
     @jit_attr
     def pkgs(self):
         """Tuple of all package change objects."""
-        return tuple(
-            change for k, v in self.data.items() for change in v
-            if k is PkgChange
-        )
+        return tuple(x for x in self.data.get(PkgChange, ()))
 
     @jit_attr
     def ebuilds(self):
@@ -210,12 +170,13 @@ class GitChanges(UserDict):
                 if len(self.pkgs) == 1 and self.pkgs[0].path.endswith('/Manifest'):
                     return 'update Manifest'
             else:
-                pkgs = {x.atom: x.status for x in self.ebuilds}
+                pkgs = {x.atom: x for x in self.ebuilds}
                 versions = [x.fullver for x in sorted(pkgs)]
                 revbump = any(x.revision for x in pkgs)
                 existing_pkgs = self._repo.match(next(iter(pkgs)).unversioned_atom)
-                if len(set(pkgs.values())) == 1:
-                    status = next(iter(pkgs.values()))
+                statuses = {x.status for x in pkgs.values()}
+                if len(statuses) == 1:
+                    status = next(iter(statuses))
                     if status == 'A':
                         if len(existing_pkgs) == len(pkgs):
                             return 'initial import'
@@ -234,8 +195,50 @@ class GitChanges(UserDict):
                                 return 'drop versions'
                         else:
                             return 'treeclean'
+                    elif status == 'R' and len(pkgs) == 1 and not revbump:
+                        # handle single, non-revbump `git mv` changes
+                        change = next(iter(pkgs.values()))
+                        return f'add {change.atom.fullver}, drop {change.old.fullver}'
 
         return ''
+
+
+@dataclass(frozen=True)
+class Change:
+    """Generic file change."""
+    status: str
+    path: str
+
+    @property
+    def prefix(self):
+        if os.sep in self.path:
+            # use change path's parent directory
+            return f'{os.path.dirname(self.path)}: '
+        else:
+            # use repo root file name
+            return f'{self.path}: '
+
+
+@dataclass(frozen=True)
+class EclassChange(Change):
+    """Eclass change."""
+    name: str
+
+    @property
+    def prefix(self):
+        return f'{self.name}: '
+
+
+@dataclass(frozen=True)
+class PkgChange(Change):
+    """Package change."""
+    atom: atom_cls
+    ebuild: bool
+    old: atom_cls = None
+
+    @property
+    def prefix(self):
+        return f'{self.atom.unversioned_atom}: '
 
 
 def determine_changes(options):
@@ -261,10 +264,10 @@ def determine_changes(options):
     changes = defaultdict(OrderedSet)
     while data:
         status = data.popleft()
+        old_path = None
         if status.startswith('R'):
             status = 'R'
-            # discard old path for rename
-            data.popleft()
+            old_path = data.popleft()
         path = data.popleft()
         path_components = path.split(os.sep)
         if path_components[0] in options.repo.categories and len(path_components) > 2:
@@ -272,15 +275,19 @@ def determine_changes(options):
                 # ebuild changes
                 try:
                     atom = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
-                    changes[PkgChange].add(PkgChange(status, path, atom, ebuild=True))
+                    old = None
+                    if status == 'R' and (om := _ebuild_re.match(old_path)):
+                        old = atom_cls(f"={om.group('category')}/{om.group('package')}")
+                    changes[PkgChange].add(PkgChange(
+                        status, path, atom=atom, ebuild=True, old=old))
                 except MalformedAtom:
                     continue
             else:
                 # non-ebuild package level changes
                 atom = atom_cls(os.sep.join(path_components[:2]))
-                changes[PkgChange].add(PkgChange(status, path, atom, ebuild=False))
+                changes[PkgChange].add(PkgChange(status, path, atom=atom, ebuild=False))
         elif mo := _eclass_re.match(path):
-            changes[EclassChange].add(EclassChange(status, path, mo.group('name')))
+            changes[EclassChange].add(EclassChange(status, path, name=mo.group('name')))
         else:
             changes[path_components[0]].add(Change(status, path))
 
