@@ -328,7 +328,7 @@ class TestPkgdevCommit:
         # but they can be forcibly mangled
         with open(ebuild_path, 'a+') as f:
             f.write('# comment')
-        commit(['-M', '-u', '-m', 'mangling'])
+        commit(['--mangle', '-u', '-m', 'mangling'])
         # mangled pre-commit, file now ends with newline
         with open(ebuild_path) as f:
             assert f.read()[-1] == '\n'

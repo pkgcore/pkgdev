@@ -44,9 +44,6 @@ commit_opts.add_argument(
     '-m', '--message', action='append',
     help='specify commit message')
 commit_opts.add_argument(
-    '-M', '--mangle', nargs='?', const=True, action=arghparse.StoreBool,
-    help='perform file mangling')
-commit_opts.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit')
 commit_opts.add_argument(
@@ -55,6 +52,9 @@ commit_opts.add_argument(
 commit_opts.add_argument(
     '--ignore-failures', action='store_true',
     help='forcibly create commit with QA errors')
+commit_opts.add_argument(
+    '--mangle', nargs='?', const=True, action=arghparse.StoreBool,
+    help='forcibly enable/disable file mangling')
 
 add_actions = commit_opts.add_mutually_exclusive_group()
 add_actions.add_argument(
