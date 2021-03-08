@@ -30,7 +30,11 @@ class ArgumentParser(arghparse.ArgumentParser):
 
     def parse_known_args(self, args=None, namespace=None):
         namespace, args = super().parse_known_args(args, namespace)
-        namespace.extended_commit_args = args
+        if namespace.dry_run:
+            args.append('--dry-run')
+        if namespace.verbosity:
+            args.append('-v')
+        namespace.commit_args = args
         return namespace, []
 
 
@@ -234,11 +238,11 @@ class GitChanges(UserDict):
         return ''
 
 
-def determine_changes(namespace):
+def determine_changes(options):
     """Determine changes staged in git."""
     # stage changes as requested
-    if namespace.git_add_arg:
-        git.run('add', namespace.git_add_arg, namespace.cwd)
+    if options.git_add_arg:
+        git.run('add', options.git_add_arg, options.cwd)
 
     # determine staged changes
     p = git.run(
@@ -263,7 +267,7 @@ def determine_changes(namespace):
             data.popleft()
         path = data.popleft()
         path_components = path.split(os.sep)
-        if path_components[0] in namespace.repo.categories and len(path_components) > 2:
+        if path_components[0] in options.repo.categories and len(path_components) > 2:
             if mo := _ebuild_re.match(path):
                 # ebuild changes
                 try:
@@ -280,36 +284,27 @@ def determine_changes(namespace):
         else:
             changes[path_components[0]].add(Change(status, path))
 
-    return GitChanges(changes, namespace.repo)
+    return GitChanges(changes, options.repo)
 
 
-def determine_commit_args(namespace):
-    """Determine arguments used with `git commit`."""
+def determine_msg_args(options, changes):
+    """Determine message-related arguments used with `git commit`."""
     args = []
-    if namespace.repo.repo_id == 'gentoo':
-        # gentoo repo requires signoffs and signed commits
-        args.extend(['--signoff', '--gpg-sign'])
-    if namespace.dry_run:
-        args.append('--dry-run')
-    if namespace.verbosity:
-        args.append('-v')
-
-    if namespace.file:
-        args.extend(['-F', namespace.file])
-    elif namespace.template:
-        args.extend(['-t', namespace.template])
+    if options.file:
+        args.extend(['-F', options.file])
+    elif options.template:
+        args.extend(['-t', options.template])
     else:
-        changes = namespace.changes
-        if namespace.message_template:
-            message = namespace.message_template.read().splitlines()
+        if options.message_template:
+            message = options.message_template.read().splitlines()
             try:
                 # TODO: replace with str.removeprefix when py3.8 support dropped
                 if message[0].startswith('*: '):
                     message[0] = message[0][3:]
             except IndexError:
-                commit.error(f'empty message template: {namespace.message_template.name!r}')
+                commit.error(f'empty message template: {options.message_template.name!r}')
         else:
-            message = [] if namespace.message is None else namespace.message
+            message = [] if options.message is None else options.message
 
         # determine commit message
         if message:
@@ -318,7 +313,7 @@ def determine_commit_args(namespace):
                 message[0] = changes.prefix + message[0]
         elif changes.prefix:
             # use generated summary if a generated prefix exists
-            message.append(changes.prefix + namespace.changes.summary)
+            message.append(changes.prefix + changes.summary)
 
         if message:
             tmp = tempfile.NamedTemporaryFile(mode='w')
@@ -343,11 +338,6 @@ def determine_commit_args(namespace):
 
 @commit.bind_final_check
 def _commit_validate(parser, namespace):
-    # determine changes from staged files
-    namespace.changes = determine_changes(namespace)
-    # determine `git commit` args
-    namespace.commit_args = determine_commit_args(namespace) + namespace.extended_commit_args
-
     # mangle files in the gentoo repo by default
     if namespace.mangle is None and namespace.repo.repo_id == 'gentoo':
         namespace.mangle = True
@@ -358,13 +348,19 @@ def _commit_validate(parser, namespace):
         namespace.scan_args.extend(shlex.split(namespace.pkgcheck_scan))
     namespace.scan_args.extend(['--exit', 'GentooCI', '--staged'])
 
+    # gentoo repo requires signoffs and signed commits
+    if namespace.repo.repo_id == 'gentoo':
+        namespace.commit_args.extend(['--signoff', '--gpg-sign'])
+
 
 @commit.bind_main_func
 def _commit(options, out, err):
     repo = options.repo
     git_add_files = []
+    # determine changes from staged files
+    changes = determine_changes(options)
 
-    if atoms := {x.atom.unversioned_atom for x in options.changes.ebuilds}:
+    if atoms := {x.atom.unversioned_atom for x in changes.ebuilds}:
         # manifest all changed packages
         failed = repo.operations.digests(
             domain=options.domain,
@@ -382,7 +378,7 @@ def _commit(options, out, err):
         # don't mangle FILESDIR content
         skip_regex = re.compile(rf'^{repo.location}/[^/]+/[^/]+/files/.+$')
         mangler = GentooMangler if repo.repo_id == 'gentoo' else Mangler
-        paths = (pjoin(repo.location, x) for x in options.changes.paths)
+        paths = (pjoin(repo.location, x) for x in changes.paths)
         git_add_files.extend(mangler(paths, skip_regex=skip_regex))
 
     # stage modified files
@@ -404,7 +400,9 @@ def _commit(options, out, err):
             if not options.ignore_failures:
                 return 1
 
+    # determine message-related args
+    args = determine_msg_args(options, changes)
     # create commit
-    git.run('commit', *options.commit_args)
+    git.run('commit', *args, *options.commit_args)
 
     return 0
