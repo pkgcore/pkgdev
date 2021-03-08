@@ -94,20 +94,8 @@ msg_actions.add_argument(
         commit summary prefix '*: ' is automatically replaced by a generated
         prefix if one exists for the related staged changes.
     """)
-msg_actions.add_argument(
-    '-F', '--file',
-    help='use commit message from specified file',
-    docs="""
-        Use content from the given file for the commit message. If - is
-        specified, the message is read from standard input.
-    """)
-msg_actions.add_argument(
-    '-t', '--template', metavar='FILE',
-    help='open editor using commit message from specified file',
-    docs="""
-        Use content from the given file as a commit message template, opening
-        an editor to complete the message.
-    """)
+msg_actions.add_argument('-F', '--file', help=argparse.SUPPRESS)
+msg_actions.add_argument('-t', '--template', help=argparse.SUPPRESS)
 
 add_actions = commit_opts.add_mutually_exclusive_group()
 add_actions.add_argument(
