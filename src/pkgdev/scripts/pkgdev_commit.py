@@ -42,16 +42,37 @@ commit.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 commit_opts = commit.add_argument_group('commit options')
 commit_opts.add_argument(
     '-n', '--dry-run', action='store_true',
-    help='pretend to create commit')
+    help='pretend to create commit',
+    docs="""
+        Perform all actions without creating a commit.
+    """)
 commit_opts.add_argument(
     '-s', '--scan', action='store_true',
-    help='run pkgcheck against staged changes')
+    help='run pkgcheck against staged changes',
+    docs="""
+        By default, ``pkgdev commit`` doesn't scan for QA errors. This option
+        enables using pkgcheck to scan the staged changes for issues, erroring
+        out if any failures are found.
+    """)
 commit_opts.add_argument(
     '--ignore-failures', action='store_true',
-    help='forcibly create commit with QA errors')
+    help='forcibly create commit with QA errors',
+    docs="""
+        When running with the -s/--scan option enabled, ``pkgdev commit`` will
+        error out without creating a commit if it detects failure results.
+        Specifying this option will force a commit to be created even when QA
+        errors are detected.
+    """)
 commit_opts.add_argument(
     '--mangle', nargs='?', const=True, action=arghparse.StoreBool,
-    help='forcibly enable/disable file mangling')
+    help='forcibly enable/disable file mangling',
+    docs="""
+        File mangling automatically modifies the content of relevant staged
+        files including updating copyright headers and fixing EOF newlines.
+
+        This is performed by default for the gentoo repo, but can be forcibly
+        disabled or enabled as required.
+    """)
 
 msg_actions = commit_opts.add_mutually_exclusive_group()
 msg_actions.add_argument(
