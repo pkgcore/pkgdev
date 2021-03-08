@@ -56,13 +56,29 @@ commit_opts.add_argument(
 msg_actions = commit_opts.add_mutually_exclusive_group()
 msg_actions.add_argument(
     '-m', '--message', metavar='MSG', action='append',
-    help='specify commit message')
+    help='specify commit message',
+    docs="""
+        Use a given message as the commit message. If multiple -m options are
+        specified, their values are concatenated as separate paragraphs with
+        line wrapping at 100 characters.
+
+        Note that the first value will be used for the commit summary and if
+        it's empty then a generated summary will be used if available.
+    """)
 msg_actions.add_argument(
     '-F', '--file',
-    help='use a commit message from a given file')
+    help='use commit message from specified file',
+    docs="""
+        Use content from the given file for the commit message. If - is
+        specified, the message is read from standard input.
+    """)
 msg_actions.add_argument(
     '-t', '--template', metavar='FILE',
-    help='open editor using commit message from a given file')
+    help='open editor using commit message from specified file',
+    docs="""
+        Use content from the given file as a commit message template, opening
+        an editor to complete the message.
+    """)
 
 add_actions = commit_opts.add_mutually_exclusive_group()
 add_actions.add_argument(
