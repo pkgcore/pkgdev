@@ -21,6 +21,15 @@ class TestPkgdevCommitParseArgs:
         out, err = capsys.readouterr()
         assert err.strip() == 'pkgdev commit: error: not in ebuild repo'
 
+    def test_bad_repo_cwd(self, make_repo, capsys, tool):
+        repo = make_repo(masters=('nonexistent',))
+        with pytest.raises(SystemExit) as excinfo, \
+                chdir(repo.location):
+            tool.parse_args(['commit'])
+        assert excinfo.value.code == 2
+        out, err = capsys.readouterr()
+        assert err.strip().startswith('pkgdev commit: error: repo init failed')
+
     def test_non_git_repo_cwd(self, repo, capsys, tool):
         with pytest.raises(SystemExit) as excinfo, \
                 chdir(repo.location):
