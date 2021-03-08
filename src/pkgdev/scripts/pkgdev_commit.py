@@ -41,9 +41,6 @@ commit = ArgumentParser(
 commit.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 commit_opts = commit.add_argument_group('commit options')
 commit_opts.add_argument(
-    '-m', '--message', action='append',
-    help='specify commit message')
-commit_opts.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit')
 commit_opts.add_argument(
@@ -55,6 +52,17 @@ commit_opts.add_argument(
 commit_opts.add_argument(
     '--mangle', nargs='?', const=True, action=arghparse.StoreBool,
     help='forcibly enable/disable file mangling')
+
+msg_actions = commit_opts.add_mutually_exclusive_group()
+msg_actions.add_argument(
+    '-m', '--message', metavar='MSG', action='append',
+    help='specify commit message')
+msg_actions.add_argument(
+    '-F', '--file',
+    help='use a commit message from a given file')
+msg_actions.add_argument(
+    '-t', '--template', metavar='FILE',
+    help='open editor using commit message from a given file')
 
 add_actions = commit_opts.add_mutually_exclusive_group()
 add_actions.add_argument(
@@ -252,36 +260,41 @@ def determine_commit_args(namespace):
         args.append('--dry-run')
     if namespace.verbosity:
         args.append('-v')
+    if namespace.file:
+        args.extend(['-F', namespace.file])
+    if namespace.template:
+        args.extend(['-t', namespace.template])
 
-    changes = namespace.changes
-    message = [] if namespace.message is None else namespace.message
+    if not (namespace.file or namespace.template):
+        changes = namespace.changes
+        message = [] if namespace.message is None else namespace.message
 
-    # determine commit message
-    if message:
-        # ignore generated prefix when using custom prefix
-        if not re.match(r'^\S+: ', message[0]):
-            message[0] = changes.prefix + message[0]
-    elif changes.prefix:
-        # use generated summary if a generated prefix exists
-        message.append(changes.prefix + namespace.changes.summary)
+        # determine commit message
+        if message:
+            # ignore generated prefix when using custom prefix
+            if not re.match(r'^\S+: ', message[0]):
+                message[0] = changes.prefix + message[0]
+        elif changes.prefix:
+            # use generated summary if a generated prefix exists
+            message.append(changes.prefix + namespace.changes.summary)
 
-    if message:
-        tmp = tempfile.NamedTemporaryFile(mode='w')
-        tmp.write(message[0])
-        if len(message) > 1:
-            # wrap body paragraphs at 100 chars
-            body = ('\n'.join(textwrap.wrap(x, width=100)) for x in message[1:])
-            tmp.write('\n\n' + '\n\n'.join(body))
-        tmp.flush()
+        if message:
+            tmp = tempfile.NamedTemporaryFile(mode='w')
+            tmp.write(message[0])
+            if len(message) > 1:
+                # wrap body paragraphs at 100 chars
+                body = ('\n'.join(textwrap.wrap(x, width=100)) for x in message[1:])
+                tmp.write('\n\n' + '\n\n'.join(body))
+            tmp.flush()
 
-        # force `git commit` to open an editor for uncompleted summary
-        if not message[0] or message[0].endswith(' '):
-            args.extend(['-t', tmp.name])
-        else:
-            args.extend(['-F', tmp.name])
+            # force `git commit` to open an editor for uncompleted summary
+            if not message[0] or message[0].endswith(' '):
+                args.extend(['-t', tmp.name])
+            else:
+                args.extend(['-F', tmp.name])
 
-        # explicitly close and delete tempfile on exit
-        atexit.register(tmp.close)
+            # explicitly close and delete tempfile on exit
+            atexit.register(tmp.close)
 
     return args
 
