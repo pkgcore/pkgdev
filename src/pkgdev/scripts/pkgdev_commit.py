@@ -87,6 +87,14 @@ msg_actions.add_argument(
         it's empty then a generated summary will be used if available.
     """)
 msg_actions.add_argument(
+    '-M', '--message-template', metavar='FILE', type=argparse.FileType('r'),
+    help='use commit message template from specified file',
+    docs="""
+        Use content from the given file as a commit message template. The
+        commit summary prefix '*: ' is automatically replaced by a generated
+        prefix if one exists for the related staged changes.
+    """)
+msg_actions.add_argument(
     '-F', '--file',
     help='use commit message from specified file',
     docs="""
@@ -297,14 +305,23 @@ def determine_commit_args(namespace):
         args.append('--dry-run')
     if namespace.verbosity:
         args.append('-v')
+
     if namespace.file:
         args.extend(['-F', namespace.file])
-    if namespace.template:
+    elif namespace.template:
         args.extend(['-t', namespace.template])
-
-    if not (namespace.file or namespace.template):
+    else:
         changes = namespace.changes
-        message = [] if namespace.message is None else namespace.message
+        if namespace.message_template:
+            message = namespace.message_template.read().splitlines()
+            try:
+                # TODO: replace with str.removeprefix when py3.8 support dropped
+                if message[0].startswith('*: '):
+                    message[0] = message[0][3:]
+            except IndexError:
+                commit.error(f'empty message template: {namespace.message_template.name!r}')
+        else:
+            message = [] if namespace.message is None else namespace.message
 
         # determine commit message
         if message:
