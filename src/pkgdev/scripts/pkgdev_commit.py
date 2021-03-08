@@ -319,8 +319,8 @@ def determine_msg_args(options, changes):
             tmp = tempfile.NamedTemporaryFile(mode='w')
             tmp.write(message[0])
             if len(message) > 1:
-                # wrap body paragraphs at 100 chars
-                body = ('\n'.join(textwrap.wrap(x, width=100)) for x in message[1:])
+                # wrap body paragraphs at 85 chars
+                body = ('\n'.join(textwrap.wrap(x, width=85)) for x in message[1:])
                 tmp.write('\n\n' + '\n\n'.join(body))
             tmp.flush()
 
