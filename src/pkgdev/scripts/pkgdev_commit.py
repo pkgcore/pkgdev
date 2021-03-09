@@ -247,8 +247,8 @@ class PkgChangeSummary:
             except IndexError:
                 return
 
-            if old_pkg.eapi in new_pkg.eapi.inherits:
-                return f'update to EAPI {new_pkg.eapi}'
+            if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
+                return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
 
     def generate(self):
         """Generate summaries for the package changes."""
