@@ -401,14 +401,14 @@ class GitChanges(UserDict):
         self._repo = options.repo
 
     @jit_attr
-    def pkgs(self):
+    def pkg_changes(self):
         """Ordered set of all package change objects."""
         return OrderedFrozenSet(self.data.get(PkgChange, ()))
 
     @jit_attr
-    def ebuilds(self):
+    def ebuild_changes(self):
         """Ordered set of all ebuild change objects."""
-        return OrderedFrozenSet(x for x in self.pkgs if x.ebuild)
+        return OrderedFrozenSet(x for x in self.pkg_changes if x.ebuild)
 
     @jit_attr
     def paths(self):
@@ -448,15 +448,15 @@ class GitChanges(UserDict):
     def summary(self):
         """Determine commit message summary."""
         # all changes made on the same package
-        if len({x.atom.unversioned_atom for x in self.pkgs}) == 1:
-            if not self.ebuilds:
-                if len(self.pkgs) == 1:
-                    if self.pkgs[0].path.endswith('/Manifest'):
+        if len({x.atom.unversioned_atom for x in self.pkg_changes}) == 1:
+            if not self.ebuild_changes:
+                if len(self.pkg_changes) == 1:
+                    if self.pkg_changes[0].path.endswith('/Manifest'):
                         return 'update Manifest'
-                    elif self.pkgs[0].path.endswith('/metadata.xml'):
-                        if summary := MetadataSummary(self._options, self.pkgs).generate():
+                    elif self.pkg_changes[0].path.endswith('/metadata.xml'):
+                        if summary := MetadataSummary(self._options, self.pkg_changes).generate():
                             return summary
-            elif summary := PkgSummary(self._options, self.ebuilds).generate():
+            elif summary := PkgSummary(self._options, self.ebuild_changes).generate():
                 return summary
         return ''
 
@@ -635,7 +635,7 @@ def _commit(options, out, err):
     # determine changes from staged files
     changes = determine_changes(options)
 
-    if atoms := {x.atom.unversioned_atom for x in changes.ebuilds}:
+    if atoms := {x.atom.unversioned_atom for x in changes.ebuild_changes}:
         # manifest all changed packages
         failed = repo.operations.digests(
             domain=options.domain,
