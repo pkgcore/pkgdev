@@ -195,7 +195,7 @@ class PkgChangeSummary:
         # set up some basic repo files so pkgcore doesn't complain
         os.makedirs(pjoin(repo_dir, 'metadata'))
         with open(pjoin(repo_dir, 'metadata', 'layout.conf'), 'w') as f:
-            f.write('masters = gentoo\n')
+            f.write(f'masters = {self.repo.repo_id}\n')
         os.makedirs(pjoin(repo_dir, 'profiles'))
         with open(pjoin(repo_dir, 'profiles', 'repo_name'), 'w') as f:
             f.write('old-repo\n')
