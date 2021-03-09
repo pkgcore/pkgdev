@@ -33,6 +33,7 @@ class ArgumentParser(arghparse.ArgumentParser):
     """Parse all known arguments, passing unknown arguments to ``git commit``."""
 
     def parse_known_args(self, args=None, namespace=None):
+        namespace.footer = OrderedSet()
         namespace, args = super().parse_known_args(args, namespace)
         if namespace.dry_run:
             args.append('--dry-run')
@@ -42,12 +43,28 @@ class ArgumentParser(arghparse.ArgumentParser):
         return namespace, []
 
 
+class CommitTags(argparse.Action):
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        try:
+            url = f'https://bugs.gentoo.org/{int(values)}'
+        except ValueError:
+            url = values
+        namespace.footer.add((self.dest.capitalize(), url))
+
+
 commit = ArgumentParser(
     prog='pkgdev commit', description='create git commit',
     parents=(cwd_repo_argparser, git_repo_argparser))
 # custom `pkgcheck scan` args used for tests
 commit.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 commit_opts = commit.add_argument_group('commit options')
+commit_opts.add_argument(
+    '-b', '--bug', action=CommitTags,
+    help='add Bug tag for a given Gentoo or upstream bug')
+commit_opts.add_argument(
+    '-c', '--closes', action=CommitTags,
+    help='add Closes tag for a given Gentoo bug or upstream PR URL')
 commit_opts.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit',
@@ -559,13 +576,20 @@ def determine_msg_args(options, changes):
             # use generated summary if a generated prefix exists
             message.append(changes.prefix + changes.summary)
 
-        if message:
+        if message or options.footer:
             tmp = tempfile.NamedTemporaryFile(mode='w')
             tmp.write(message[0])
             if len(message) > 1:
                 # wrap body paragraphs at 85 chars
                 body = ('\n'.join(textwrap.wrap(x, width=85)) for x in message[1:])
                 tmp.write('\n\n' + '\n\n'.join(body))
+
+            # add footer tags
+            if options.footer:
+                tmp.write('\n\n')
+                for tag, url in options.footer:
+                    tmp.write(f'{tag}: {url}\n')
+
             tmp.flush()
 
             # force `git commit` to open an editor for uncompleted summary
