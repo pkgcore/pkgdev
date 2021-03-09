@@ -44,12 +44,13 @@ class ArgumentParser(arghparse.ArgumentParser):
 
 
 class CommitTags(argparse.Action):
+    """Register tags to inject into the commit message footer."""
 
-    def __call__(self, parser, namespace, values, option_string=None):
+    def __call__(self, parser, namespace, value, option_string=None):
         try:
-            url = f'https://bugs.gentoo.org/{int(values)}'
+            url = f'https://bugs.gentoo.org/{int(value)}'
         except ValueError:
-            url = values
+            url = value
             if not url.startswith(('https://', 'http://')):
                 raise argparse.ArgumentError(self, f'invalid URL: {url}')
         namespace.footer.add((self.dest.capitalize(), url))
