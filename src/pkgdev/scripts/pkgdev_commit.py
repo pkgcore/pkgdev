@@ -257,6 +257,35 @@ class PkgChangeSummary:
 
             if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
                 return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
+            elif new_pkg.keywords != old_pkg.keywords:
+                new_keywords = set(new_pkg.keywords)
+                old_keywords = set(old_pkg.keywords)
+                added = new_keywords - old_keywords
+                removed = old_keywords - new_keywords
+                if removed == {f'~{x}' for x in added}:
+                    msg = f"stabilize {atom.fullver}: {', '.join(sorted(added))}"
+                    if len(msg) <= 50:
+                        return msg
+                    else:
+                        return f'stabilize {atom.fullver}'
+                elif not removed and all(x.startswith('~') for x in added):
+                    msg = f"keyword {atom.fullver}: {', '.join(sorted(added))}"
+                    if len(msg) <= 50:
+                        return msg
+                    else:
+                        return f'keyword {atom.fullver}'
+                elif removed == {x.lstrip('~') for x in added}:
+                    msg = f"revert {atom.fullver} keywords: {', '.join(sorted(added))}"
+                    if len(msg) <= 50:
+                        return msg
+                    else:
+                        return f'revert {atom.fullver} keywords'
+                elif not added:
+                    msg = f"remove {atom.fullver} keywords: {', '.join(sorted(removed))}"
+                    if len(msg) <= 50:
+                        return msg
+                    else:
+                        return f'remove {atom.fullver} keywords'
 
     def generate(self):
         """Generate summaries for the package changes."""
