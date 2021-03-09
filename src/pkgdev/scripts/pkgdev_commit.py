@@ -219,6 +219,18 @@ class PkgChangeSummary:
                 return msg
             else:
                 return 'add versions'
+        elif len(self.pkgs) == 1:
+            # adding a new revbump
+            atom = next(iter(self.pkgs))
+            try:
+                # assume revbump was based on the previous version
+                pkgs = [x for x in self.repo.match(atom.unversioned_atom) if x <= atom]
+                old_pkg, new_pkg = pkgs[-2:]
+            except IndexError:
+                return
+
+            if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
+                return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
 
     @change('D')
     def remove(self):
