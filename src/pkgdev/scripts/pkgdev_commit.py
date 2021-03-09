@@ -481,8 +481,8 @@ def _commit_validate(parser, namespace):
         namespace.scan_args.extend(shlex.split(namespace.pkgcheck_scan))
     namespace.scan_args.extend(['--exit', 'GentooCI', '--staged'])
 
-    # gentoo repo requires signoffs and signed commits
-    if namespace.repo.repo_id == 'gentoo':
+    # assume signed commits means also requiring signoffs
+    if namespace.repo.config.sign_commits:
         namespace.commit_args.extend(['--signoff', '--gpg-sign'])
 
 
