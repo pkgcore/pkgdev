@@ -50,6 +50,8 @@ class CommitTags(argparse.Action):
             url = f'https://bugs.gentoo.org/{int(values)}'
         except ValueError:
             url = values
+            if not url.startswith(('https://', 'http://')):
+                raise argparse.ArgumentError(self, f'invalid URL: {url}')
         namespace.footer.add((self.dest.capitalize(), url))
 
 
