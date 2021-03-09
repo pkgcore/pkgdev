@@ -145,7 +145,7 @@ class _HistoricalRepo(UnconfiguredTree):
             tar.extractall(path=self.location)
 
 
-def change(status):
+def change(*statuses):
     """Decorator to register change status summary methods."""
 
     class decorator:
@@ -155,7 +155,7 @@ def change(status):
             self.func = func
 
         def __set_name__(self, owner, name):
-            owner.status_funcs[status] = self.func
+            owner.status_funcs[frozenset(statuses)] = self.func
             setattr(owner, name, self.func)
 
     return decorator
@@ -260,13 +260,11 @@ class PkgChangeSummary:
 
     def generate(self):
         """Generate summaries for the package changes."""
-        statuses = {x.status for x in self.pkgs.values()}
-        if len(statuses) == 1:
-            status = next(iter(statuses))
-            try:
-                return self.status_funcs[status](self)
-            except KeyError:
-                pass
+        statuses = frozenset(x.status for x in self.pkgs.values())
+        try:
+            return self.status_funcs[statuses](self)
+        except KeyError:
+            pass
 
 
 class GitChanges(UserDict):
