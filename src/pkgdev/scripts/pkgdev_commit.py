@@ -4,15 +4,18 @@ import os
 import re
 import shlex
 import subprocess
+import tarfile
 import tempfile
 import textwrap
 from collections import defaultdict, deque, UserDict
 from dataclasses import dataclass
+from functools import partial
 from itertools import chain
 
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import MalformedAtom
 from pkgcore.ebuild.atom import atom as atom_cls
+from pkgcore.ebuild.repository import UnconfiguredTree
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
@@ -110,6 +113,37 @@ add_actions.add_argument(
     help='stage all changed/new/removed files')
 
 
+class _HistoricalRepo(UnconfiguredTree):
+    """Repository of historical packages stored in a temporary directory."""
+
+    def __init__(self, repo, *args, **kwargs):
+        self.__parent_repo = repo
+        self.__created = False
+        super().__init__(*args, **kwargs)
+
+    def add_pkgs(self, pkgs):
+        """Update the repo with a given sequence of packages."""
+        self._populate(pkgs)
+        if self.__created:
+            # notify the repo object that new pkgs were added
+            for pkg in pkgs:
+                self.notify_add_package(pkg)
+        self.__created = True
+
+    def _populate(self, pkgs):
+        """Populate the repo with a given sequence of historical packages."""
+        paths = [pjoin(pkg.category, pkg.package) for pkg in pkgs]
+        old_files = subprocess.Popen(
+            ['git', 'archive', 'HEAD'] + paths,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            cwd=self.__parent_repo.location)
+        if old_files.poll():
+            error = old_files.stderr.read().decode().strip()
+            raise Exception(f'failed populating archive repo: {error}')
+        with tarfile.open(mode='r|', fileobj=old_files.stdout) as tar:
+            tar.extractall(path=self.location)
+
+
 def change(status):
     """Decorator to register change status summary methods."""
 
@@ -131,8 +165,9 @@ class PkgChangeSummary:
 
     status_funcs = {}
 
-    def __init__(self, repo, ebuilds):
-        self.repo = repo
+    def __init__(self, options, ebuilds):
+        self.options = options
+        self.repo = options.repo
         self.pkgs = {x.atom: x for x in ebuilds}
 
     @jit_attr
@@ -150,9 +185,28 @@ class PkgChangeSummary:
         """Existing packages in the tree related to the package."""
         return tuple(self.repo.match(next(iter(self.pkgs)).unversioned_atom))
 
+    @jit_attr
+    def old_repo(self):
+        """Create a repository of historical packages removed from git."""
+        tmpdir = tempfile.TemporaryDirectory()
+        atexit.register(tmpdir.cleanup)
+        repo_dir = tmpdir.name
+
+        # set up some basic repo files so pkgcore doesn't complain
+        os.makedirs(pjoin(repo_dir, 'metadata'))
+        with open(pjoin(repo_dir, 'metadata', 'layout.conf'), 'w') as f:
+            f.write('masters = gentoo\n')
+        os.makedirs(pjoin(repo_dir, 'profiles'))
+        with open(pjoin(repo_dir, 'profiles', 'repo_name'), 'w') as f:
+            f.write('old-repo\n')
+
+        repo_cls = partial(_HistoricalRepo, self.repo)
+        return self.options.domain.add_repo(
+            repo_dir, self.options.config, tree_cls=repo_cls)
+
     @change('A')
     def add(self):
-        """Generate summaries for add action."""
+        """Generate summaries for add actions."""
         if len(self.existing) == len(self.pkgs):
             return 'initial import'
         elif not self.revbump:
@@ -164,7 +218,7 @@ class PkgChangeSummary:
 
     @change('D')
     def remove(self):
-        """Generate summaries for remove action."""
+        """Generate summaries for remove actions."""
         if self.existing:
             msg = f"drop {', '.join(self.versions)}"
             if len(self.versions) == 1 or len(msg) <= 50:
@@ -175,11 +229,26 @@ class PkgChangeSummary:
 
     @change('R')
     def rename(self):
-        """Generate summaries for rename action."""
+        """Generate summaries for rename actions."""
         if len(self.pkgs) == 1 and not self.revbump:
             # handle single, non-revbump `git mv` changes
             change = next(iter(self.pkgs.values()))
             return f'add {change.atom.fullver}, drop {change.old.fullver}'
+
+    @change('M')
+    def modify(self):
+        """Generate summaries for modify actions."""
+        if len(self.pkgs) == 1:
+            atom = next(iter(self.pkgs))
+            self.old_repo.add_pkgs([atom])
+            try:
+                old_pkg = self.old_repo.match(atom)[0]
+                new_pkg = self.repo.match(atom)[0]
+            except IndexError:
+                return
+
+            if old_pkg.eapi in new_pkg.eapi.inherits:
+                return f'update to EAPI {new_pkg.eapi}'
 
     def generate(self):
         """Generate summaries for the package changes."""
@@ -195,9 +264,10 @@ class PkgChangeSummary:
 class GitChanges(UserDict):
     """Mapping of change objects for staged git changes."""
 
-    def __init__(self, changes, repo):
+    def __init__(self, options, changes):
         super().__init__(changes)
-        self._repo = repo
+        self._options = options
+        self._repo = options.repo
 
     @jit_attr
     def pkgs(self):
@@ -251,7 +321,7 @@ class GitChanges(UserDict):
             if not self.ebuilds:
                 if len(self.pkgs) == 1 and self.pkgs[0].path.endswith('/Manifest'):
                     return 'update Manifest'
-            elif summary := PkgChangeSummary(self._repo, self.ebuilds).generate():
+            elif summary := PkgChangeSummary(self._options, self.ebuilds).generate():
                 return summary
         return ''
 
@@ -344,7 +414,7 @@ def determine_changes(options):
         else:
             changes[path_components[0]].add(Change(status, path))
 
-    return GitChanges(changes, options.repo)
+    return GitChanges(options, changes)
 
 
 def determine_msg_args(options, changes):
