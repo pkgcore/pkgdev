@@ -17,6 +17,7 @@ from pkgcore.ebuild.atom import MalformedAtom
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.ebuild.repository import UnconfiguredTree
 from pkgcore.operations import observer as observer_mod
+from pkgcore.repository import errors as repo_errors
 from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
 from snakeoil.klass import jit_attr
@@ -201,8 +202,11 @@ class PkgChangeSummary:
             f.write('old-repo\n')
 
         repo_cls = partial(_HistoricalRepo, self.repo)
-        return self.options.domain.add_repo(
-            repo_dir, self.options.config, tree_cls=repo_cls)
+        try:
+            return self.options.domain.add_repo(
+                repo_dir, self.options.config, tree_cls=repo_cls)
+        except repo_errors.RepoError:
+            pass
 
     @change('A')
     def add(self):
@@ -238,17 +242,18 @@ class PkgChangeSummary:
     @change('M')
     def modify(self):
         """Generate summaries for modify actions."""
-        if len(self.pkgs) == 1:
-            atom = next(iter(self.pkgs))
-            self.old_repo.add_pkgs([atom])
-            try:
-                old_pkg = self.old_repo.match(atom)[0]
-                new_pkg = self.repo.match(atom)[0]
-            except IndexError:
-                return
+        if old_repo := self.old_repo:
+            if len(self.pkgs) == 1:
+                atom = next(iter(self.pkgs))
+                old_repo.add_pkgs([atom])
+                try:
+                    old_pkg = old_repo.match(atom)[0]
+                    new_pkg = self.repo.match(atom)[0]
+                except IndexError:
+                    return
 
-            if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
-                return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
+                if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
+                    return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
 
     def generate(self):
         """Generate summaries for the package changes."""
