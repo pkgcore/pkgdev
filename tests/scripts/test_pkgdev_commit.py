@@ -67,10 +67,10 @@ class TestPkgdevCommitParseArgs:
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
         git_repo.add_all('cat/pkg-0', commit=False)
-        author_opt = '--author="A U Thor <author@example.com>"'
         with chdir(repo.location):
-            options, _ = tool.parse_args(['commit', author_opt])
-        assert options.commit_args == [author_opt]
+            for opt in ('--author="A U Thor <author@example.com>"', '-e'):
+                options, _ = tool.parse_args(['commit', opt])
+            assert options.commit_args == [opt]
 
     def test_scan_args(self, repo, make_git_repo, tool):
         git_repo = make_git_repo(repo.location)
@@ -84,6 +84,36 @@ class TestPkgdevCommitParseArgs:
         with chdir(repo.location):
             options, _ = tool.parse_args(['commit', '-v'])
         assert '-v' in options.scan_args
+
+    def test_commit_tags(self, capsys, repo, make_git_repo, tool):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0', commit=False)
+        with chdir(repo.location):
+            # bug IDs
+            for opt in ('-b', '--bug'):
+                options, _ = tool.parse_args(['commit', opt, '1'])
+                assert options.footer == {('Bug', 'https://bugs.gentoo.org/1')}
+            # bug URLs
+            for opt in ('-b', '--bug'):
+                options, _ = tool.parse_args(['commit', opt, 'https://bugs.gentoo.org/2'])
+                assert options.footer == {('Bug', 'https://bugs.gentoo.org/2')}
+            # bug IDs
+            for opt in ('-c', '--closes'):
+                options, _ = tool.parse_args(['commit', opt, '1'])
+                assert options.footer == {('Closes', 'https://bugs.gentoo.org/1')}
+            # bug URLs
+            for opt in ('-c', '--closes'):
+                options, _ = tool.parse_args(['commit', opt, 'https://bugs.gentoo.org/2'])
+                assert options.footer == {('Closes', 'https://bugs.gentoo.org/2')}
+            # bad URL
+            for opt in ('-b', '-c'):
+                with pytest.raises(SystemExit) as excinfo:
+                    tool.parse_args(['commit', opt, 'bugs.gentoo.org/1'])
+                assert excinfo.value.code == 2
+                out, err = capsys.readouterr()
+                assert not out
+                assert 'invalid URL: bugs.gentoo.org/1' in err
 
 
 class TestPkgdevCommit:
