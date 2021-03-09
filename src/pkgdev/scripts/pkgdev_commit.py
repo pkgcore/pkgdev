@@ -242,18 +242,21 @@ class PkgChangeSummary:
     @change('M')
     def modify(self):
         """Generate summaries for modify actions."""
-        if old_repo := self.old_repo:
-            if len(self.pkgs) == 1:
-                atom = next(iter(self.pkgs))
-                old_repo.add_pkgs([atom])
-                try:
-                    old_pkg = old_repo.match(atom)[0]
-                    new_pkg = self.repo.match(atom)[0]
-                except IndexError:
-                    return
+        if len(self.pkgs) == 1:
+            if self.old_repo is None:
+                # error initializing historical repo
+                return
 
-                if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
-                    return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
+            atom = next(iter(self.pkgs))
+            self.old_repo.add_pkgs([atom])
+            try:
+                old_pkg = self.old_repo.match(atom)[0]
+                new_pkg = self.repo.match(atom)[0]
+            except IndexError:
+                return
+
+            if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
+                return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
 
     def generate(self):
         """Generate summaries for the package changes."""
