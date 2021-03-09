@@ -110,6 +110,88 @@ add_actions.add_argument(
     help='stage all changed/new/removed files')
 
 
+def change(status):
+    """Decorator to register change status summary methods."""
+
+    class decorator:
+        """Decorator with access to the class of a decorated function."""
+
+        def __init__(self, func):
+            self.func = func
+
+        def __set_name__(self, owner, name):
+            owner.status_funcs[status] = self.func
+            setattr(owner, name, self.func)
+
+    return decorator
+
+
+class PkgChangeSummary:
+    """Summary generation support for single package ebuild changes."""
+
+    status_funcs = {}
+
+    def __init__(self, repo, ebuilds):
+        self.repo = repo
+        self.pkgs = {x.atom: x for x in ebuilds}
+
+    @jit_attr
+    def versions(self):
+        """Tuple of package versions that were changed."""
+        return tuple(x.fullver for x in sorted(self.pkgs))
+
+    @jit_attr
+    def revbump(self):
+        """Boolean for any package changes involving version revisions."""
+        return any(x.revision for x in self.pkgs)
+
+    @jit_attr
+    def existing(self):
+        """Existing packages in the tree related to the package."""
+        return tuple(self.repo.match(next(iter(self.pkgs)).unversioned_atom))
+
+    @change('A')
+    def add(self):
+        """Generate summaries for add action."""
+        if len(self.existing) == len(self.pkgs):
+            return 'initial import'
+        elif not self.revbump:
+            msg = f"add {', '.join(self.versions)}"
+            if len(self.versions) == 1 or len(msg) <= 50:
+                return msg
+            else:
+                return 'add versions'
+
+    @change('D')
+    def remove(self):
+        """Generate summaries for remove action."""
+        if self.existing:
+            msg = f"drop {', '.join(self.versions)}"
+            if len(self.versions) == 1 or len(msg) <= 50:
+                return msg
+            else:
+                return 'drop versions'
+        return 'treeclean'
+
+    @change('R')
+    def rename(self):
+        """Generate summaries for rename action."""
+        if len(self.pkgs) == 1 and not self.revbump:
+            # handle single, non-revbump `git mv` changes
+            change = next(iter(self.pkgs.values()))
+            return f'add {change.atom.fullver}, drop {change.old.fullver}'
+
+    def generate(self):
+        """Generate summaries for the package changes."""
+        statuses = {x.status for x in self.pkgs.values()}
+        if len(statuses) == 1:
+            status = next(iter(statuses))
+            try:
+                return self.status_funcs[status](self)
+            except KeyError:
+                pass
+
+
 class GitChanges(UserDict):
     """Mapping of change objects for staged git changes."""
 
@@ -169,37 +251,8 @@ class GitChanges(UserDict):
             if not self.ebuilds:
                 if len(self.pkgs) == 1 and self.pkgs[0].path.endswith('/Manifest'):
                     return 'update Manifest'
-            else:
-                pkgs = {x.atom: x for x in self.ebuilds}
-                versions = [x.fullver for x in sorted(pkgs)]
-                revbump = any(x.revision for x in pkgs)
-                existing_pkgs = self._repo.match(next(iter(pkgs)).unversioned_atom)
-                statuses = {x.status for x in pkgs.values()}
-                if len(statuses) == 1:
-                    status = next(iter(statuses))
-                    if status == 'A':
-                        if len(existing_pkgs) == len(pkgs):
-                            return 'initial import'
-                        elif not revbump:
-                            msg = f"add {', '.join(versions)}"
-                            if len(versions) == 1 or len(msg) <= 50:
-                                return msg
-                            else:
-                                return 'add versions'
-                    elif status == 'D':
-                        if existing_pkgs:
-                            msg = f"drop {', '.join(versions)}"
-                            if len(versions) == 1 or len(msg) <= 50:
-                                return msg
-                            else:
-                                return 'drop versions'
-                        else:
-                            return 'treeclean'
-                    elif status == 'R' and len(pkgs) == 1 and not revbump:
-                        # handle single, non-revbump `git mv` changes
-                        change = next(iter(pkgs.values()))
-                        return f'add {change.atom.fullver}, drop {change.old.fullver}'
-
+            elif summary := PkgChangeSummary(self._repo, self.ebuilds).generate():
+                return summary
         return ''
 
 
