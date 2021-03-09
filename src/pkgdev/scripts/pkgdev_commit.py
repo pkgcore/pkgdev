@@ -161,30 +161,15 @@ def change(*statuses):
     return decorator
 
 
-class PkgChangeSummary:
-    """Summary generation support for single package ebuild changes."""
+class ChangeSummary:
+    """Generic summary generation support for git changes."""
 
-    status_funcs = {}
+    # mapping of handled statuses to functions
+    status_funcs = None
 
-    def __init__(self, options, ebuilds):
+    def __init__(self, options):
         self.options = options
         self.repo = options.repo
-        self.pkgs = {x.atom: x for x in ebuilds}
-
-    @jit_attr
-    def versions(self):
-        """Tuple of package versions that were changed."""
-        return tuple(x.fullver for x in sorted(self.pkgs))
-
-    @jit_attr
-    def revbump(self):
-        """Boolean for any package changes involving version revisions."""
-        return any(x.revision for x in self.pkgs)
-
-    @jit_attr
-    def existing(self):
-        """Existing packages in the tree related to the package."""
-        return tuple(self.repo.match(next(iter(self.pkgs)).unversioned_atom))
 
     @jit_attr
     def old_repo(self):
@@ -208,10 +193,96 @@ class PkgChangeSummary:
         except repo_errors.RepoError:
             pass
 
+    def generate(self):
+        """Generate summaries for the package changes."""
+        statuses = frozenset(x.status for x in self.changes.values())
+        try:
+            return self.status_funcs[statuses](self)
+        except KeyError:
+            pass
+
+
+class MetadataSummary(ChangeSummary):
+    """Summary generation support for metadata.xml changes."""
+
+    status_funcs = {}
+
+    def __init__(self, options, changes):
+        super().__init__(options)
+        self.changes = {x.atom: x for x in changes}
+
+    @change('M')
+    def modify(self):
+        """Generate summaries for modify actions."""
+        if self.old_repo is None:
+            # error initializing historical repo
+            return
+
+        atom = next(iter(self.changes))
+        self.old_repo.add_pkgs([atom])
+        try:
+            old_pkg = self.old_repo.match(atom)[0]
+            new_pkg = self.repo.match(atom)[0]
+        except IndexError:
+            return
+
+        if old_pkg.maintainers != new_pkg.maintainers:
+            new = set(new_pkg.maintainers)
+            old = set(old_pkg.maintainers)
+            p = git.run('config', 'user.email', stdout=subprocess.PIPE)
+            git_email = p.stdout.strip()
+            if git_email in list(new - old):
+                return 'add myself to maintainers'
+            if git_email in list(old - new):
+                return 'drop myself from maintainers'
+            return 'update maintainers'
+        elif old_pkg.stabilize_allarches != new_pkg.stabilize_allarches:
+            status = 'mark' if new_pkg.stabilize_allarches else 'drop'
+            return f'{status} ALLARCHES'
+        elif old_pkg.upstreams != new_pkg.upstreams:
+            new = set(new_pkg.upstreams)
+            old = set(old_pkg.upstreams)
+            added = new - old
+            removed = old - new
+            msg = []
+            for action, data in (('add', added), ('remove', removed)):
+                if data:
+                    upstreams = [x.type for x in data]
+                    msg.append(f"{action} {', '.join(upstreams)} upstream metadata")
+            # return action-specific shorter summary if a single type exists
+            if len(msg) == 1 and len(msg[0]) <= 50:
+                return msg[0]
+            return 'update upstream metadata'
+
+
+class PkgSummary(ChangeSummary):
+    """Summary generation support for single package ebuild changes."""
+
+    status_funcs = {}
+
+    def __init__(self, options, changes):
+        super().__init__(options)
+        self.changes = {x.atom: x for x in changes}
+
+    @jit_attr
+    def versions(self):
+        """Tuple of package versions that were changed."""
+        return tuple(x.fullver for x in sorted(self.changes))
+
+    @jit_attr
+    def revbump(self):
+        """Boolean for any package changes involving version revisions."""
+        return any(x.revision for x in self.changes)
+
+    @jit_attr
+    def existing(self):
+        """Existing packages in the tree related to the package."""
+        return tuple(self.repo.match(next(iter(self.changes)).unversioned_atom))
+
     @change('A')
     def add(self):
         """Generate summaries for add actions."""
-        if len(self.existing) == len(self.pkgs):
+        if len(self.existing) == len(self.changes):
             return 'initial import'
         elif not self.revbump:
             msg = f"add {', '.join(self.versions)}"
@@ -219,9 +290,9 @@ class PkgChangeSummary:
                 return msg
             else:
                 return 'add versions'
-        elif len(self.pkgs) == 1:
+        elif len(self.changes) == 1:
             # adding a new revbump
-            atom = next(iter(self.pkgs))
+            atom = next(iter(self.changes))
             try:
                 # assume revbump was based on the previous version
                 pkgs = [x for x in self.repo.match(atom.unversioned_atom) if x <= atom]
@@ -246,20 +317,20 @@ class PkgChangeSummary:
     @change('R')
     def rename(self):
         """Generate summaries for rename actions."""
-        if len(self.pkgs) == 1 and not self.revbump:
+        if len(self.changes) == 1 and not self.revbump:
             # handle single, non-revbump `git mv` changes
-            change = next(iter(self.pkgs.values()))
+            change = next(iter(self.changes.values()))
             return f'add {change.atom.fullver}, drop {change.old.fullver}'
 
     @change('M')
     def modify(self):
         """Generate summaries for modify actions."""
-        if len(self.pkgs) == 1:
+        if len(self.changes) == 1:
             if self.old_repo is None:
                 # error initializing historical repo
                 return
 
-            atom = next(iter(self.pkgs))
+            atom = next(iter(self.changes))
             self.old_repo.add_pkgs([atom])
             try:
                 old_pkg = self.old_repo.match(atom)[0]
@@ -298,14 +369,6 @@ class PkgChangeSummary:
                         return msg
                     else:
                         return f'remove {atom.fullver} keywords'
-
-    def generate(self):
-        """Generate summaries for the package changes."""
-        statuses = frozenset(x.status for x in self.pkgs.values())
-        try:
-            return self.status_funcs[statuses](self)
-        except KeyError:
-            pass
 
 
 class GitChanges(UserDict):
@@ -366,9 +429,13 @@ class GitChanges(UserDict):
         # all changes made on the same package
         if len({x.atom.unversioned_atom for x in self.pkgs}) == 1:
             if not self.ebuilds:
-                if len(self.pkgs) == 1 and self.pkgs[0].path.endswith('/Manifest'):
-                    return 'update Manifest'
-            elif summary := PkgChangeSummary(self._options, self.ebuilds).generate():
+                if len(self.pkgs) == 1:
+                    if self.pkgs[0].path.endswith('/Manifest'):
+                        return 'update Manifest'
+                    elif self.pkgs[0].path.endswith('/metadata.xml'):
+                        if summary := MetadataSummary(self._options, self.pkgs).generate():
+                            return summary
+            elif summary := PkgSummary(self._options, self.ebuilds).generate():
                 return summary
         return ''
 
