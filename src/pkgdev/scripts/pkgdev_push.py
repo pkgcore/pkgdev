@@ -13,7 +13,9 @@ class ArgumentParser(arghparse.ArgumentParser):
 
     def parse_known_args(self, args=None, namespace=None):
         namespace, args = super().parse_known_args(args, namespace)
-        namespace.extended_push_args = args
+        if namespace.dry_run:
+            args.append('--dry-run')
+        namespace.push_args = args
         return namespace, []
 
 
@@ -31,22 +33,8 @@ push_opts.add_argument(
     help='pretend to push the commits')
 
 
-def determine_push_args(namespace):
-    """Determine arguments used with `git push`."""
-    args = []
-    if namespace.repo.repo_id == 'gentoo':
-        # gentoo repo requires signed pushes
-        args.append('--signed')
-    if namespace.dry_run:
-        args.append('--dry-run')
-    return args
-
-
 @push.bind_final_check
 def _commit_validate(parser, namespace):
-    # determine `git push` args
-    namespace.push_args = determine_push_args(namespace) + namespace.extended_push_args
-
     # determine `pkgcheck scan` args
     namespace.scan_args = ['-v'] * namespace.verbosity
     if namespace.pkgcheck_scan:

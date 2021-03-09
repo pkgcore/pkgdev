@@ -38,16 +38,10 @@ class TestPkgdevPushParseArgs:
         git_repo = make_git_repo(repo.location)
         with chdir(git_repo.path):
             options, _ = tool.parse_args(['push', 'origin', 'master'])
-        assert options.push_args == ['origin', 'master']
-
-    def test_gentoo_repo_git_push_args(self, make_repo, make_git_repo, tool):
-        """Unknown arguments for ``pkgdev push`` are passed to ``git push``."""
-        repo = make_repo(repo_id='gentoo')
-        git_repo = make_git_repo(repo.location)
-        with chdir(git_repo.path):
-            options, _ = tool.parse_args(['push', '-n'])
-        assert '--signed' in options.push_args
-        assert '--dry-run' in options.push_args
+            assert options.push_args == ['origin', 'master']
+            options, _ = tool.parse_args(['push', '-n', '--signed'])
+            assert '--dry-run' in options.push_args
+            assert '--signed' in options.push_args
 
     def test_scan_args(self, repo, make_git_repo, tool):
         git_repo = make_git_repo(repo.location)
