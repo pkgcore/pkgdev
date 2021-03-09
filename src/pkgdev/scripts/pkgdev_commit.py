@@ -468,8 +468,11 @@ def determine_msg_args(options, changes):
 
 @commit.bind_final_check
 def _commit_validate(parser, namespace):
+    # flag for testing if running under the gentoo repo
+    namespace.gentoo_repo = namespace.repo.repo_id == 'gentoo'
+
     # mangle files in the gentoo repo by default
-    if namespace.mangle is None and namespace.repo.repo_id == 'gentoo':
+    if namespace.mangle is None and namespace.gentoo_repo:
         namespace.mangle = True
 
     # determine `pkgcheck scan` args
@@ -507,7 +510,7 @@ def _commit(options, out, err):
     if options.mangle:
         # don't mangle FILESDIR content
         skip_regex = re.compile(rf'^{repo.location}/[^/]+/[^/]+/files/.+$')
-        mangler = GentooMangler if repo.repo_id == 'gentoo' else Mangler
+        mangler = GentooMangler if options.gentoo_repo else Mangler
         paths = (pjoin(repo.location, x) for x in changes.paths)
         git_add_files.extend(mangler(paths, skip_regex=skip_regex))
 
