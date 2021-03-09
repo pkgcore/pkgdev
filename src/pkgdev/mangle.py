@@ -49,7 +49,7 @@ class Mangler:
         self._current_year = str(datetime.today().year)
 
         # initialize settings used by iterator support
-        self._runner = None
+        self._runner = self._mp_ctx.Process(target=self._run)
         signal.signal(signal.SIGINT, self._kill_pipe)
         self._mangled_paths = iter(self._mangled_paths_q.get, None)
 
@@ -64,7 +64,7 @@ class Mangler:
 
     def _kill_pipe(self, *args, error=None):
         """Handle terminating the mangling process group."""
-        if self._runner is not None:
+        if self._runner.is_alive():
             os.killpg(self._runner.pid, signal.SIGKILL)
         if error is not None:
             # propagate exception raised during parallelized mangling
@@ -73,7 +73,6 @@ class Mangler:
 
     def __iter__(self):
         # start running the mangling processes
-        self._runner = self._mp_ctx.Process(target=self._run)
         self._runner.start()
         return self
 
