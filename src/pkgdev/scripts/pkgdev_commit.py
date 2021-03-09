@@ -133,7 +133,7 @@ class _HistoricalRepo(UnconfiguredTree):
 
     def _populate(self, pkgs):
         """Populate the repo with a given sequence of historical packages."""
-        paths = [pjoin(pkg.category, pkg.package) for pkg in pkgs]
+        paths = list({pkg.key for pkg in pkgs})
         old_files = subprocess.Popen(
             ['git', 'archive', 'HEAD'] + paths,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
