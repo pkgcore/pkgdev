@@ -313,11 +313,12 @@ class PkgSummary(ChangeSummary):
         elif len(self.changes) == 1:
             # adding a new revbump
             atom = next(iter(self.changes))
+            # assume revbump was based on the previous version
+            pkgs = [x for x in self.repo.match(atom.unversioned_atom) if x <= atom]
             try:
-                # assume revbump was based on the previous version
-                pkgs = [x for x in self.repo.match(atom.unversioned_atom) if x <= atom]
                 old_pkg, new_pkg = pkgs[-2:]
-            except IndexError:
+            except ValueError:
+                # probably a broken ebuild
                 return
 
             if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
