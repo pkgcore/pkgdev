@@ -204,7 +204,7 @@ class ChangeSummary:
             f.write(f'masters = {self.repo.repo_id}\n')
         os.makedirs(pjoin(repo_dir, 'profiles'))
         with open(pjoin(repo_dir, 'profiles', 'repo_name'), 'w') as f:
-            f.write('old-repo\n')
+            f.write('{self.repo.repo_id}-old\n')
 
         repo_cls = partial(_HistoricalRepo, self.repo)
         try:
