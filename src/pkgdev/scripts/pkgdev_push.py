@@ -3,6 +3,7 @@ import shlex
 
 from pkgcheck import reporters, scan
 from snakeoil.cli import arghparse
+from snakeoil.cli.input import userquery
 
 from .. import git
 from .argparsers import cwd_repo_argparser, git_repo_argparser
@@ -26,8 +27,8 @@ push = ArgumentParser(
 push.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 push_opts = push.add_argument_group('push options')
 push_opts.add_argument(
-    '--ignore-failures', action='store_true',
-    help='ignore QA failures before pushing')
+    '-A', '--ask', action='store_true',
+    help='confirm pushing commits with QA errors')
 push_opts.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to push the commits')
@@ -56,7 +57,7 @@ def _push(options, out, err):
             out.write(out.bold, out.fg('red'), '\nFAILURES', out.reset)
             for result in sorted(pipe.errors):
                 reporter.report(result)
-        if not options.ignore_failures:
+        if not (options.ask and userquery('Push commits anyway?', out, err)):
             return 1
 
     # push commits upstream

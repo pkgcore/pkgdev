@@ -1,6 +1,7 @@
 import os
 import textwrap
 from functools import partial
+from io import StringIO
 from unittest.mock import patch
 
 import pytest
@@ -115,7 +116,8 @@ class TestPkgdevPush:
         """)
 
         # but failures can be ignored to push anyway
-        with patch('sys.argv', self.args + ['--ignore-failures']), \
+        with patch('sys.argv', self.args + ['--ask']), \
+                patch('sys.stdin', StringIO('y\n')), \
                 pytest.raises(SystemExit) as excinfo, \
                 chdir(self.child_git_repo.path):
             self.script()

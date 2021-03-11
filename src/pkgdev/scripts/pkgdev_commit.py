@@ -20,6 +20,7 @@ from pkgcore.operations import observer as observer_mod
 from pkgcore.repository import errors as repo_errors
 from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
+from snakeoil.cli.input import userquery
 from snakeoil.klass import jit_attr
 from snakeoil.mappings import OrderedFrozenSet, OrderedSet
 from snakeoil.osutils import pjoin
@@ -83,13 +84,12 @@ commit_opts.add_argument(
         out if any failures are found.
     """)
 commit_opts.add_argument(
-    '--ignore-failures', action='store_true',
-    help='forcibly create commit with QA errors',
+    '-A', '--ask', action='store_true',
+    help='confirm creating commit with QA errors',
     docs="""
         When running with the -s/--scan option enabled, ``pkgdev commit`` will
-        error out without creating a commit if it detects failure results.
-        Specifying this option will force a commit to be created even when QA
-        errors are detected.
+        ask for confirmation before creating a commit if it detects failure
+        results.
     """)
 commit_opts.add_argument(
     '--mangle', nargs='?', const=True, action=arghparse.StoreBool,
@@ -672,7 +672,7 @@ def _commit(options, out, err):
                 out.write(out.bold, out.fg('red'), '\nFAILURES', out.reset)
                 for result in sorted(pipe.errors):
                     reporter.report(result)
-            if not options.ignore_failures:
+            if not (options.ask and userquery('Create commit anyway?', out, err)):
                 return 1
 
     # determine message-related args

@@ -3,6 +3,7 @@ import shutil
 import textwrap
 from datetime import datetime
 from functools import partial
+from io import StringIO
 from unittest.mock import patch
 
 import pytest
@@ -479,7 +480,8 @@ class TestPkgdevCommit:
         """)
 
         # ignore failures to create the commit
-        with patch('sys.argv', self.args + ['--scan', '--ignore-failures']), \
+        with patch('sys.argv', self.args + ['--scan', '--ask']), \
+                patch('sys.stdin', StringIO('y\n')), \
                 pytest.raises(SystemExit) as excinfo, \
                 chdir(git_repo.path):
             self.script()
