@@ -184,7 +184,7 @@ class TestPkgdevCommit:
         commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
         assert commit_msg == ['commit2']
 
-    def test_message_template(self, repo, make_git_repo, tmp_path):
+    def test_message_template(self, capsys, repo, make_git_repo, tmp_path):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
         git_repo.add_all('cat/pkg-0')
@@ -227,6 +227,22 @@ class TestPkgdevCommit:
             assert excinfo.value.code == 0
             commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
             assert commit_msg == ['prefix: summary', '', 'body']
+
+        # empty message
+        with open(path, 'w') as f:
+            f.write('')
+
+        for i, opt in enumerate(['-M', '--message-template'], 5):
+            repo.create_ebuild(f'cat/pkg-{i}')
+            git_repo.add_all(f'cat/pkg-{i}', commit=False)
+            with patch('sys.argv', self.args + ['-u', opt, path]), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 2
+            out, err = capsys.readouterr()
+            assert not out
+            assert err.strip().startswith('pkgdev commit: error: empty message template')
 
     def test_custom_unprefixed_message(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
