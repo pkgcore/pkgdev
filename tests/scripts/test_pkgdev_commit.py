@@ -156,7 +156,7 @@ class TestPkgdevCommit:
         assert not out
         assert err.strip() == 'pkgdev commit: error: no staged changes exist'
 
-    def test_git_message_opts(self, capsys, repo, make_git_repo, tmp_path):
+    def test_git_message_opts(self, repo, make_git_repo, tmp_path):
         """Verify message-related options are passed through to `git commit`."""
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
@@ -170,8 +170,6 @@ class TestPkgdevCommit:
                 chdir(git_repo.path):
             self.script()
         assert excinfo.value.code == 0
-        out, err = capsys.readouterr()
-        assert err == out == ''
         commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
         assert commit_msg == ['commit1']
 
@@ -183,10 +181,52 @@ class TestPkgdevCommit:
                 chdir(git_repo.path):
             self.script()
         assert excinfo.value.code == 0
-        out, err = capsys.readouterr()
-        assert err == out == ''
         commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
         assert commit_msg == ['commit2']
+
+    def test_message_template(self, repo, make_git_repo, tmp_path):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+        path = str(tmp_path / 'msg')
+
+        # auto-generate prefix
+        with open(path, 'w') as f:
+            f.write(textwrap.dedent("""\
+                *: summary
+
+                body
+            """))
+
+        for i, opt in enumerate(['-M', '--message-template'], 1):
+            repo.create_ebuild(f'cat/pkg-{i}')
+            git_repo.add_all(f'cat/pkg-{i}', commit=False)
+            with patch('sys.argv', self.args + ['-u', opt, path]), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 0
+            commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+            assert commit_msg == ['cat/pkg: summary', '', 'body']
+
+        # override prefix
+        with open(path, 'w') as f:
+            f.write(textwrap.dedent("""\
+                prefix: summary
+
+                body
+            """))
+
+        for i, opt in enumerate(['-M', '--message-template'], 3):
+            repo.create_ebuild(f'cat/pkg-{i}')
+            git_repo.add_all(f'cat/pkg-{i}', commit=False)
+            with patch('sys.argv', self.args + ['-u', opt, path]), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 0
+            commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+            assert commit_msg == ['prefix: summary', '', 'body']
 
     def test_custom_unprefixed_message(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
