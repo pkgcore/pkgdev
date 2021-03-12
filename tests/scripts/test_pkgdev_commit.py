@@ -156,6 +156,38 @@ class TestPkgdevCommit:
         assert not out
         assert err.strip() == 'pkgdev commit: error: no staged changes exist'
 
+    def test_git_message_opts(self, capsys, repo, make_git_repo, tmp_path):
+        """Verify message-related options are passed through to `git commit`."""
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0', commit=False)
+        path = str(tmp_path / 'msg')
+        with open(path, 'w') as f:
+            f.write('commit1')
+
+        with patch('sys.argv', self.args + ['-u', '-F', path]), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        assert excinfo.value.code == 0
+        out, err = capsys.readouterr()
+        assert err == out == ''
+        commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+        assert commit_msg == ['commit1']
+
+        repo.create_ebuild('cat/pkg-1')
+        git_repo.add_all('cat/pkg-1', commit=False)
+        with os_environ(GIT_EDITOR="sed -i '1s/1/2/'"), \
+                patch('sys.argv', self.args + ['-u', '-t', path]), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        assert excinfo.value.code == 0
+        out, err = capsys.readouterr()
+        assert err == out == ''
+        commit_msg = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+        assert commit_msg == ['commit2']
+
     def test_custom_unprefixed_message(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         ebuild_path = repo.create_ebuild('cat/pkg-0')
