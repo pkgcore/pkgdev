@@ -49,6 +49,23 @@ class TestPkgdevCommitParseArgs:
         out, err = capsys.readouterr()
         assert err.strip() == 'pkgdev commit: error: not in ebuild git repo'
 
+    def test_commit_signing(self, repo, make_git_repo, tool):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0', commit=False)
+        # signed commits aren't enabled by default
+        with chdir(repo.location):
+            options, _ = tool.parse_args(['commit', '-u'])
+            assert '--signoff' not in options.commit_args
+            assert '--gpg-sign' not in options.commit_args
+        # signed commits enabled by layout.conf setting
+        with open(pjoin(git_repo.path, 'metadata/layout.conf'), 'a+') as f:
+            f.write('sign-commits = true\n')
+        with chdir(repo.location):
+            options, _ = tool.parse_args(['commit', '-u'])
+            assert '--signoff' in options.commit_args
+            assert '--gpg-sign' in options.commit_args
+
     def test_git_commit_args(self, repo, make_git_repo, tool):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
