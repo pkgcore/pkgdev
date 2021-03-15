@@ -22,7 +22,7 @@ manifest.add_argument(
     """)
 manifest_opts = manifest.add_argument_group('manifest options')
 manifest_opts.add_argument(
-    '-f', '--force', help='forcibly remanifest specified packages',
+    '-f', '--force', help='forcibly remanifest packages',
     action='store_true',
     docs="""
         Force package manifest files to be rewritten. Note that this requires
