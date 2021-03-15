@@ -247,14 +247,14 @@ class MetadataSummary(ChangeSummary):
             return
 
         if old_pkg.maintainers != new_pkg.maintainers:
-            new = set(new_pkg.maintainers)
-            old = set(old_pkg.maintainers)
+            new = {x.email for x in new_pkg.maintainers}
+            old = {x.email for x in old_pkg.maintainers}
             p = git.run('config', 'user.email', stdout=subprocess.PIPE)
             git_email = p.stdout.strip()
-            if git_email in list(new - old):
-                return 'add myself to maintainers'
-            if git_email in list(old - new):
-                return 'drop myself from maintainers'
+            if git_email in new - old:
+                return 'add myself as a maintainer'
+            if git_email in old - new:
+                return 'drop myself as a maintainer'
             return 'update maintainers'
         elif old_pkg.stabilize_allarches != new_pkg.stabilize_allarches:
             status = 'mark' if new_pkg.stabilize_allarches else 'drop'
