@@ -108,8 +108,7 @@ msg_actions.add_argument(
     help='specify commit message',
     docs="""
         Use a given message as the commit message. If multiple -m options are
-        specified, their values are concatenated as separate paragraphs with
-        line wrapping at 100 characters.
+        specified, their values are concatenated as separate paragraphs.
 
         Note that the first value will be used for the commit summary and if
         it's empty then a generated summary will be used if available.
