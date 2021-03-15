@@ -38,13 +38,13 @@ case $state in
       (commit)
         _arguments -C -A '-*' \
           $base_options \
-          {'(--bug)-b','(-b)--bug'}'[add Bug tag for a given Gentoo or upstream bug]' \
-          {'(--closes)-c','(-c)--closes'}'[add Closes tag for a given Gentoo bug or upstream PR URL]' \
+          {'(--bug)-b','(-b)--bug'}'[add Bug tag for a given Gentoo or upstream bug]:bug ID or URL' \
+          {'(--closes)-c','(-c)--closes'}'[add Closes tag for a given Gentoo bug or upstream PR URL]:bug ID or URL' \
           {'(--dry-run)-n','(-n)--dry-run'}'[pretend to create commit]' \
           {'(--scan)-s','(-s)--scan'}'[run pkgcheck against staged changes]' \
           {'(--ask)-A','(-A)--ask'}'[confirm creating commit with QA errors]' \
           '--mangle[forcibly enable/disable file mangling]' \
-          {'(--message)-m','(-m)--message'}'[specify commit message]' \
+          {'(--message)-m','(-m)--message'}'[specify commit message]:message' \
           {'(--message-template)-M','(-M)--message-template'}'[use commit message template from specified file]:template:_files' \
           {'(--update)-u','(-u)--update'}'[stage all changed files]' \
           {'(--all)-a','(-a)--all'}'[stage all changed/new/removed files]' \
