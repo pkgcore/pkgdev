@@ -199,8 +199,9 @@ class ChangeSummary:
 
         # set up some basic repo files so pkgcore doesn't complain
         os.makedirs(pjoin(repo_dir, 'metadata'))
+        masters = ' '.join(self.repo.config.masters)
         with open(pjoin(repo_dir, 'metadata', 'layout.conf'), 'w') as f:
-            f.write(f'masters = {self.repo.repo_id}\n')
+            f.write(f'masters = {masters} "{self.repo.location}"\n')
         os.makedirs(pjoin(repo_dir, 'profiles'))
         with open(pjoin(repo_dir, 'profiles', 'repo_name'), 'w') as f:
             f.write(f'{self.repo.repo_id}-old\n')
