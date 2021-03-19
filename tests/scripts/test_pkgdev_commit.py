@@ -425,6 +425,24 @@ class TestPkgdevCommit:
         )
         assert commit() == 'cat/pkg: add 5, drop 4'
 
+        # keyword version
+        repo.create_ebuild('cat/pkg-6')
+        git_repo.add_all('cat/pkg-6')
+        repo.create_ebuild('cat/pkg-6', keywords=['~amd64'])
+        assert commit() == 'cat/pkg: keyword 6 for ~amd64'
+
+        # stabilize version
+        repo.create_ebuild('cat/pkg-6', keywords=['amd64'])
+        assert commit() == 'cat/pkg: stabilize 6 for amd64'
+
+        # destabilize version
+        repo.create_ebuild('cat/pkg-6', keywords=['~amd64'])
+        assert commit() == 'cat/pkg: destabilize 6 for ~amd64'
+
+        # unkeyword version
+        repo.create_ebuild('cat/pkg-6')
+        assert commit() == 'cat/pkg: unkeyword 6 for ~amd64'
+
         # large number of additions in a single commit
         for v in range(10000, 10010):
             repo.create_ebuild(f'cat/pkg-{v}')
