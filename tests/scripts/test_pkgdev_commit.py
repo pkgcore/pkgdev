@@ -388,7 +388,8 @@ class TestPkgdevCommit:
         git_repo.add_all('cat/pkg-0')
 
         def commit():
-            with patch('sys.argv', self.args + ['-a']), \
+            with os_environ(GIT_EDITOR="sed -i '1s/$/commit/'"), \
+                    patch('sys.argv', self.args + ['-a']), \
                     pytest.raises(SystemExit) as excinfo, \
                     chdir(git_repo.path):
                 self.script()
