@@ -314,7 +314,7 @@ class PkgSummary(ChangeSummary):
             # adding a new revbump
             atom = next(iter(self.changes))
             # assume revbump was based on the previous version
-            pkgs = [x for x in self.repo.match(atom.unversioned_atom) if x <= atom]
+            pkgs = sorted(x for x in self.repo.match(atom.unversioned_atom) if x <= atom)
             try:
                 old_pkg, new_pkg = pkgs[-2:]
             except ValueError:

@@ -408,8 +408,12 @@ class TestPkgdevCommit:
 
         # multiple additions
         repo.create_ebuild('cat/pkg-2')
-        repo.create_ebuild('cat/pkg-3')
+        repo.create_ebuild('cat/pkg-3', eapi=6)
         assert commit() == 'cat/pkg: add 2, 3'
+
+        # revbump updating EAPI
+        repo.create_ebuild('cat/pkg-3-r1', eapi=7)
+        assert commit() == 'cat/pkg: update EAPI 6 -> 7'
 
         # large number of additions in a single commit
         for v in range(10000, 10010):
