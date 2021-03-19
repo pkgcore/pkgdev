@@ -441,7 +441,9 @@ class TestPkgdevCommit:
         os.remove(pjoin(git_repo.path, 'cat/pkg/Manifest'))
         assert commit() == 'cat/pkg: update Manifest'
 
-        # single removal
+        # single removals
+        os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-4-r1.ebuild'))
+        assert commit() == 'cat/pkg: drop 4-r1'
         os.remove(pjoin(git_repo.path, 'cat/pkg/pkg-3.ebuild'))
         assert commit() == 'cat/pkg: drop 3'
 
