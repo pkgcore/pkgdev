@@ -9,7 +9,6 @@ import tempfile
 import textwrap
 from collections import defaultdict, deque, UserDict
 from dataclasses import dataclass
-from functools import partial
 from itertools import chain
 
 from pkgcheck import reporters, scan
@@ -17,7 +16,6 @@ from pkgcore.ebuild.atom import MalformedAtom
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.ebuild.repository import UnconfiguredTree
 from pkgcore.operations import observer as observer_mod
-from pkgcore.repository import errors as repo_errors
 from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
@@ -138,8 +136,18 @@ class _HistoricalRepo(UnconfiguredTree):
 
     def __init__(self, repo, *args, **kwargs):
         self.__parent_repo = repo
+        self.__tmpdir = tempfile.TemporaryDirectory()
         self.__created = False
-        super().__init__(*args, **kwargs)
+        repo_dir = self.__tmpdir.name
+
+        # set up some basic repo files so pkgcore doesn't complain
+        os.makedirs(pjoin(repo_dir, 'metadata'))
+        with open(pjoin(repo_dir, 'metadata', 'layout.conf'), 'w') as f:
+            f.write(f"masters = {' '.join(x.repo_id for x in repo.trees)}\n")
+        os.makedirs(pjoin(repo_dir, 'profiles'))
+        with open(pjoin(repo_dir, 'profiles', 'repo_name'), 'w') as f:
+            f.write(f'{repo.repo_id}-old\n')
+        super().__init__(repo_dir)
 
     def add_pkgs(self, pkgs):
         """Update the repo with a given sequence of packages."""
@@ -193,24 +201,7 @@ class ChangeSummary:
     @jit_attr
     def old_repo(self):
         """Create a repository of historical packages removed from git."""
-        tmpdir = tempfile.TemporaryDirectory()
-        atexit.register(tmpdir.cleanup)
-        repo_dir = tmpdir.name
-
-        # set up some basic repo files so pkgcore doesn't complain
-        os.makedirs(pjoin(repo_dir, 'metadata'))
-        with open(pjoin(repo_dir, 'metadata', 'layout.conf'), 'w') as f:
-            f.write(f"masters = {' '.join(x.repo_id for x in self.repo.trees)}\n")
-        os.makedirs(pjoin(repo_dir, 'profiles'))
-        with open(pjoin(repo_dir, 'profiles', 'repo_name'), 'w') as f:
-            f.write(f'{self.repo.repo_id}-old\n')
-
-        repo_cls = partial(_HistoricalRepo, self.repo)
-        try:
-            return self.options.domain.add_repo(
-                repo_dir, self.options.config, tree_cls=repo_cls)
-        except repo_errors.RepoError:
-            pass
+        return _HistoricalRepo(self.repo)
 
     def generate(self):
         """Generate summaries for the package changes."""
