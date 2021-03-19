@@ -308,8 +308,7 @@ class PkgSummary(ChangeSummary):
             msg = f"add {', '.join(self.versions)}"
             if len(self.versions) == 1 or len(msg) <= 50:
                 return msg
-            else:
-                return 'add versions'
+            return 'add versions'
         elif len(self.changes) == 1:
             # adding a new revbump
             atom = next(iter(self.changes))
@@ -331,8 +330,7 @@ class PkgSummary(ChangeSummary):
             msg = f"drop {', '.join(self.versions)}"
             if len(self.versions) == 1 or len(msg) <= 50:
                 return msg
-            else:
-                return 'drop versions'
+            return 'drop versions'
         return 'treeclean'
 
     @change('R')
@@ -381,8 +379,7 @@ class PkgSummary(ChangeSummary):
 
                 if len(msg) <= 50:
                     return msg
-                else:
-                    return action
+                return action
 
 
 class GitChanges(UserDict):
@@ -429,8 +426,7 @@ class GitChanges(UserDict):
                         return f'{common_path}: '
                     elif common_path:
                         return f'{common_path}/*: '
-                    else:
-                        return '*/*: '
+                    return '*/*: '
                 elif common_path:
                     return f'{common_path}: '
 
@@ -465,9 +461,8 @@ class Change:
         if os.sep in self.path:
             # use change path's parent directory
             return f'{os.path.dirname(self.path)}: '
-        else:
-            # use repo root file name
-            return f'{self.path}: '
+        # use repo root file name
+        return f'{self.path}: '
 
 
 @dataclass(frozen=True)
