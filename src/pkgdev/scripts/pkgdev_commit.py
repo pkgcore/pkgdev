@@ -367,29 +367,22 @@ class PkgSummary(ChangeSummary):
                 added = new_keywords - old_keywords
                 removed = old_keywords - new_keywords
                 if removed == {f'~{x}' for x in added}:
-                    msg = f"stabilize {atom.fullver} for {', '.join(sorted(added))}"
-                    if len(msg) <= 50:
-                        return msg
-                    else:
-                        return f'stabilize {atom.fullver}'
+                    action = f'stabilize {atom.fullver}'
+                    msg = f"{action} for {', '.join(sorted(added))}"
                 elif not removed and all(x.startswith('~') for x in added):
-                    msg = f"keyword {atom.fullver} for {', '.join(sorted(added))}"
-                    if len(msg) <= 50:
-                        return msg
-                    else:
-                        return f'keyword {atom.fullver}'
+                    action = f'keyword {atom.fullver}'
+                    msg = f"{action} for {', '.join(sorted(added))}"
                 elif removed == {x.lstrip('~') for x in added}:
-                    msg = f"destabilize {atom.fullver} for {', '.join(sorted(added))}"
-                    if len(msg) <= 50:
-                        return msg
-                    else:
-                        return f'destabilize {atom.fullver}'
+                    action = f'destabilize {atom.fullver}'
+                    msg = f"{action} for {', '.join(sorted(added))}"
                 elif not added:
-                    msg = f"unkeyword {atom.fullver} for {', '.join(sorted(removed))}"
-                    if len(msg) <= 50:
-                        return msg
-                    else:
-                        return f'unkeyword {atom.fullver}'
+                    action = f'unkeyword {atom.fullver}'
+                    msg = f"{action} for {', '.join(sorted(removed))}"
+
+                if len(msg) <= 50:
+                    return msg
+                else:
+                    return action
 
 
 class GitChanges(UserDict):
