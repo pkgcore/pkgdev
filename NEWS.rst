@@ -2,6 +2,13 @@
 Release Notes
 =============
 
+pkgdev 0.1.2 (2021-03-19)
+-------------------------
+
+- pkgdev commit: Support pulling historical data from unconfigured repos.
+
+- Add initial zsh completion support (#16).
+
 pkgdev 0.1.1 (2021-03-12)
 -------------------------
 
