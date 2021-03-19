@@ -224,10 +224,6 @@ class MetadataSummary(ChangeSummary):
     @change('M')
     def modify(self):
         """Generate summaries for modify actions."""
-        if self.old_repo is None:
-            # error initializing historical repo
-            return
-
         atom = next(iter(self.changes))
         self.old_repo.add_pkgs([atom])
         try:
@@ -335,10 +331,6 @@ class PkgSummary(ChangeSummary):
     def modify(self):
         """Generate summaries for modify actions."""
         if len(self.changes) == 1:
-            if self.old_repo is None:
-                # error initializing historical repo
-                return
-
             atom = next(iter(self.changes))
             self.old_repo.add_pkgs([atom])
             try:
