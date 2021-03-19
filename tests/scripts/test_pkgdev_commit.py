@@ -440,8 +440,12 @@ class TestPkgdevCommit:
         assert commit() == 'cat/pkg: destabilize 6 for ~amd64'
 
         # unkeyword version
-        repo.create_ebuild('cat/pkg-6')
+        repo.create_ebuild('cat/pkg-6', eapi='6')
         assert commit() == 'cat/pkg: unkeyword 6 for ~amd64'
+
+        # bump EAPI
+        repo.create_ebuild('cat/pkg-6', eapi='7')
+        assert commit() == 'cat/pkg: update EAPI 6 -> 7'
 
         # large number of additions in a single commit
         for v in range(10000, 10010):
