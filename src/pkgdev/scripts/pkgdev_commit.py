@@ -367,29 +367,29 @@ class PkgSummary(ChangeSummary):
                 added = new_keywords - old_keywords
                 removed = old_keywords - new_keywords
                 if removed == {f'~{x}' for x in added}:
-                    msg = f"stabilize {atom.fullver}: {', '.join(sorted(added))}"
+                    msg = f"stabilize {atom.fullver} for {', '.join(sorted(added))}"
                     if len(msg) <= 50:
                         return msg
                     else:
                         return f'stabilize {atom.fullver}'
                 elif not removed and all(x.startswith('~') for x in added):
-                    msg = f"keyword {atom.fullver}: {', '.join(sorted(added))}"
+                    msg = f"keyword {atom.fullver} for {', '.join(sorted(added))}"
                     if len(msg) <= 50:
                         return msg
                     else:
                         return f'keyword {atom.fullver}'
                 elif removed == {x.lstrip('~') for x in added}:
-                    msg = f"revert {atom.fullver} keywords: {', '.join(sorted(added))}"
+                    msg = f"destabilize {atom.fullver} for {', '.join(sorted(added))}"
                     if len(msg) <= 50:
                         return msg
                     else:
-                        return f'revert {atom.fullver} keywords'
+                        return f'destabilize {atom.fullver}'
                 elif not added:
-                    msg = f"remove {atom.fullver} keywords: {', '.join(sorted(removed))}"
+                    msg = f"unkeyword {atom.fullver} for {', '.join(sorted(removed))}"
                     if len(msg) <= 50:
                         return msg
                     else:
-                        return f'remove {atom.fullver} keywords'
+                        return f'unkeyword {atom.fullver}'
 
 
 class GitChanges(UserDict):
