@@ -408,12 +408,21 @@ class TestPkgdevCommit:
 
         # multiple additions
         repo.create_ebuild('cat/pkg-2')
-        repo.create_ebuild('cat/pkg-3', eapi=6)
-        assert commit() == 'cat/pkg: add 2, 3'
+        repo.create_ebuild('cat/pkg-3')
+        repo.create_ebuild('cat/pkg-4', eapi=6)
+        assert commit() == 'cat/pkg: add 2, 3, 4'
 
         # revbump updating EAPI
-        repo.create_ebuild('cat/pkg-3-r1', eapi=7)
+        repo.create_ebuild('cat/pkg-4-r1', eapi=7)
         assert commit() == 'cat/pkg: update EAPI 6 -> 7'
+
+        # single rename with no revisions
+        git_repo.move(
+            pjoin(git_repo.path, 'cat/pkg/pkg-4.ebuild'),
+            pjoin(git_repo.path, 'cat/pkg/pkg-5.ebuild'),
+            commit=False
+        )
+        assert commit() == 'cat/pkg: add 5, drop 4'
 
         # large number of additions in a single commit
         for v in range(10000, 10010):
