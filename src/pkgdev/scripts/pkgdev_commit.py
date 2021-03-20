@@ -150,7 +150,7 @@ add_actions.add_argument(
 class _HistoricalRepo(UnconfiguredTree):
     """Repository of historical packages stored in a temporary directory."""
 
-    def __init__(self, repo, *args, **kwargs):
+    def __init__(self, repo):
         self.__parent_repo = repo
         self.__tmpdir = tempfile.TemporaryDirectory()
         self.__created = False
