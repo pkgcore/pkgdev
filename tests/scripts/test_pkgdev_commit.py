@@ -112,18 +112,22 @@ class TestPkgdevCommitParseArgs:
             for opt in ('-b', '--bug'):
                 options, _ = tool.parse_args(['commit', opt, '1'])
                 assert options.footer == {('Bug', 'https://bugs.gentoo.org/1')}
+
             # bug URLs
             for opt in ('-b', '--bug'):
                 options, _ = tool.parse_args(['commit', opt, 'https://bugs.gentoo.org/2'])
                 assert options.footer == {('Bug', 'https://bugs.gentoo.org/2')}
+
             # bug IDs
             for opt in ('-c', '--closes'):
                 options, _ = tool.parse_args(['commit', opt, '1'])
                 assert options.footer == {('Closes', 'https://bugs.gentoo.org/1')}
+
             # bug URLs
             for opt in ('-c', '--closes'):
                 options, _ = tool.parse_args(['commit', opt, 'https://bugs.gentoo.org/2'])
                 assert options.footer == {('Closes', 'https://bugs.gentoo.org/2')}
+
             # bad URL
             for opt in ('-b', '-c'):
                 with pytest.raises(SystemExit) as excinfo:
@@ -132,6 +136,26 @@ class TestPkgdevCommitParseArgs:
                 out, err = capsys.readouterr()
                 assert not out
                 assert 'invalid URL: bugs.gentoo.org/1' in err
+
+            # generic tags
+            for opt in ('-T', '--tag'):
+                for value, expected in (
+                        ('tag:value', ('Tag', 'value')),
+                        ('tag:multiple values', ('Tag', 'multiple values')),
+                        ('tag:multiple:values', ('Tag', 'multiple:values')),
+                        ):
+                    options, _ = tool.parse_args(['commit', opt, value])
+                    assert options.footer == {expected}
+
+            # bad tags
+            for opt in ('-T', '--tag'):
+                for value in ('', ':', 'tag:', ':value', 'tag'):
+                    with pytest.raises(SystemExit) as excinfo:
+                        tool.parse_args(['commit', opt, value])
+                    assert excinfo.value.code == 2
+                    out, err = capsys.readouterr()
+                    assert not out
+                    assert 'invalid commit tag' in err
 
 
 class TestPkgdevCommit:

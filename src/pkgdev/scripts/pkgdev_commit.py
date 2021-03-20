@@ -42,8 +42,8 @@ class ArgumentParser(arghparse.ArgumentParser):
         return namespace, []
 
 
-class CommitTags(argparse.Action):
-    """Register tags to inject into the commit message footer."""
+class BugTag(argparse.Action):
+    """Register bug-related tag to inject into the commit message footer."""
 
     def __call__(self, parser, namespace, value, option_string=None):
         try:
@@ -55,6 +55,19 @@ class CommitTags(argparse.Action):
         namespace.footer.add((self.dest.capitalize(), url))
 
 
+class CommitTag(argparse.Action):
+    """Register commit tag to inject into the commit message footer."""
+
+    def __call__(self, parser, namespace, value, option_string=None):
+        try:
+            name, val = value.split(':', 1)
+            if not (name and val):
+                raise ValueError('empty name or value')
+        except ValueError:
+            raise argparse.ArgumentError(self, f'invalid commit tag: {value!r}')
+        namespace.footer.add((name.capitalize(), val))
+
+
 commit = ArgumentParser(
     prog='pkgdev commit', description='create git commit',
     parents=(cwd_repo_argparser, git_repo_argparser))
@@ -62,11 +75,14 @@ commit = ArgumentParser(
 commit.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 commit_opts = commit.add_argument_group('commit options')
 commit_opts.add_argument(
-    '-b', '--bug', action=CommitTags,
+    '-b', '--bug', action=BugTag,
     help='add Bug tag for a given Gentoo or upstream bug')
 commit_opts.add_argument(
-    '-c', '--closes', action=CommitTags,
+    '-c', '--closes', action=BugTag,
     help='add Closes tag for a given Gentoo bug or upstream PR URL')
+commit_opts.add_argument(
+    '-T', '--tag', action=CommitTag, metavar='NAME:VALUE',
+    help='add commit tag')
 commit_opts.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to create commit',
