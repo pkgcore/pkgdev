@@ -349,13 +349,13 @@ class PkgSummary(ChangeSummary):
                 if removed == {f'~{x}' for x in added}:
                     action = f'stabilize {atom.fullver}'
                     msg = f"{action} for {', '.join(sorted(added))}"
-                elif not removed and all(x.startswith('~') for x in added):
-                    action = f'keyword {atom.fullver}'
-                    msg = f"{action} for {', '.join(sorted(added))}"
                 elif removed == {x.lstrip('~') for x in added}:
                     action = f'destabilize {atom.fullver}'
                     msg = f"{action} for {', '.join(sorted(added))}"
-                elif not added:
+                elif added:
+                    action = f'keyword {atom.fullver}'
+                    msg = f"{action} for {', '.join(sorted(added))}"
+                else:
                     action = f'unkeyword {atom.fullver}'
                     msg = f"{action} for {', '.join(sorted(removed))}"
 
