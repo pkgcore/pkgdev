@@ -229,7 +229,8 @@ class MetadataSummary(ChangeSummary):
         try:
             old_pkg = self.old_repo.match(atom)[0]
             new_pkg = self.repo.match(atom)[0]
-        except IndexError:
+        except IndexError:  # pragma: no cover
+            # broken ebuild should be caught during manifesting or scanning
             return
 
         if old_pkg.maintainers != new_pkg.maintainers:
@@ -302,8 +303,8 @@ class PkgSummary(ChangeSummary):
             pkgs = sorted(x for x in self.repo.match(atom.unversioned_atom) if x <= atom)
             try:
                 old_pkg, new_pkg = pkgs[-2:]
-            except ValueError:
-                # probably a broken ebuild
+            except ValueError:  # pragma: no cover
+                # broken ebuild should be caught during manifesting or scanning
                 return
 
             if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
@@ -336,7 +337,8 @@ class PkgSummary(ChangeSummary):
             try:
                 old_pkg = self.old_repo.match(atom)[0]
                 new_pkg = self.repo.match(atom)[0]
-            except IndexError:
+            except IndexError:  # pragma: no cover
+                # broken ebuild should be caught during manifesting or scanning
                 return
 
             if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
