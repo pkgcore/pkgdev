@@ -447,6 +447,11 @@ class TestPkgdevCommit:
         repo.create_ebuild('cat/pkg-6', eapi='7')
         assert commit() == 'cat/pkg: update EAPI 6 -> 7'
 
+        # multiple ebuild modifications don't get a generated summary
+        repo.create_ebuild('cat/pkg-5', keywords=['~amd64'])
+        repo.create_ebuild('cat/pkg-6', keywords=['~amd64'])
+        assert commit() == 'cat/pkg: summary'
+
         # large number of additions in a single commit
         for v in range(10000, 10010):
             repo.create_ebuild(f'cat/pkg-{v}')
