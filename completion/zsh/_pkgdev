@@ -40,6 +40,7 @@ case $state in
           $base_options \
           {'(--bug)-b','(-b)--bug'}'[add Bug tag for a given Gentoo or upstream bug]:bug ID or URL' \
           {'(--closes)-c','(-c)--closes'}'[add Closes tag for a given Gentoo bug or upstream PR URL]:bug ID or URL' \
+          {'(--tag)-T','(-T)--tag'}'[add commit tag]:tag\:value' \
           {'(--dry-run)-n','(-n)--dry-run'}'[pretend to create commit]' \
           {'(--scan)-s','(-s)--scan'}'[run pkgcheck against staged changes]' \
           {'(--ask)-A','(-A)--ask'}'[confirm creating commit with QA errors]' \
