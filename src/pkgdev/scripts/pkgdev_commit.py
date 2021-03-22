@@ -632,8 +632,11 @@ def _commit(options, out, err):
             cwd=repo.location, stdout=subprocess.PIPE)
         for path in p.stdout.strip('\x00').split('\x00'):
             if mo := _untracked_ebuild_re.match(path):
-                untracked = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
-                pkgs.discard(untracked)
+                try:
+                    untracked = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
+                    pkgs.discard(untracked)
+                except MalformedAtom:
+                    continue
 
         # manifest all staged or committed packages
         failed = repo.operations.manifest(
