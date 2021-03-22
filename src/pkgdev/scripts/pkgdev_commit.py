@@ -437,7 +437,7 @@ class GitChanges(UserDict):
     def summary(self):
         """Determine commit message summary."""
         # all changes made on the same package
-        if len({x.atom.unversioned_atom for x in self.pkg_changes}) == 1:
+        if len({x.atom.key for x in self.pkg_changes}) == 1:
             if not self.ebuild_changes:
                 if len(self.pkg_changes) == 1:
                     if self.pkg_changes[0].path.endswith('/Manifest'):
@@ -484,7 +484,7 @@ class PkgChange(Change):
 
     @property
     def prefix(self):
-        return f'{self.atom.unversioned_atom}: '
+        return f'{self.atom.key}: '
 
 
 def determine_changes(options):
