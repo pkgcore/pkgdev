@@ -32,11 +32,9 @@ jobs:
 
     - name: Build release files
       run: |
-        # use release version of pyproject.toml (without URL dev deps)
-        cp requirements/pyproject.toml ./pyproject.toml
+        git clean -fxd
         python setup.py sdist
         python setup.py bdist_wheel
-
         # output file info
         tar -ztf dist/*.tar.gz | sort
         sha512sum dist/*
