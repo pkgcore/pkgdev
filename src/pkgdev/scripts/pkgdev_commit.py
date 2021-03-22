@@ -90,7 +90,7 @@ commit_opts.add_argument(
         Perform all actions without creating a commit.
     """)
 commit_opts.add_argument(
-    '-s', '--scan', action='store_true',
+    '-s', '--scan', nargs='?', const=True, action=arghparse.StoreBool,
     help='run pkgcheck against staged changes',
     docs="""
         By default, ``pkgdev commit`` doesn't scan for QA errors. This option
