@@ -60,7 +60,7 @@ def _manifest_validate(parser, namespace):
 
 @manifest.bind_main_func
 def _manifest(options, out, err):
-    failed = options.repo.operations.digests(
+    failed = options.repo.operations.manifest(
         domain=options.domain,
         restriction=options.restriction,
         observer=observer_mod.formatter_output(out),

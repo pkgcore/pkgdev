@@ -623,17 +623,27 @@ def _commit(options, out, err):
     # determine changes from staged files
     changes = determine_changes(options)
 
+    _untracked_ebuild_re = re.compile(r'^\?\? (?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
     if atoms := {x.atom.unversioned_atom for x in changes.ebuild_changes}:
-        # manifest all changed packages
-        failed = repo.operations.digests(
-            domain=options.domain,
-            restriction=packages.OrRestriction(*atoms),
+        # pull all matches and drop untracked ebuilds
+        pkgs = {x.versioned_atom for x in repo.itermatch(packages.OrRestriction(*atoms))}
+        p = git.run(
+            'status', '--porcelain=v1', '-u', '-z', '*.ebuild',
+            cwd=repo.location, stdout=subprocess.PIPE)
+        for path in p.stdout.strip('\x00').split('\x00'):
+            if mo := _untracked_ebuild_re.match(path):
+                untracked = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
+                pkgs.discard(untracked)
+
+        # manifest all staged or committed packages
+        failed = repo.operations.manifest(
+            options.domain, packages.OrRestriction(*pkgs),
             observer=observer_mod.formatter_output(out))
         if any(failed):
             return 1
 
         # include existing Manifest files for staging
-        manifests = (pjoin(repo.location, f'{x.cpvstr}/Manifest') for x in atoms)
+        manifests = (pjoin(repo.location, f'{x.key}/Manifest') for x in atoms)
         git_add_files.extend(filter(os.path.exists, manifests))
 
     # mangle files
