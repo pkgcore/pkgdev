@@ -70,10 +70,13 @@ class Mask:
     date: str
     comment: List[str]
     atoms: List[atom_cls]
+    removal: str = None
 
     def __str__(self):
         lines = [f'# {self.author} <{self.email}> ({self.date})']
         lines.extend(f'# {x}' for x in self.comment)
+        if self.removal:
+            lines.append(f'# Removal on {self.removal}')
         lines.extend(map(str, self.atoms))
         return '\n'.join(lines)
 
@@ -128,17 +131,13 @@ class MaskFile:
         return ''.join(self.header) + '\n\n'.join(map(str, self.masks))
 
 
-@mask.bind_main_func
-def _mask(options, out, err):
-    today = datetime.date.today()
-    mask_file = MaskFile(pjoin(options.repo.location, 'profiles/package.mask'))
-
+def get_comment():
+    """Spawn editor to get mask comment."""
     with tempfile.NamedTemporaryFile(mode='w+') as f:
         f.write('\n\n')
         f.write("# Please enter the mask message. Lines starting with '#' will be ignored.")
         f.flush()
 
-        # open editor to write mask comment
         editor = os.environ.get('VISUAL', os.environ.get('EDITOR', 'nano'))
         try:
             subprocess.run([editor, f.name], check=True)
@@ -155,9 +154,13 @@ def _mask(options, out, err):
         if not comment:
             mask.error('empty mask comment')
 
-        if options.rites:
-            removal_date = today + datetime.timedelta(days=options.rites)
-            comment.append(f'Removal on {removal_date.isoformat()}')
+    return comment
+
+
+@mask.bind_main_func
+def _mask(options, out, err):
+    mask_file = MaskFile(pjoin(options.repo.location, 'profiles/package.mask'))
+    today = datetime.date.today()
 
     # pull name/email from git config
     p = git.run('config', 'user.name', stdout=subprocess.PIPE)
@@ -165,7 +168,20 @@ def _mask(options, out, err):
     p = git.run('config', 'user.email', stdout=subprocess.PIPE)
     email = p.stdout.strip()
 
-    mask_file.add(Mask(author, email, today.isoformat(), comment, options.atoms))
+    # initial args for Mask obj
+    mask_args = {
+        'author': author,
+        'email': email,
+        'date': today.isoformat(),
+        'comment': get_comment(),
+        'atoms': options.atoms,
+    }
+
+    if options.rites:
+        removal_date = today + datetime.timedelta(days=options.rites)
+        mask_args['removal'] = removal_date.isoformat()
+
+    mask_file.add(Mask(**mask_args))
     mask_file.write()
 
     return 0
