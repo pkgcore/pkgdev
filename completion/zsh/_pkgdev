@@ -62,7 +62,7 @@ case $state in
       (mask)
         _arguments -C -A '-*' \
           $base_options \
-          {'(--rites)-r','(-r)--rites'}'[mark package for last rites]' \
+          {'(--rites)-r','(-r)--rites'}'[mark for last rites]' \
           && ret=0
         ;;
       (push)
