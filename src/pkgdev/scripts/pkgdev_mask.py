@@ -70,15 +70,21 @@ class Mask:
     date: str
     comment: List[str]
     atoms: List[atom_cls]
-    removal: str = None
+
+    _removal_re = re.compile(r'^Removal on (?P<date>\d{4}-\d{2}-\d{2})')
 
     def __str__(self):
         lines = [f'# {self.author} <{self.email}> ({self.date})']
         lines.extend(f'# {x}' for x in self.comment)
-        if self.removal:
-            lines.append(f'# Removal on {self.removal}')
         lines.extend(map(str, self.atoms))
         return '\n'.join(lines)
+
+    @property
+    def removal(self):
+        """Pull removal date from comment."""
+        if mo := self._removal_re.match(self.comment[-1]):
+            return mo.group('date')
+        return None
 
 
 def consecutive_groups(iterable, ordering=lambda x: x):
@@ -90,40 +96,52 @@ def consecutive_groups(iterable, ordering=lambda x: x):
 class MaskFile:
     """Object representing the contents of a package.mask file."""
 
-    author_date_re = re.compile(r'^(?P<author>.+) <(?P<email>.+)> \((?P<date>\d{4}-\d{2}-\d{2})\)$')
+    attribution_re = re.compile(r'^(?P<author>.+) <(?P<email>.+)> \((?P<date>\d{4}-\d{2}-\d{2})\)$')
 
     def __init__(self, path):
         self.path = path
         self.profile = ProfileNode(os.path.dirname(path))
         self.header = []
         self.masks = deque()
+        self.parse()
 
-        with open(path) as f:
+    def parse(self):
+        """Parse the given file into Mask objects."""
+        with open(self.path) as f:
             lines = f.readlines()
-            # determine mask groups by line number
-            mask_map = dict(iter_read_bash(path, enum_line=True))
-            for mask_lines in map(list, consecutive_groups(mask_map)):
-                atoms = [self.profile.eapi_atom(mask_map[x]) for x in mask_lines]
-                comment = []
-                i = mask_lines[0] - 2
-                while line := lines[i].rstrip():
-                    if not line.startswith('# '):
-                        mask.error(f'invalid mask entry header, lineno {i + 1}: {line!r}')
-                    comment.append(line[2:])
-                    i -= 1
-                if not self.header:
-                    self.header = lines[:i + 1]
-                comment = list(reversed(comment))
-                if mo := self.author_date_re.match(comment[0]):
-                    author, email, date = mo.group('author'), mo.group('email'), mo.group('date')
-                else:
-                    mask.error(f'invalid author, lineno {i + 2}: {comment[0]!r}')
-                self.masks.append(Mask(author, email, date, comment[1:], atoms))
+
+        # determine mask groups by line number
+        mask_map = dict(iter_read_bash(self.path, enum_line=True))
+        for mask_lines in map(list, consecutive_groups(mask_map)):
+            # use profile's EAPI setting to coerce supported masks
+            atoms = [self.profile.eapi_atom(mask_map[x]) for x in mask_lines]
+
+            # pull comment lines above initial mask entry line
+            comment = []
+            i = mask_lines[0] - 2
+            while line := lines[i].rstrip():
+                if not line.startswith('# '):
+                    mask.error(f'invalid mask entry header, lineno {i + 1}: {line!r}')
+                comment.append(line[2:])
+                i -= 1
+            if not self.header:
+                self.header = lines[:i + 1]
+            comment = list(reversed(comment))
+
+            # pull attribution data from first comment line
+            if mo := self.attribution_re.match(comment[0]):
+                author, email, date = mo.group('author'), mo.group('email'), mo.group('date')
+            else:
+                mask.error(f'invalid author, lineno {i + 2}: {comment[0]!r}')
+
+            self.masks.append(Mask(author, email, date, comment[1:], atoms))
 
     def add(self, mask):
+        """Add a new mask to the file."""
         self.masks.appendleft(mask)
 
     def write(self):
+        """Serialize the registered masks back to the related file."""
         with open(self.path, 'w') as f:
             f.write(f'{self}\n')
 
@@ -179,7 +197,7 @@ def _mask(options, out, err):
 
     if options.rites:
         removal_date = today + datetime.timedelta(days=options.rites)
-        mask_args['removal'] = removal_date.isoformat()
+        mask_args['comment'].append(f'Removal on {removal_date.isoformat()}')
 
     mask_file.add(Mask(**mask_args))
     mask_file.write()
