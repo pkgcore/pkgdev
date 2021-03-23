@@ -133,9 +133,10 @@ def _mask(options, out, err):
         f.write("# Please enter the mask message. Lines starting with '#' will be ignored.")
         f.flush()
 
-        # request mask comment from the user
+        # open editor to write mask comment
+        editor = os.environ.get('VISUAL', os.environ.get('EDITOR', 'nano'))
         try:
-            subprocess.run([os.environ['EDITOR'], f.name], check=True)
+            subprocess.run([editor, f.name], check=True)
         except subprocess.CalledProcessError:
             mask.error('failed writing mask comment')
 
