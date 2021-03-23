@@ -1,10 +1,10 @@
-import datetime
 import os
 import re
 import subprocess
 import tempfile
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from itertools import groupby
 from operator import itemgetter
 from typing import List
@@ -178,7 +178,7 @@ def get_comment():
 @mask.bind_main_func
 def _mask(options, out, err):
     mask_file = MaskFile(pjoin(options.repo.location, 'profiles/package.mask'))
-    today = datetime.date.today()
+    today = datetime.now(timezone.utc)
 
     # pull name/email from git config
     p = git.run('config', 'user.name', stdout=subprocess.PIPE)
@@ -190,14 +190,15 @@ def _mask(options, out, err):
     mask_args = {
         'author': author,
         'email': email,
-        'date': today.isoformat(),
+        'date': today.strftime('%Y-%m-%d'),
         'comment': get_comment(),
         'atoms': options.atoms,
     }
 
     if options.rites:
-        removal_date = today + datetime.timedelta(days=options.rites)
-        mask_args['comment'].append(f'Removal on {removal_date.isoformat()}')
+        removal_date = today + timedelta(days=options.rites)
+        removal = removal_date.strftime('%Y-%m-%d')
+        mask_args['comment'].append(f'Removal on {removal}')
 
     mask_file.add(Mask(**mask_args))
     mask_file.write()
