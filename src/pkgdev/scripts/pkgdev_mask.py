@@ -20,7 +20,7 @@ from .. import git
 from .argparsers import cwd_repo_argparser, git_repo_argparser
 
 mask = arghparse.ArgumentParser(
-    prog='pkgdev mask', description='mangle profiles/package.mask',
+    prog='pkgdev mask', description='mask packages',
     parents=(cwd_repo_argparser, git_repo_argparser))
 mask.add_argument(
     'target', nargs='*',

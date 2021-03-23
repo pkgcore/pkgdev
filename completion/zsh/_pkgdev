@@ -25,6 +25,7 @@ case $state in
     subcommands=(
       commit:'create git commit'
       manifest:'update package manifests'
+      mask:'mask packages'
       push:'run QA checks on commits and push them'
     )
 
@@ -56,6 +57,12 @@ case $state in
           $base_options \
           {'(--force)-f','(-f)--force'}'[forcibly remanifest packages]' \
           {'(--mirrors)-m','(-m)--mirrors'}'[enable fetching from Gentoo mirrors]' \
+          && ret=0
+        ;;
+      (mask)
+        _arguments -C -A '-*' \
+          $base_options \
+          {'(--rites)-r','(-r)--rites'}'[mark package for last rites]' \
           && ret=0
         ;;
       (push)
