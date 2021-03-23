@@ -35,7 +35,12 @@ mask.add_argument(
 mask_opts = mask.add_argument_group('mask options')
 mask_opts.add_argument(
     '-r', '--rites', nargs='?', const=30, type=arghparse.positive_int,
-    help='mark package for last rites')
+    help='mark for last rites',
+    docs="""
+        Mark a mask entry for last rites. This defaults to 30 days until
+        package removal but accepts an optional argument for the number of
+        days.
+    """)
 
 
 @mask.bind_final_check
