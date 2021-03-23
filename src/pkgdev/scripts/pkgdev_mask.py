@@ -1,10 +1,10 @@
+import datetime
 import os
 import re
 import subprocess
 import tempfile
 from collections import deque
 from dataclasses import dataclass
-from datetime import date as date_mod
 from itertools import groupby
 from operator import itemgetter
 from typing import List
@@ -32,6 +32,10 @@ mask.add_argument(
         words, if ``pkgdev mask`` is run within an ebuild's directory, all the
         ebuilds within that directory will be masked.
     """)
+mask_opts = mask.add_argument_group('mask options')
+mask_opts.add_argument(
+    '-r', '--rites', nargs='?', const=30, type=arghparse.positive_int,
+    help='mark package for last rites')
 
 
 @mask.bind_final_check
@@ -126,6 +130,7 @@ class MaskFile:
 
 @mask.bind_main_func
 def _mask(options, out, err):
+    today = datetime.date.today()
     mask_file = MaskFile(pjoin(options.repo.location, 'profiles/package.mask'))
 
     with tempfile.NamedTemporaryFile(mode='w+') as f:
@@ -150,14 +155,17 @@ def _mask(options, out, err):
         if not comment:
             mask.error('empty mask comment')
 
+        if options.rites:
+            removal_date = today + datetime.timedelta(days=options.rites)
+            comment.append(f'Removal on {removal_date.isoformat()}')
+
     # pull name/email from git config
     p = git.run('config', 'user.name', stdout=subprocess.PIPE)
     author = p.stdout.strip()
     p = git.run('config', 'user.email', stdout=subprocess.PIPE)
     email = p.stdout.strip()
 
-    date = date_mod.today().isoformat()
-    mask_file.add(Mask(author, email, date, comment, options.atoms))
+    mask_file.add(Mask(author, email, today.isoformat(), comment, options.atoms))
     mask_file.write()
 
     return 0
