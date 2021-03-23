@@ -81,7 +81,7 @@ def consecutive_groups(iterable, ordering=lambda x: x):
 
 
 class MaskFile:
-    """Object relating to a package.mask file's contents."""
+    """Object representing the contents of a package.mask file."""
 
     author_date_re = re.compile(r'^(?P<author>.+) <(?P<email>.+)> \((?P<date>\d{4}-\d{2}-\d{2})\)$')
 
@@ -113,8 +113,8 @@ class MaskFile:
                     mask.error(f'invalid author, lineno {i + 2}: {comment[0]!r}')
                 self.masks.append(Mask(author, email, date, comment[1:], atoms))
 
-    def add(self, author, email, date, comment, atoms):
-        self.masks.appendleft(Mask(author, email, date, comment, atoms))
+    def add(self, mask):
+        self.masks.appendleft(mask)
 
     def write(self):
         with open(self.path, 'w') as f:
@@ -151,12 +151,12 @@ def _mask(options, out, err):
 
     # pull name/email from git config
     p = git.run('config', 'user.name', stdout=subprocess.PIPE)
-    name = p.stdout.strip()
+    author = p.stdout.strip()
     p = git.run('config', 'user.email', stdout=subprocess.PIPE)
     email = p.stdout.strip()
 
     date = date_mod.today().isoformat()
-    mask_file.add(name, email, date, comment, options.atoms)
+    mask_file.add(Mask(author, email, date, comment, options.atoms))
     mask_file.write()
 
     return 0
