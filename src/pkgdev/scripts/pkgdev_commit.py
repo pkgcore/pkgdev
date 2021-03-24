@@ -590,7 +590,8 @@ def determine_msg_args(options, changes):
             else:
                 args.extend(['-F', tmp.name])
 
-            # explicitly close and delete tempfile on exit
+            # Explicitly register tempfile removal so the object isn't garbage
+            # collected and removed when leaving function scope.
             atexit.register(tmp.close)
 
     return args
