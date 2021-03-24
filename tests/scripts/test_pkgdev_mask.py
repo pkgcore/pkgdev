@@ -57,6 +57,30 @@ class TestPkgdevMaskParseArgs:
             options, _ = tool.parse_args(['mask'])
         assert options.atoms == [atom_cls('cat/pkg')]
 
+    def test_targets(self, repo, make_git_repo, capsys, tool):
+        git_repo = make_git_repo(repo.location)
+
+        # invalid atom
+        with pytest.raises(SystemExit), \
+                chdir(repo.location):
+            tool.parse_args(['mask', 'pkg'])
+        out, err = capsys.readouterr()
+        assert err.strip() == "pkgdev mask: error: invalid atom: 'pkg'"
+
+        # nonexistent pkg
+        with pytest.raises(SystemExit), \
+                chdir(repo.location):
+            tool.parse_args(['mask', 'cat/nonexistent'])
+        out, err = capsys.readouterr()
+        assert err.strip() == "pkgdev mask: error: no repo matches: 'cat/nonexistent'"
+
+        # masked pkg
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+        with chdir(repo.location):
+            options, _ = tool.parse_args(['mask', 'cat/pkg'])
+        assert options.atoms == [atom_cls('cat/pkg')]
+
 
 class TestPkgdevMask:
 
