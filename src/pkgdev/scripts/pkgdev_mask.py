@@ -25,7 +25,7 @@ mask = arghparse.ArgumentParser(
     parents=(cwd_repo_argparser, git_repo_argparser))
 mask.add_argument(
     'targets', metavar='TARGET', nargs='*',
-    help='packages to target',
+    help='package to mask',
     docs="""
         Packages matching any of these restrictions will have a mask entry in
         profiles/package.mask added for them. If no target is specified a path
