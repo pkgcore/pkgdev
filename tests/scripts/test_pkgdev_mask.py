@@ -1,4 +1,5 @@
 import os
+import textwrap
 from functools import partial
 from pathlib import Path
 from unittest.mock import patch
@@ -150,19 +151,22 @@ class TestPkgdevMask:
 
     def test_mask_target(self):
         with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                patch('sys.argv', self.args + ['cat/pkg']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+        assert self.profile.masks == frozenset([atom_cls('cat/pkg')])
+
+    def test_existing_masks(self):
+        self.masks_path.write_text(textwrap.dedent("""\
+            # Random Dev <random.dev@email.com> (2021-03-24)
+            # masked
+            cat/masked
+        """))
+
+        with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
                 patch('sys.argv', self.args + ['=cat/pkg-0']), \
                 pytest.raises(SystemExit), \
                 chdir(pjoin(self.repo.path)):
             self.script()
-        assert self.profile.masks == frozenset([atom_cls('=cat/pkg-0')])
-
-        # create a new pkg version and mask it as well
-        self.repo.create_ebuild('cat/pkg-1')
-        self.git_repo.add_all('cat/pkg-1')
-        with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
-                patch('sys.argv', self.args + ['=cat/pkg-1']), \
-                pytest.raises(SystemExit), \
-                chdir(pjoin(self.repo.path)):
-            self.script()
-        self.repo.sync()
-        assert self.profile.masks == frozenset([atom_cls('=cat/pkg-0'), atom_cls('=cat/pkg-1')])
+        assert self.profile.masks == frozenset([atom_cls('cat/masked'), atom_cls('=cat/pkg-0')])
