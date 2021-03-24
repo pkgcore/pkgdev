@@ -50,13 +50,17 @@ def _mask_validate(parser, namespace):
 
     if namespace.targets:
         for x in namespace.targets:
-            try:
-                atom = atom_cls(x)
-            except MalformedAtom:
-                mask.error(f'invalid atom: {x!r}')
-
-            if not namespace.repo.match(atom):
-                mask.error(f'no repo matches: {x!r}')
+            if os.path.exists(x) and x.endswith('.ebuild'):
+                restrict = namespace.repo.path_restrict(x)
+                pkg = next(namespace.repo.itermatch(restrict))
+                atom = pkg.versioned_atom
+            else:
+                try:
+                    atom = atom_cls(x)
+                except MalformedAtom:
+                    mask.error(f'invalid atom: {x!r}')
+                if not namespace.repo.match(atom):
+                    mask.error(f'no repo matches: {x!r}')
             atoms.append(atom)
     else:
         restrict = namespace.repo.path_restrict(os.getcwd())
