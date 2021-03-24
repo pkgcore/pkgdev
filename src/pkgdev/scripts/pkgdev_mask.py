@@ -131,7 +131,7 @@ class MaskFile:
             # pull comment lines above initial mask entry line
             comment = []
             i = mask_lines[0] - 2
-            while line := lines[i].rstrip():
+            while i >= 0 and (line := lines[i].rstrip()):
                 if not line.startswith('# '):
                     mask.error(f'invalid mask entry header, lineno {i + 1}: {line!r}')
                 comment.append(line[2:])

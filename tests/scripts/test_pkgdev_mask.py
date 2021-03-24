@@ -103,9 +103,12 @@ class TestPkgdevMask:
         with open(pjoin(self.repo.location, 'profiles/profiles.desc'), 'w') as f:
             f.write('amd64 arch/amd64 stable\n')
 
-        profile = list(self.repo.config.profiles)[0]
-        self.profile = self.repo.config.profiles.create_profile(profile)
         self.masks_path = Path(pjoin(self.repo.location, 'profiles/package.mask'))
+
+    @property
+    def profile(self):
+        profile = list(self.repo.config.profiles)[0]
+        return self.repo.config.profiles.create_profile(profile)
 
     def test_empty_repo(self):
         assert self.profile.masks == frozenset()
@@ -120,7 +123,7 @@ class TestPkgdevMask:
         assert err.strip() == "pkgdev mask: error: nonexistent editor: '12345'"
 
     def test_failed_editor(self, capsys):
-        with os_environ(EDITOR='sed'), \
+        with os_environ(EDITOR="sed -i 's///'"), \
                 patch('sys.argv', self.args + ['cat/pkg']), \
                 pytest.raises(SystemExit), \
                 chdir(pjoin(self.repo.path)):
@@ -140,8 +143,25 @@ class TestPkgdevMask:
     def test_mask_cwd(self):
         with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
                 patch('sys.argv', self.args), \
-                pytest.raises(SystemExit) as excinfo, \
+                pytest.raises(SystemExit), \
                 chdir(pjoin(self.repo.path, 'cat/pkg')):
             self.script()
-        assert excinfo.value.code == 0
         assert self.profile.masks == frozenset([atom_cls('cat/pkg')])
+
+    def test_mask_target(self):
+        with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                patch('sys.argv', self.args + ['=cat/pkg-0']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+        assert self.profile.masks == frozenset([atom_cls('=cat/pkg-0')])
+
+        # create a new pkg version and mask it as well
+        self.repo.create_ebuild('cat/pkg-1')
+        self.git_repo.add_all('cat/pkg-1')
+        with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                patch('sys.argv', self.args + ['=cat/pkg-1']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+        assert self.profile.masks == frozenset([atom_cls('=cat/pkg-0'), atom_cls('=cat/pkg-1')])
