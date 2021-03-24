@@ -164,4 +164,5 @@ class TestPkgdevMask:
                 pytest.raises(SystemExit), \
                 chdir(pjoin(self.repo.path)):
             self.script()
+        self.repo.sync()
         assert self.profile.masks == frozenset([atom_cls('=cat/pkg-0'), atom_cls('=cat/pkg-1')])
