@@ -1,5 +1,6 @@
 import os
 import textwrap
+from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path
 from unittest.mock import patch
@@ -93,6 +94,7 @@ class TestPkgdevMask:
         self.args = ['pkgdev', 'mask']
         self.repo = make_repo(arches=['amd64'])
         self.git_repo = make_git_repo(self.repo.location)
+        self.today = datetime.now(timezone.utc)
 
         # add stub pkg
         self.repo.create_ebuild('cat/pkg-0')
@@ -178,3 +180,20 @@ class TestPkgdevMask:
                 chdir(pjoin(self.repo.path)):
             self.script()
         assert self.profile.masks == frozenset([atom_cls('cat/masked'), atom_cls('=cat/pkg-0')])
+
+    def test_last_rites(self):
+        with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                patch('sys.argv', self.args + ['cat/pkg', '-r']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+
+        removal_date = self.today + timedelta(days=30)
+        today = self.today.strftime('%Y-%m-%d')
+        removal = removal_date.strftime('%Y-%m-%d')
+        assert self.masks_path.read_text() == textwrap.dedent(f"""\
+            # First Last <first.last@email.com> ({today})
+            # mask comment
+            # Removal on {removal}
+            cat/pkg
+        """)
