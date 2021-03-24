@@ -163,10 +163,9 @@ class MaskFile:
 
 def get_comment():
     """Spawn editor to get mask comment."""
-    with tempfile.NamedTemporaryFile(mode='w+') as f:
-        f.write('\n\n')
-        f.write("# Please enter the mask message. Lines starting with '#' will be ignored.")
-        f.flush()
+    tmp = tempfile.NamedTemporaryFile(mode='w')
+    tmp.write("\n\n# Please enter the mask message. Lines starting with '#' will be ignored.\n")
+    tmp.flush()
 
     editor = os.environ.get('VISUAL', os.environ.get('EDITOR', 'nano'))
     try:
@@ -174,15 +173,15 @@ def get_comment():
     except subprocess.CalledProcessError:
         mask.error('failed writing mask comment')
 
-        f.seek(0)
+    with open(tmp.name) as f:
         # strip trailing whitespace from lines
         comment = (x.rstrip() for x in f.readlines())
-        # strip comments
-        comment = (x for x in comment if not x.startswith('#'))
-        # strip leading/trailing newlines
-        comment = '\n'.join(comment).strip().splitlines()
-        if not comment:
-            mask.error('empty mask comment')
+    # strip comments
+    comment = (x for x in comment if not x.startswith('#'))
+    # strip leading/trailing newlines
+    comment = '\n'.join(comment).strip().splitlines()
+    if not comment:
+        mask.error('empty mask comment')
 
     return comment
 
