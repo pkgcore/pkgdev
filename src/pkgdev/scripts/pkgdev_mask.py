@@ -66,7 +66,7 @@ def _mask_validate(parser, namespace):
         pkg = next(namespace.repo.itermatch(restrict))
         atoms.append(pkg.unversioned_atom)
 
-    namespace.atoms = atoms
+    namespace.atoms = sorted(atoms)
 
 
 @dataclass(frozen=True)
