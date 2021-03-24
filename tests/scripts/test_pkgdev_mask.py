@@ -93,6 +93,10 @@ class TestPkgdevMask:
         self.repo = make_repo(arches=['amd64'])
         self.git_repo = make_git_repo(self.repo.location)
 
+        # add stub pkg
+        self.repo.create_ebuild('cat/pkg-0')
+        self.git_repo.add_all('cat/pkg-0')
+
         # create profile
         self.profile_path = pjoin(self.repo.location, 'profiles/arch/amd64')
         os.makedirs(self.profile_path)
@@ -106,9 +110,16 @@ class TestPkgdevMask:
     def test_empty_repo(self):
         assert self.profile.masks == frozenset()
 
+    def test_nonexistent_editor(self, capsys):
+        with os_environ(EDITOR='12345'), \
+                patch('sys.argv', self.args + ['cat/pkg']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+        out, err = capsys.readouterr()
+        assert err.strip() == "pkgdev mask: error: nonexistent editor: '12345'"
+
     def test_mask_cwd(self):
-        self.repo.create_ebuild('cat/pkg-0')
-        self.git_repo.add_all('cat/pkg-0')
         with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
                 patch('sys.argv', self.args), \
                 pytest.raises(SystemExit) as excinfo, \

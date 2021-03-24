@@ -167,11 +167,13 @@ def get_comment():
     tmp.write("\n\n# Please enter the mask message. Lines starting with '#' will be ignored.\n")
     tmp.flush()
 
-    editor = os.environ.get('VISUAL', os.environ.get('EDITOR', 'nano'))
+    editor = shlex.split(os.environ.get('VISUAL', os.environ.get('EDITOR', 'nano')))
     try:
-        subprocess.run(shlex.split(editor) + [tmp.name], check=True)
+        subprocess.run(editor + [tmp.name], check=True)
     except subprocess.CalledProcessError:
         mask.error('failed writing mask comment')
+    except FileNotFoundError:
+        mask.error(f'nonexistent editor: {editor[0]!r}')
 
     with open(tmp.name) as f:
         # strip trailing whitespace from lines
