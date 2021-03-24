@@ -157,6 +157,14 @@ class TestPkgdevMask:
             self.script()
         assert self.profile.masks == frozenset([atom_cls('cat/pkg')])
 
+    def test_mask_ebuild_path(self):
+        with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                patch('sys.argv', self.args + ['cat/pkg/pkg-0.ebuild']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+        assert self.profile.masks == frozenset([atom_cls('=cat/pkg-0')])
+
     def test_existing_masks(self):
         self.masks_path.write_text(textwrap.dedent("""\
             # Random Dev <random.dev@email.com> (2021-03-24)
