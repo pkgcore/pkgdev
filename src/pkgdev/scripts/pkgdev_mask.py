@@ -109,7 +109,12 @@ class MaskFile:
         self.profile = ProfileNode(os.path.dirname(path))
         self.header = []
         self.masks = deque()
-        self.parse()
+
+        # parse existing mask entries
+        try:
+            self.parse()
+        except FileNotFoundError:
+            pass
 
     def parse(self):
         """Parse the given file into Mask objects."""
