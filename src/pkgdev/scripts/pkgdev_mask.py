@@ -59,10 +59,11 @@ def _mask_validate(parser, namespace):
             atoms.append(atom)
     else:
         restrict = namespace.repo.path_restrict(os.getcwd())
-        pkgs = {x.unversioned_atom for x in namespace.repo.match(restrict)}
-        if len(pkgs) > 1:
+        # repo, category, and package level restricts
+        if len(restrict) != 3:
             mask.error('not in a package directory')
-        atoms.append(next(iter(pkgs)))
+        pkg = next(namespace.repo.itermatch(restrict))
+        atoms.append(pkg.unversioned_atom)
 
     namespace.atoms = atoms
 
