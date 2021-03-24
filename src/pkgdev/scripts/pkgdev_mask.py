@@ -24,7 +24,7 @@ mask = arghparse.ArgumentParser(
     prog='pkgdev mask', description='mask packages',
     parents=(cwd_repo_argparser, git_repo_argparser))
 mask.add_argument(
-    'target', nargs='*',
+    'targets', metavar='TARGET', nargs='*',
     help='packages to target',
     docs="""
         Packages matching any of these restrictions will have a mask entry in
@@ -35,7 +35,7 @@ mask.add_argument(
     """)
 mask_opts = mask.add_argument_group('mask options')
 mask_opts.add_argument(
-    '-r', '--rites', nargs='?', const=30, type=arghparse.positive_int,
+    '-r', '--rites', metavar='DAYS', nargs='?', const=30, type=arghparse.positive_int,
     help='mark for last rites',
     docs="""
         Mark a mask entry for last rites. This defaults to 30 days until
@@ -48,8 +48,8 @@ mask_opts.add_argument(
 def _mask_validate(parser, namespace):
     atoms = []
 
-    if namespace.target:
-        for x in namespace.target:
+    if namespace.targets:
+        for x in namespace.targets:
             try:
                 atom = atom_cls(x)
             except MalformedAtom:
