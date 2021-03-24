@@ -10,6 +10,8 @@ pkgdev provides a collection of tools for Gentoo development including:
 
 **pkgdev manifest**: update package manifests
 
+**pkgdev mask**: mask packages
+
 **pkgdev push**: scan commits for QA issues before pushing upstream
 
 Dependencies
