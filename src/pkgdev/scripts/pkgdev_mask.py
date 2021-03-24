@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 import subprocess
 import tempfile
 from collections import deque
@@ -167,11 +168,11 @@ def get_comment():
         f.write("# Please enter the mask message. Lines starting with '#' will be ignored.")
         f.flush()
 
-        editor = os.environ.get('VISUAL', os.environ.get('EDITOR', 'nano'))
-        try:
-            subprocess.run([editor, f.name], check=True)
-        except subprocess.CalledProcessError:
-            mask.error('failed writing mask comment')
+    editor = os.environ.get('VISUAL', os.environ.get('EDITOR', 'nano'))
+    try:
+        subprocess.run(shlex.split(editor) + [tmp.name], check=True)
+    except subprocess.CalledProcessError:
+        mask.error('failed writing mask comment')
 
         f.seek(0)
         # strip trailing whitespace from lines
