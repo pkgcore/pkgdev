@@ -119,6 +119,24 @@ class TestPkgdevMask:
         out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: nonexistent editor: '12345'"
 
+    def test_failed_editor(self, capsys):
+        with os_environ(EDITOR='sed'), \
+                patch('sys.argv', self.args + ['cat/pkg']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+        out, err = capsys.readouterr()
+        assert err.strip() == "pkgdev mask: error: failed writing mask comment"
+
+    def test_empty_mask_comment(self, capsys):
+        with os_environ(EDITOR="sed -i 's/#/#/'"), \
+                patch('sys.argv', self.args + ['cat/pkg']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+        out, err = capsys.readouterr()
+        assert err.strip() == "pkgdev mask: error: empty mask comment"
+
     def test_mask_cwd(self):
         with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
                 patch('sys.argv', self.args), \
