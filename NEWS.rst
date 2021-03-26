@@ -2,6 +2,18 @@
 Release Notes
 =============
 
+pkgdev 0.1.3 (2021-03-26)
+-------------------------
+
+- pkgdev mask: Initial implementation of package.mask mangling support.
+
+- pkgdev commit: Allow -s/--scan to accept an optional boolean arg for
+  consistency.
+
+- pkgdev commit: Support partial package manifesting (#33).
+
+- pkgdev commit: Add -T/--tag option to add generic commit tags.
+
 pkgdev 0.1.2 (2021-03-19)
 -------------------------
 
