@@ -82,7 +82,7 @@ class Mask:
     comment: List[str]
     atoms: List[atom_cls]
 
-    _removal_re = re.compile(r'^Removal on (?P<date>\d{4}-\d{2}-\d{2})')
+    _removal_re = re.compile(r'^Removal: (?P<date>\d{4}-\d{2}-\d{2})')
 
     def __str__(self):
         lines = [f'# {self.author} <{self.email}> ({self.date})']
@@ -215,7 +215,7 @@ def _mask(options, out, err):
     if options.rites:
         removal_date = today + timedelta(days=options.rites)
         removal = removal_date.strftime('%Y-%m-%d')
-        mask_args['comment'].append(f'Removal on {removal}')
+        mask_args['comment'].append(f'Removal: {removal}')
 
     mask_file.add(Mask(**mask_args))
     mask_file.write()

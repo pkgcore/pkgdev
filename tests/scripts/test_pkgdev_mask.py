@@ -194,6 +194,6 @@ class TestPkgdevMask:
         assert self.masks_path.read_text() == textwrap.dedent(f"""\
             # First Last <first.last@email.com> ({today})
             # mask comment
-            # Removal on {removal}
+            # Removal: {removal}
             cat/pkg
         """)
