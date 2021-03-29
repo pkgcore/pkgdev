@@ -22,6 +22,12 @@ manifest.add_argument(
     """)
 manifest_opts = manifest.add_argument_group('manifest options')
 manifest_opts.add_argument(
+    '-d', '--distdir', type=arghparse.create_dir, help='target download directory',
+    docs="""
+        Use a specified target directory for downloads instead of the
+        configured DISTDIR.
+    """)
+manifest_opts.add_argument(
     '-f', '--force', help='forcibly remanifest packages',
     action='store_true',
     docs="""
@@ -65,6 +71,7 @@ def _manifest(options, out, err):
         restriction=options.restriction,
         observer=observer_mod.formatter_output(out),
         mirrors=options.mirrors,
-        force=options.force)
+        force=options.force,
+        distdir=options.distdir)
 
     return int(any(failed))

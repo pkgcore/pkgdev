@@ -55,6 +55,7 @@ case $state in
       (manifest)
         _arguments -C -A '-*' \
           $base_options \
+          {'(--distdir)-d','(-d)--distdir'}'[target download directory]:distdir:_files -/' \
           {'(--force)-f','(-f)--force'}'[forcibly remanifest packages]' \
           {'(--mirrors)-m','(-m)--mirrors'}'[enable fetching from Gentoo mirrors]' \
           && ret=0
