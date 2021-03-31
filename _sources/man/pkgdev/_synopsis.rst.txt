@@ -1,0 +1,4 @@
+Synopsis
+========
+
+pkgdev [-h] [--version] [--debug] [-q] [-v] [--color BOOLEAN] {commit,manifest,mask,push,showkw} ...

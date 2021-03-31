@@ -1,0 +1,5 @@
+.. include:: commit.rst
+.. include:: manifest.rst
+.. include:: mask.rst
+.. include:: push.rst
+.. include:: showkw.rst

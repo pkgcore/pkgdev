@@ -1,0 +1,20 @@
+pkgdev package
+==============
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 4
+
+   pkgdev.cli
+   pkgdev.git
+   pkgdev.mangle
+
+Module contents
+---------------
+
+.. automodule:: pkgdev
+   :members:
+   :undoc-members:
+   :show-inheritance:

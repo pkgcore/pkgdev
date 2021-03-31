@@ -1,0 +1,4 @@
+Synopsis
+--------
+
+pkgdev push [-h] [--debug] [-q] [-v] [--color BOOLEAN] [-A] [-n]

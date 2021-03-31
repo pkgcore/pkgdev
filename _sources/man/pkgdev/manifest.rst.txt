@@ -1,0 +1,7 @@
+pkgdev manifest - update package manifests
+------------------------------------------
+
+.. include:: manifest/_synopsis.rst
+.. include:: manifest/_description.rst
+.. include:: manifest/_options.rst
+.. include:: manifest/_subcommands.rst

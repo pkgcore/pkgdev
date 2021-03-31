@@ -1,0 +1,7 @@
+pkgdev showkw - show package keywords
+-------------------------------------
+
+.. include:: showkw/_synopsis.rst
+.. include:: showkw/_description.rst
+.. include:: showkw/_options.rst
+.. include:: showkw/_subcommands.rst

@@ -1,0 +1,7 @@
+pkgdev.mangle module
+====================
+
+.. automodule:: pkgdev.mangle
+   :members:
+   :undoc-members:
+   :show-inheritance:

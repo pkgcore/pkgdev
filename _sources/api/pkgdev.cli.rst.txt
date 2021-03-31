@@ -1,0 +1,7 @@
+pkgdev.cli module
+=================
+
+.. automodule:: pkgdev.cli
+   :members:
+   :undoc-members:
+   :show-inheritance:

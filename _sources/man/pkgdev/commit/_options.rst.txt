@@ -1,0 +1,70 @@
+Base Options
+------------
+
+-h, --help       
+                 Show this help message and exit. To get more
+                 information see the related man page.
+
+--debug          
+                 Enable debug checks and show verbose debug output.
+
+-q, --quiet      
+                 Suppress non-error, informational messages.
+
+-v, --verbose    
+                 Increase the verbosity of various output.
+
+--color BOOLEAN  
+                 Toggle colored output support. This can be used to forcibly
+                 enable color support when piping output or other sitations
+                 where stdout is not a tty.
+
+Commit Options
+--------------
+
+-b BUG, --bug BUG                 
+                                  add Bug tag for a given Gentoo or upstream bug
+
+-c CLOSES, --closes CLOSES        
+                                  add Closes tag for a given Gentoo bug or upstream PR URL
+
+-T NAME:VALUE, --tag NAME:VALUE   
+                                  add commit tag
+
+-n, --dry-run                     
+                                  Perform all actions without creating a commit.
+
+-s [BOOLEAN], --scan [BOOLEAN]    
+                                  By default, ``pkgdev commit`` doesn't scan for QA errors. This option
+                                  enables using pkgcheck to scan the staged changes for issues, erroring
+                                  out if any failures are found.
+
+-A, --ask                         
+                                  When running with the -s/--scan option enabled, ``pkgdev commit`` will
+                                  ask for confirmation before creating a commit if it detects failure
+                                  results.
+
+--mangle [BOOLEAN]                
+                                  File mangling automatically modifies the content of relevant staged
+                                  files including updating copyright headers and fixing EOF newlines.
+                                  
+                                  This is performed by default for the gentoo repo, but can be forcibly
+                                  disabled or enabled as required.
+
+-m MSG, --message MSG             
+                                  Use a given message as the commit message. If multiple -m options are
+                                  specified, their values are concatenated as separate paragraphs.
+                                  
+                                  Note that the first value will be used for the commit summary and if
+                                  it's empty then a generated summary will be used if available.
+
+-M FILE, --message-template FILE  
+                                  Use content from the given file as a commit message template. The
+                                  commit summary prefix '*: ' is automatically replaced by a generated
+                                  prefix if one exists for the related staged changes.
+
+-u, --update                      
+                                  stage all changed files
+
+-a, --all                         
+                                  stage all changed/new/removed files

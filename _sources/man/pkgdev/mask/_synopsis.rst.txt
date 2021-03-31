@@ -1,0 +1,4 @@
+Synopsis
+--------
+
+pkgdev mask [-h] [--debug] [-q] [-v] [--color BOOLEAN] [-r [DAYS]] [TARGET [TARGET ...]]

@@ -1,0 +1,4 @@
+Synopsis
+--------
+
+pkgdev showkw [-h] [--debug] [-q] [-v] [--color BOOLEAN] [-f FORMAT] [-c] [-s] [-u] [-o] [-p] [-a ARCH] [-r REPO] [target [target ...]]

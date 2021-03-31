@@ -1,0 +1,4 @@
+Synopsis
+--------
+
+pkgdev manifest [-h] [--debug] [-q] [-v] [--color BOOLEAN] [-d DISTDIR] [-f] [-m] [target [target ...]]

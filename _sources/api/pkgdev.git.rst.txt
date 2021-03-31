@@ -1,0 +1,7 @@
+pkgdev.git module
+=================
+
+.. automodule:: pkgdev.git
+   :members:
+   :undoc-members:
+   :show-inheritance:

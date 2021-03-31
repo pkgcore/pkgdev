@@ -1,0 +1,7 @@
+pkgdev push - run QA checks on commits and push them
+----------------------------------------------------
+
+.. include:: push/_synopsis.rst
+.. include:: push/_description.rst
+.. include:: push/_options.rst
+.. include:: push/_subcommands.rst

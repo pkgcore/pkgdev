@@ -1,0 +1,7 @@
+pkgdev mask - mask packages
+---------------------------
+
+.. include:: mask/_synopsis.rst
+.. include:: mask/_description.rst
+.. include:: mask/_options.rst
+.. include:: mask/_subcommands.rst

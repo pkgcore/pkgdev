@@ -1,0 +1,7 @@
+pkgdev commit - create git commit
+---------------------------------
+
+.. include:: commit/_synopsis.rst
+.. include:: commit/_description.rst
+.. include:: commit/_options.rst
+.. include:: commit/_subcommands.rst

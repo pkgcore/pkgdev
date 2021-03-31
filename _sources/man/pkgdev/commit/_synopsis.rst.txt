@@ -1,0 +1,4 @@
+Synopsis
+--------
+
+pkgdev commit [-h] [--debug] [-q] [-v] [--color BOOLEAN] [-b BUG] [-c CLOSES] [-T NAME:VALUE] [-n] [-s [BOOLEAN]] [-A] [--mangle [BOOLEAN]] [-m MSG | -M FILE] [-u | -a]

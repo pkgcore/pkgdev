@@ -1,0 +1,46 @@
+Positional Arguments
+--------------------
+
+:target:  
+        Packages matching any of these restrictions will have their manifest
+        entries updated. If no target is specified a path restriction is
+        created based on the current working directory. In other words, if
+        ``pkgdev manifest`` is run within an ebuild's directory, all the
+        ebuilds within that directory will be manifested.
+
+Base Options
+------------
+
+-h, --help       
+                 Show this help message and exit. To get more
+                 information see the related man page.
+
+--debug          
+                 Enable debug checks and show verbose debug output.
+
+-q, --quiet      
+                 Suppress non-error, informational messages.
+
+-v, --verbose    
+                 Increase the verbosity of various output.
+
+--color BOOLEAN  
+                 Toggle colored output support. This can be used to forcibly
+                 enable color support when piping output or other sitations
+                 where stdout is not a tty.
+
+Manifest Options
+----------------
+
+-d DISTDIR, --distdir DISTDIR  
+                               Use a specified target directory for downloads instead of the
+                               configured DISTDIR.
+
+-f, --force                    
+                               Force package manifest files to be rewritten. Note that this requires
+                               downloading all distfiles.
+
+-m, --mirrors                  
+                               Enable checking Gentoo mirrors first for distfiles. This is disabled by
+                               default because manifest generation is often performed when adding new
+                               ebuilds with distfiles that aren't on Gentoo mirrors yet.
