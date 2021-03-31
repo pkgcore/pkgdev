@@ -14,6 +14,8 @@ pkgdev provides a collection of tools for Gentoo development including:
 
 **pkgdev push**: scan commits for QA issues before pushing upstream
 
+**pkgdev showkw**: show package keywords
+
 Dependencies
 ============
 

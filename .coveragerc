@@ -1,7 +1,7 @@
 [run]
 source = pkgdev
 branch = True
-omit = src/*, tests/*
+omit = src/*, tests/*, */_vendor/*
 
 [paths]
 source = **/site-packages/pkgdev
