@@ -1,4 +1,4 @@
-# Copyright (c) 2011-2017 Sergey Astanin
+# Copyright (c) 2011-2020 Sergey Astanin
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -41,19 +41,35 @@ try:
 except ImportError:
     wcwidth = None
 
+try:
+    from html import escape as htmlescape
+except ImportError:
+    from cgi import escape as htmlescape
+
+
+__all__ = ["tabulate", "tabulate_formats", "simple_separated_format"]
+__version__ = "0.8.9"
+
+
 # minimum extra space in headers
 MIN_PADDING = 2
 
 # Whether or not to preserve leading/trailing whitespace in data.
 PRESERVE_WHITESPACE = False
 
-_DEFAULT_FLOATFMT="g"
-_DEFAULT_MISSINGVAL=""
+_DEFAULT_FLOATFMT = "g"
+_DEFAULT_MISSINGVAL = ""
+# default align will be overwritten by "left", "center" or "decimal"
+# depending on the formatter
+_DEFAULT_ALIGN = "default"
+
 
 # if True, enable wide-character (CJK) support
 WIDE_CHARS_MODE = wcwidth is not None
 
+
 Line = namedtuple("Line", ["begin", "hline", "sep", "end"])
+
 
 DataRow = namedtuple("DataRow", ["begin", "sep", "end"])
 
@@ -64,9 +80,9 @@ DataRow = namedtuple("DataRow", ["begin", "sep", "end"])
 #         headerrow
 #     --- linebelowheader ---
 #         datarow
-#     --- linebewteenrows ---
+#     --- linebetweenrows ---
 #     ... (more datarows) ...
-#     --- linebewteenrows ---
+#     --- linebetweenrows ---
 #         last datarow
 #     --- linebelow ---------
 #
@@ -88,15 +104,22 @@ DataRow = namedtuple("DataRow", ["begin", "sep", "end"])
 #
 #   - either None, to display all table elements unconditionally,
 #   - or a list of elements not to be displayed if the table has column headers.
-
-TableFormat = namedtuple("TableFormat", [
-    "lineabove", "linebelowheader", "linebetweenrows", "linebelow",
-    "headerrow", "datarow", "padding", "with_header_hide",
-    "vertical_headers",
-])
-# TODO: use defaults param when >= python3.7 only
-# set default for vertical_headers params
-TableFormat.__new__.__defaults__ = (False,)
+#
+TableFormat = namedtuple(
+    "TableFormat",
+    [
+        "lineabove",
+        "linebelowheader",
+        "linebetweenrows",
+        "linebelow",
+        "headerrow",
+        "datarow",
+        "padding",
+        "with_header_hide",
+        "vertical_headers",
+    ],
+    defaults=(False,)
+)
 
 
 def _pipe_segment_with_colons(align, colwidth):
@@ -104,91 +127,126 @@ def _pipe_segment_with_colons(align, colwidth):
     indicate column's alignment (as in `pipe` output format)."""
     w = colwidth
     if align in ["right", "decimal"]:
-        return ('-' * (w - 1)) + ":"
+        return ("-" * (w - 1)) + ":"
     elif align == "center":
-        return ":" + ('-' * (w - 2)) + ":"
+        return ":" + ("-" * (w - 2)) + ":"
     elif align == "left":
-        return ":" + ('-' * (w - 1))
+        return ":" + ("-" * (w - 1))
     else:
-        return '-' * w
+        return "-" * w
 
 
 def _pipe_line_with_colons(colwidths, colaligns):
     """Return a horizontal line with optional colons to indicate column's
     alignment (as in `pipe` output format)."""
+    if not colaligns:  # e.g. printing an empty data frame (github issue #15)
+        colaligns = [""] * len(colwidths)
     segments = [_pipe_segment_with_colons(a, w) for a, w in zip(colaligns, colwidths)]
     return "|" + "|".join(segments) + "|"
 
 
 def _mediawiki_row_with_attrs(separator, cell_values, colwidths, colaligns):
-    alignment = { "left":    '',
-                  "right":   'align="right"| ',
-                  "center":  'align="center"| ',
-                  "decimal": 'align="right"| ' }
+    alignment = {
+        "left": "",
+        "right": 'align="right"| ',
+        "center": 'align="center"| ',
+        "decimal": 'align="right"| ',
+    }
     # hard-coded padding _around_ align attribute and value together
     # rather than padding parameter which affects only the value
-    values_with_attrs = [' ' + alignment.get(a, '') + c + ' '
-                         for c, a in zip(cell_values, colaligns)]
-    colsep = separator*2
+    values_with_attrs = [
+        " " + alignment.get(a, "") + c + " " for c, a in zip(cell_values, colaligns)
+    ]
+    colsep = separator * 2
     return (separator + colsep.join(values_with_attrs)).rstrip()
 
 
 def _textile_row_with_attrs(cell_values, colwidths, colaligns):
-    cell_values[0] += ' '
-    alignment = { "left": "<.", "right": ">.", "center": "=.", "decimal": ">." }
-    values = (alignment.get(a, '') + v for a, v in zip(colaligns, cell_values))
-    return '|' + '|'.join(values) + '|'
+    cell_values[0] += " "
+    alignment = {"left": "<.", "right": ">.", "center": "=.", "decimal": ">."}
+    values = (alignment.get(a, "") + v for a, v in zip(colaligns, cell_values))
+    return "|" + "|".join(values) + "|"
 
 
 def _html_begin_table_without_header(colwidths_ignore, colaligns_ignore):
     # this table header will be suppressed if there is a header row
-    return "\n".join(["<table>", "<tbody>"])
+    return "<table>\n<tbody>"
 
 
-def _html_row_with_attrs(celltag, cell_values, colwidths, colaligns):
-    alignment = { "left":    '',
-                  "right":   ' style="text-align: right;"',
-                  "center":  ' style="text-align: center;"',
-                  "decimal": ' style="text-align: right;"' }
-    values_with_attrs = ["<{0}{1}>{2}</{0}>".format(celltag, alignment.get(a, ''), c)
-                         for c, a in zip(cell_values, colaligns)]
-    rowhtml = "<tr>" + "".join(values_with_attrs).rstrip() + "</tr>"
+def _html_row_with_attrs(celltag, unsafe, cell_values, colwidths, colaligns):
+    alignment = {
+        "left": "",
+        "right": ' style="text-align: right;"',
+        "center": ' style="text-align: center;"',
+        "decimal": ' style="text-align: right;"',
+    }
+    if unsafe:
+        values_with_attrs = [
+            "<{0}{1}>{2}</{0}>".format(celltag, alignment.get(a, ""), c)
+            for c, a in zip(cell_values, colaligns)
+        ]
+    else:
+        values_with_attrs = [
+            "<{0}{1}>{2}</{0}>".format(celltag, alignment.get(a, ""), htmlescape(c))
+            for c, a in zip(cell_values, colaligns)
+        ]
+    rowhtml = "<tr>{}</tr>".format("".join(values_with_attrs).rstrip())
     if celltag == "th":  # it's a header row, create a new table header
-        rowhtml = "\n".join(["<table>",
-                             "<thead>",
-                             rowhtml,
-                             "</thead>",
-                             "<tbody>"])
+        rowhtml = "<table>\n<thead>\n{}\n</thead>\n<tbody>".format(rowhtml)
     return rowhtml
 
-def _moin_row_with_attrs(celltag, cell_values, colwidths, colaligns, header=''):
-    alignment = { "left":    '',
-                  "right":   '<style="text-align: right;">',
-                  "center":  '<style="text-align: center;">',
-                  "decimal": '<style="text-align: right;">' }
-    values_with_attrs = ["{0}{1} {2} ".format(celltag,
-                                              alignment.get(a, ''),
-                                              header+c+header)
-                         for c, a in zip(cell_values, colaligns)]
-    return "".join(values_with_attrs)+"||"
 
-def _latex_line_begin_tabular(colwidths, colaligns, booktabs=False):
-    alignment = { "left": "l", "right": "r", "center": "c", "decimal": "r" }
+def _moin_row_with_attrs(celltag, cell_values, colwidths, colaligns, header=""):
+    alignment = {
+        "left": "",
+        "right": '<style="text-align: right;">',
+        "center": '<style="text-align: center;">',
+        "decimal": '<style="text-align: right;">',
+    }
+    values_with_attrs = [
+        "{0}{1} {2} ".format(celltag, alignment.get(a, ""), header + c + header)
+        for c, a in zip(cell_values, colaligns)
+    ]
+    return "".join(values_with_attrs) + "||"
+
+
+def _latex_line_begin_tabular(colwidths, colaligns, booktabs=False, longtable=False):
+    alignment = {"left": "l", "right": "r", "center": "c", "decimal": "r"}
     tabular_columns_fmt = "".join([alignment.get(a, "l") for a in colaligns])
-    return "\n".join(["\\begin{tabular}{" + tabular_columns_fmt + "}",
-                      "\\toprule" if booktabs else "\\hline"])
+    return "\n".join(
+        [
+            ("\\begin{tabular}{" if not longtable else "\\begin{longtable}{")
+            + tabular_columns_fmt
+            + "}",
+            "\\toprule" if booktabs else "\\hline",
+        ]
+    )
 
-LATEX_ESCAPE_RULES = {r"&": r"\&", r"%": r"\%", r"$": r"\$", r"#": r"\#",
-                      r"_": r"\_", r"^": r"\^{}", r"{": r"\{", r"}": r"\}",
-                      r"~": r"\textasciitilde{}", "\\": r"\textbackslash{}",
-                      r"<": r"\ensuremath{<}", r">": r"\ensuremath{>}"}
+
+LATEX_ESCAPE_RULES = {
+    r"&": r"\&",
+    r"%": r"\%",
+    r"$": r"\$",
+    r"#": r"\#",
+    r"_": r"\_",
+    r"^": r"\^{}",
+    r"{": r"\{",
+    r"}": r"\}",
+    r"~": r"\textasciitilde{}",
+    "\\": r"\textbackslash{}",
+    r"<": r"\ensuremath{<}",
+    r">": r"\ensuremath{>}",
+}
+
 
 def _latex_row(cell_values, colwidths, colaligns, escrules=LATEX_ESCAPE_RULES):
     def escape_char(c):
         return escrules.get(c, c)
+
     escaped_values = ["".join(map(escape_char, cell)) for cell in cell_values]
     rowfmt = DataRow("", "&", "\\\\")
     return _build_simple_row(escaped_values, rowfmt)
+
 
 def _rst_escape_first_column(rows, headers):
     def escape_empty(val):
@@ -196,6 +254,7 @@ def _rst_escape_first_column(rows, headers):
             return ".."
         else:
             return val
+
     new_headers = list(headers)
     new_rows = []
     if headers:
@@ -209,213 +268,281 @@ def _rst_escape_first_column(rows, headers):
 
 
 _table_formats = {
-    "simple":
-        TableFormat(lineabove=Line("", "-", "  ", ""),
-                    linebelowheader=Line("", "-", "  ", ""),
-                    linebetweenrows=None,
-                    linebelow=Line("", "-", "  ", ""),
-                    headerrow=DataRow("", "  ", ""),
-                    datarow=DataRow("", "  ", ""),
-                    padding=0,
-                    with_header_hide=["lineabove", "linebelow"],
+    "simple": TableFormat(
+        lineabove=Line("", "-", "  ", ""),
+        linebelowheader=Line("", "-", "  ", ""),
+        linebetweenrows=None,
+        linebelow=Line("", "-", "  ", ""),
+        headerrow=DataRow("", "  ", ""),
+        datarow=DataRow("", "  ", ""),
+        padding=0,
+        with_header_hide=["lineabove", "linebelow"],
+    ),
+    "plain": TableFormat(
+        lineabove=None,
+        linebelowheader=None,
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("", "  ", ""),
+        datarow=DataRow("", "  ", ""),
+        padding=0,
+        with_header_hide=None,
+    ),
+    "grid": TableFormat(
+        lineabove=Line("+", "-", "+", "+"),
+        linebelowheader=Line("+", "=", "+", "+"),
+        linebetweenrows=Line("+", "-", "+", "+"),
+        linebelow=Line("+", "-", "+", "+"),
+        headerrow=DataRow("|", "|", "|"),
+        datarow=DataRow("|", "|", "|"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "fancy_grid": TableFormat(
+        lineabove=Line("╒", "═", "╤", "╕"),
+        linebelowheader=Line("╞", "═", "╪", "╡"),
+        linebetweenrows=Line("├", "─", "┼", "┤"),
+        linebelow=Line("╘", "═", "╧", "╛"),
+        headerrow=DataRow("│", "│", "│"),
+        datarow=DataRow("│", "│", "│"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "fancy_outline": TableFormat(
+        lineabove=Line("╒", "═", "╤", "╕"),
+        linebelowheader=Line("╞", "═", "╪", "╡"),
+        linebetweenrows=None,
+        linebelow=Line("╘", "═", "╧", "╛"),
+        headerrow=DataRow("│", "│", "│"),
+        datarow=DataRow("│", "│", "│"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "github": TableFormat(
+        lineabove=Line("|", "-", "|", "|"),
+        linebelowheader=Line("|", "-", "|", "|"),
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("|", "|", "|"),
+        datarow=DataRow("|", "|", "|"),
+        padding=1,
+        with_header_hide=["lineabove"],
+    ),
+    "pipe": TableFormat(
+        lineabove=_pipe_line_with_colons,
+        linebelowheader=_pipe_line_with_colons,
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("|", "|", "|"),
+        datarow=DataRow("|", "|", "|"),
+        padding=1,
+        with_header_hide=["lineabove"],
+    ),
+    "orgtbl": TableFormat(
+        lineabove=None,
+        linebelowheader=Line("|", "-", "+", "|"),
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("|", "|", "|"),
+        datarow=DataRow("|", "|", "|"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "jira": TableFormat(
+        lineabove=None,
+        linebelowheader=None,
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("||", "||", "||"),
+        datarow=DataRow("|", "|", "|"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "presto": TableFormat(
+        lineabove=None,
+        linebelowheader=Line("", "-", "+", ""),
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("", "|", ""),
+        datarow=DataRow("", "|", ""),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "pretty": TableFormat(
+        lineabove=Line("+", "-", "+", "+"),
+        linebelowheader=Line("+", "-", "+", "+"),
+        linebetweenrows=None,
+        linebelow=Line("+", "-", "+", "+"),
+        headerrow=DataRow("|", "|", "|"),
+        datarow=DataRow("|", "|", "|"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "psql": TableFormat(
+        lineabove=Line("+", "-", "+", "+"),
+        linebelowheader=Line("|", "-", "+", "|"),
+        linebetweenrows=None,
+        linebelow=Line("+", "-", "+", "+"),
+        headerrow=DataRow("|", "|", "|"),
+        datarow=DataRow("|", "|", "|"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "rst": TableFormat(
+        lineabove=Line("", "=", "  ", ""),
+        linebelowheader=Line("", "=", "  ", ""),
+        linebetweenrows=None,
+        linebelow=Line("", "=", "  ", ""),
+        headerrow=DataRow("", "  ", ""),
+        datarow=DataRow("", "  ", ""),
+        padding=0,
+        with_header_hide=None,
+    ),
+    "showkw": TableFormat(
+        lineabove=None,
+        linebelowheader=Line("", "-", "-", ""),
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("", "", ""),
+        datarow=DataRow("", "", ""),
+        padding=1, with_header_hide=None,
+        vertical_headers=True,
+    ),
+    "mediawiki": TableFormat(
+        lineabove=Line(
+            '{| class="wikitable" style="text-align: left;"',
+            "",
+            "",
+            "\n|+ <!-- caption -->\n|-",
         ),
-    "plain":
-        TableFormat(lineabove=None, linebelowheader=None,
-                    linebetweenrows=None, linebelow=None,
-                    headerrow=DataRow("", "  ", ""),
-                    datarow=DataRow("", "  ", ""),
-                    padding=0, with_header_hide=None,
-        ),
-    "grid":
-        TableFormat(lineabove=Line("+", "-", "+", "+"),
-                    linebelowheader=Line("+", "=", "+", "+"),
-                    linebetweenrows=Line("+", "-", "+", "+"),
-                    linebelow=Line("+", "-", "+", "+"),
-                    headerrow=DataRow("|", "|", "|"),
-                    datarow=DataRow("|", "|", "|"),
-                    padding=1, with_header_hide=None,
-        ),
-    "fancy_grid":
-        TableFormat(lineabove=Line("╒", "═", "╤", "╕"),
-                    linebelowheader=Line("╞", "═", "╪", "╡"),
-                    linebetweenrows=Line("├", "─", "┼", "┤"),
-                    linebelow=Line("╘", "═", "╧", "╛"),
-                    headerrow=DataRow("│", "│", "│"),
-                    datarow=DataRow("│", "│", "│"),
-                    padding=1, with_header_hide=None,
-        ),
-    "github":
-        TableFormat(lineabove=Line("|", "-", "|", "|"),
-                    linebelowheader=Line("|", "-", "|", "|"),
-                    linebetweenrows=None,
-                    linebelow=None,
-                    headerrow=DataRow("|", "|", "|"),
-                    datarow=DataRow("|", "|", "|"),
-                    padding=1,
-                    with_header_hide=["lineabove"],
-        ),
-    "pipe":
-        TableFormat(lineabove=_pipe_line_with_colons,
-                    linebelowheader=_pipe_line_with_colons,
-                    linebetweenrows=None,
-                    linebelow=None,
-                    headerrow=DataRow("|", "|", "|"),
-                    datarow=DataRow("|", "|", "|"),
-                    padding=1,
-                    with_header_hide=["lineabove"],
-        ),
-    "orgtbl":
-        TableFormat(lineabove=None,
-                    linebelowheader=Line("|", "-", "+", "|"),
-                    linebetweenrows=None,
-                    linebelow=None,
-                    headerrow=DataRow("|", "|", "|"),
-                    datarow=DataRow("|", "|", "|"),
-                    padding=1, with_header_hide=None,
-        ),
-    "jira":
-        TableFormat(lineabove=None,
-                    linebelowheader=None,
-                    linebetweenrows=None,
-                    linebelow=None,
-                    headerrow=DataRow("||", "||", "||"),
-                    datarow=DataRow("|", "|", "|"),
-                    padding=1, with_header_hide=None,
-        ),
-    "presto":
-        TableFormat(lineabove=None,
-                    linebelowheader=Line("", "-", "+", ""),
-                    linebetweenrows=None,
-                    linebelow=None,
-                    headerrow=DataRow("", "|", ""),
-                    datarow=DataRow("", "|", ""),
-                    padding=1, with_header_hide=None,
-        ),
-    "showkw":
-        TableFormat(lineabove=None,
-                    linebelowheader=Line("", "-", "-", ""),
-                    linebetweenrows=None,
-                    linebelow=None,
-                    headerrow=DataRow("", "", ""),
-                    datarow=DataRow("", "", ""),
-                    padding=1, with_header_hide=None,
-                    vertical_headers=True,
-        ),
-    "psql":
-        TableFormat(lineabove=Line("+", "-", "+", "+"),
-                    linebelowheader=Line("|", "-", "+", "|"),
-                    linebetweenrows=None,
-                    linebelow=Line("+", "-", "+", "+"),
-                    headerrow=DataRow("|", "|", "|"),
-                    datarow=DataRow("|", "|", "|"),
-                    padding=1, with_header_hide=None,
-        ),
-    "rst":
-        TableFormat(lineabove=Line("", "=", "  ", ""),
-                    linebelowheader=Line("", "=", "  ", ""),
-                    linebetweenrows=None,
-                    linebelow=Line("", "=", "  ", ""),
-                    headerrow=DataRow("", "  ", ""),
-                    datarow=DataRow("", "  ", ""),
-                    padding=0, with_header_hide=None,
-        ),
-    "mediawiki":
-        TableFormat(lineabove=Line("{| class=\"wikitable\" style=\"text-align: left;\"",
-                                    "", "", "\n|+ <!-- caption -->\n|-"),
-                    linebelowheader=Line("|-", "", "", ""),
-                    linebetweenrows=Line("|-", "", "", ""),
-                    linebelow=Line("|}", "", "", ""),
-                    headerrow=partial(_mediawiki_row_with_attrs, "!"),
-                    datarow=partial(_mediawiki_row_with_attrs, "|"),
-                    padding=0, with_header_hide=None,
-        ),
-    "moinmoin":
-        TableFormat(lineabove=None,
-                    linebelowheader=None,
-                    linebetweenrows=None,
-                    linebelow=None,
-                    headerrow=partial(_moin_row_with_attrs,"||",header="'''"),
-                    datarow=partial(_moin_row_with_attrs,"||"),
-                    padding=1, with_header_hide=None,
-        ),
-    "youtrack":
-        TableFormat(lineabove=None,
-                    linebelowheader=None,
-                    linebetweenrows=None,
-                    linebelow=None,
-                    headerrow=DataRow("|| ", " || ", " || "),
-                    datarow=DataRow("| ", " | ", " |"),
-                    padding=1, with_header_hide=None,
-        ),
-    "html":
-        TableFormat(lineabove=_html_begin_table_without_header,
-                    linebelowheader="",
-                    linebetweenrows=None,
-                    linebelow=Line("</tbody>\n</table>", "", "", ""),
-                    headerrow=partial(_html_row_with_attrs, "th"),
-                    datarow=partial(_html_row_with_attrs, "td"),
-                    padding=0, with_header_hide=["lineabove"],
-        ),
-    "latex":
-        TableFormat(lineabove=_latex_line_begin_tabular,
-                    linebelowheader=Line("\\hline", "", "", ""),
-                    linebetweenrows=None,
-                    linebelow=Line("\\hline\n\\end{tabular}", "", "", ""),
-                    headerrow=_latex_row,
-                    datarow=_latex_row,
-                    padding=1, with_header_hide=None,
-        ),
-    "latex_raw":
-        TableFormat(lineabove=_latex_line_begin_tabular,
-                    linebelowheader=Line("\\hline", "", "", ""),
-                    linebetweenrows=None,
-                    linebelow=Line("\\hline\n\\end{tabular}", "", "", ""),
-                    headerrow=partial(_latex_row, escrules={}),
-                    datarow=partial(_latex_row, escrules={}),
-                    padding=1, with_header_hide=None,
-        ),
-    "latex_booktabs":
-        TableFormat(lineabove=partial(_latex_line_begin_tabular, booktabs=True),
-                    linebelowheader=Line("\\midrule", "", "", ""),
-                    linebetweenrows=None,
-                    linebelow=Line("\\bottomrule\n\\end{tabular}", "", "", ""),
-                    headerrow=_latex_row,
-                    datarow=_latex_row,
-                    padding=1, with_header_hide=None,
-        ),
-    "tsv":
-        TableFormat(lineabove=None, linebelowheader=None,
-                    linebetweenrows=None, linebelow=None,
-                    headerrow=DataRow("", "\t", ""),
-                    datarow=DataRow("", "\t", ""),
-                    padding=0, with_header_hide=None,
-        ),
-    "textile":
-        TableFormat(lineabove=None, linebelowheader=None,
-                    linebetweenrows=None, linebelow=None,
-                    headerrow=DataRow("|_. ", "|_.", "|"),
-                    datarow=_textile_row_with_attrs,
-                    padding=1, with_header_hide=None,
-        ),
+        linebelowheader=Line("|-", "", "", ""),
+        linebetweenrows=Line("|-", "", "", ""),
+        linebelow=Line("|}", "", "", ""),
+        headerrow=partial(_mediawiki_row_with_attrs, "!"),
+        datarow=partial(_mediawiki_row_with_attrs, "|"),
+        padding=0,
+        with_header_hide=None,
+    ),
+    "moinmoin": TableFormat(
+        lineabove=None,
+        linebelowheader=None,
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=partial(_moin_row_with_attrs, "||", header="'''"),
+        datarow=partial(_moin_row_with_attrs, "||"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "youtrack": TableFormat(
+        lineabove=None,
+        linebelowheader=None,
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("|| ", " || ", " || "),
+        datarow=DataRow("| ", " | ", " |"),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "html": TableFormat(
+        lineabove=_html_begin_table_without_header,
+        linebelowheader="",
+        linebetweenrows=None,
+        linebelow=Line("</tbody>\n</table>", "", "", ""),
+        headerrow=partial(_html_row_with_attrs, "th", False),
+        datarow=partial(_html_row_with_attrs, "td", False),
+        padding=0,
+        with_header_hide=["lineabove"],
+    ),
+    "unsafehtml": TableFormat(
+        lineabove=_html_begin_table_without_header,
+        linebelowheader="",
+        linebetweenrows=None,
+        linebelow=Line("</tbody>\n</table>", "", "", ""),
+        headerrow=partial(_html_row_with_attrs, "th", True),
+        datarow=partial(_html_row_with_attrs, "td", True),
+        padding=0,
+        with_header_hide=["lineabove"],
+    ),
+    "latex": TableFormat(
+        lineabove=_latex_line_begin_tabular,
+        linebelowheader=Line("\\hline", "", "", ""),
+        linebetweenrows=None,
+        linebelow=Line("\\hline\n\\end{tabular}", "", "", ""),
+        headerrow=_latex_row,
+        datarow=_latex_row,
+        padding=1,
+        with_header_hide=None,
+    ),
+    "latex_raw": TableFormat(
+        lineabove=_latex_line_begin_tabular,
+        linebelowheader=Line("\\hline", "", "", ""),
+        linebetweenrows=None,
+        linebelow=Line("\\hline\n\\end{tabular}", "", "", ""),
+        headerrow=partial(_latex_row, escrules={}),
+        datarow=partial(_latex_row, escrules={}),
+        padding=1,
+        with_header_hide=None,
+    ),
+    "latex_booktabs": TableFormat(
+        lineabove=partial(_latex_line_begin_tabular, booktabs=True),
+        linebelowheader=Line("\\midrule", "", "", ""),
+        linebetweenrows=None,
+        linebelow=Line("\\bottomrule\n\\end{tabular}", "", "", ""),
+        headerrow=_latex_row,
+        datarow=_latex_row,
+        padding=1,
+        with_header_hide=None,
+    ),
+    "latex_longtable": TableFormat(
+        lineabove=partial(_latex_line_begin_tabular, longtable=True),
+        linebelowheader=Line("\\hline\n\\endhead", "", "", ""),
+        linebetweenrows=None,
+        linebelow=Line("\\hline\n\\end{longtable}", "", "", ""),
+        headerrow=_latex_row,
+        datarow=_latex_row,
+        padding=1,
+        with_header_hide=None,
+    ),
+    "tsv": TableFormat(
+        lineabove=None,
+        linebelowheader=None,
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("", "\t", ""),
+        datarow=DataRow("", "\t", ""),
+        padding=0,
+        with_header_hide=None,
+    ),
+    "textile": TableFormat(
+        lineabove=None,
+        linebelowheader=None,
+        linebetweenrows=None,
+        linebelow=None,
+        headerrow=DataRow("|_. ", "|_.", "|"),
+        datarow=_textile_row_with_attrs,
+        padding=1,
+        with_header_hide=None,
+    ),
 }
 
 
-tabulate_formats = sorted(_table_formats.keys())
+tabulate_formats = list(sorted(_table_formats.keys()))
 
 # The table formats for which multiline cells will be folded into subsequent
 # table rows. The key is the original format specified at the API. The value is
 # the format that will be used to represent the original format.
 multiline_formats = {
-        "plain": "plain",
-        "simple": "simple",
-        "grid": "grid",
-        "fancy_grid": "fancy_grid",
-        "pipe": "pipe",
-        "orgtbl": "orgtbl",
-        "jira": "jira",
-        "presto": "presto",
-        "psql": "psql",
-        "rst": "rst",
+    "plain": "plain",
+    "simple": "simple",
+    "grid": "grid",
+    "fancy_grid": "fancy_grid",
+    "pipe": "pipe",
+    "orgtbl": "orgtbl",
+    "jira": "jira",
+    "presto": "presto",
+    "pretty": "pretty",
+    "psql": "psql",
+    "rst": "rst",
 }
 
 # TODO: Add multiline support for the remaining table formats:
@@ -429,9 +556,16 @@ multiline_formats = {
 #       - textile: Replace \n with <br/> (must be well-formed XML)
 
 _multiline_codes = re.compile(r"\r|\n|\r\n")
-_multiline_codes_bytes = re.compile(rb"\r|\n|\r\n")
-_invisible_codes = re.compile(r"\x1b\[\d+[;\d]*m|\x1b\[\d*\;\d*\;\d*m")  # ANSI color codes
-_invisible_codes_bytes = re.compile(rb"\x1b\[\d+[;\d]*m|\x1b\[\d*\;\d*\;\d*m")  # ANSI color codes
+_multiline_codes_bytes = re.compile(b"\r|\n|\r\n")
+_invisible_codes = re.compile(
+    r"\x1b\[\d+[;\d]*m|\x1b\[\d*\;\d*\;\d*m|\x1b\]8;;(.*?)\x1b\\"
+)  # ANSI color codes
+_invisible_codes_bytes = re.compile(
+    b"\x1b\\[\\d+\\[;\\d]*m|\x1b\\[\\d*;\\d*;\\d*m|\\x1b\\]8;;(.*?)\\x1b\\\\"
+)  # ANSI color codes
+_invisible_codes_link = re.compile(
+    r"\x1B]8;[a-zA-Z0-9:]*;[^\x1B]+\x1B\\([^\x1b]+)\x1B]8;;\x1B\\"
+)  # Terminal hyperlinks
 
 
 def simple_separated_format(separator):
@@ -442,15 +576,21 @@ def simple_separated_format(separator):
     True
 
     """
-    return TableFormat(None, None, None, None,
-                       headerrow=DataRow('', separator, ''),
-                       datarow=DataRow('', separator, ''),
-                       padding=0, with_header_hide=None)
+    return TableFormat(
+        None,
+        None,
+        None,
+        None,
+        headerrow=DataRow("", separator, ""),
+        datarow=DataRow("", separator, ""),
+        padding=0,
+        with_header_hide=None,
+    )
 
 
 def _isconvertible(conv, string):
     try:
-        n = conv(string)
+        conv(string)
         return True
     except (ValueError, TypeError):
         return False
@@ -472,8 +612,9 @@ def _isnumber(string):
     if not _isconvertible(float, string):
         return False
     elif isinstance(string, (_text_type, _binary_type)) and (
-            math.isinf(float(string)) or math.isnan(float(string))):
-        return string.lower() in ['inf', '-inf', 'nan']
+        math.isinf(float(string)) or math.isnan(float(string))
+    ):
+        return string.lower() in ["inf", "-inf", "nan"]
     return True
 
 
@@ -484,10 +625,11 @@ def _isint(string, inttype=int):
     >>> _isint("123.45")
     False
     """
-    return type(string) is inttype or\
-           (isinstance(string, _binary_type) or isinstance(string, _text_type))\
-            and\
-            _isconvertible(inttype, string)
+    return (
+        type(string) is inttype
+        or (isinstance(string, _binary_type) or isinstance(string, _text_type))
+        and _isconvertible(inttype, string)
+    )
 
 
 def _isbool(string):
@@ -499,10 +641,9 @@ def _isbool(string):
     >>> _isbool(1)
     False
     """
-    return type(string) is _bool_type or\
-           (isinstance(string, (_binary_type, _text_type))\
-            and\
-            string in ("True", "False"))
+    return type(string) is _bool_type or (
+        isinstance(string, (_binary_type, _text_type)) and string in ("True", "False")
+    )
 
 
 def _type(string, has_invisible=True, numparse=True):
@@ -521,8 +662,9 @@ def _type(string, has_invisible=True, numparse=True):
 
     """
 
-    if has_invisible and \
-       (isinstance(string, _text_type) or isinstance(string, _binary_type)):
+    if has_invisible and (
+        isinstance(string, _text_type) or isinstance(string, _binary_type)
+    ):
         string = _strip_invisible(string)
 
     if string is None:
@@ -608,9 +750,15 @@ def _padnone(ignore_width, s):
 
 
 def _strip_invisible(s):
-    "Remove invisible ANSI color codes."
+    r"""Remove invisible ANSI color codes.
+
+    >>> str(_strip_invisible('\x1B]8;;https://example.com\x1B\\This is a link\x1B]8;;\x1B\\'))
+    'This is a link'
+
+    """
     if isinstance(s, _text_type):
-        return re.sub(_invisible_codes, "", s)
+        links_removed = re.sub(_invisible_codes_link, "\\1", s)
+        return re.sub(_invisible_codes, "", links_removed)
     else:  # a bytestring
         return re.sub(_invisible_codes_bytes, "", s)
 
@@ -649,12 +797,12 @@ def _choose_width_fn(has_invisible, enable_widechars, is_multiline):
     """Return a function to calculate visible cell width."""
     if has_invisible:
         line_width_fn = _visible_width
-    elif enable_widechars: # optional wide-character support if available
+    elif enable_widechars:  # optional wide-character support if available
         line_width_fn = wcwidth.wcswidth
     else:
         line_width_fn = len
     if is_multiline:
-        width_fn = lambda s: _multiline_width(s, line_width_fn)
+        width_fn = lambda s: _multiline_width(s, line_width_fn)  # noqa
     else:
         width_fn = line_width_fn
     return width_fn
@@ -675,8 +823,7 @@ def _align_column_choose_padfn(strings, alignment, has_invisible):
         else:
             decimals = [_afterpoint(s) for s in strings]
         maxdecimals = max(decimals)
-        strings = [s + (maxdecimals - decs) * " "
-                   for s, decs in zip(strings, decimals)]
+        strings = [s + (maxdecimals - decs) * " " for s, decs in zip(strings, decimals)]
         padfn = _padleft
     elif not alignment:
         padfn = _padnone
@@ -687,28 +834,72 @@ def _align_column_choose_padfn(strings, alignment, has_invisible):
     return strings, padfn
 
 
-def _align_column(strings, alignment, minwidth=0,
-                  has_invisible=True, enable_widechars=False, is_multiline=False):
+def _align_column_choose_width_fn(has_invisible, enable_widechars, is_multiline):
+    if has_invisible:
+        line_width_fn = _visible_width
+    elif enable_widechars:  # optional wide-character support if available
+        line_width_fn = wcwidth.wcswidth
+    else:
+        line_width_fn = len
+    if is_multiline:
+        width_fn = lambda s: _align_column_multiline_width(s, line_width_fn)  # noqa
+    else:
+        width_fn = line_width_fn
+    return width_fn
+
+
+def _align_column_multiline_width(multiline_s, line_width_fn=len):
+    """Visible width of a potentially multiline content."""
+    return list(map(line_width_fn, re.split("[\r\n]", multiline_s)))
+
+
+def _flat_list(nested_list):
+    ret = []
+    for item in nested_list:
+        if isinstance(item, list):
+            for subitem in item:
+                ret.append(subitem)
+        else:
+            ret.append(item)
+    return ret
+
+
+def _align_column(
+    strings,
+    alignment,
+    minwidth=0,
+    has_invisible=True,
+    enable_widechars=False,
+    is_multiline=False,
+):
     """[string] -> [padded_string]"""
     strings, padfn = _align_column_choose_padfn(strings, alignment, has_invisible)
-    width_fn = _choose_width_fn(has_invisible, enable_widechars, is_multiline)
+    width_fn = _align_column_choose_width_fn(
+        has_invisible, enable_widechars, is_multiline
+    )
 
     s_widths = list(map(width_fn, strings))
-    maxwidth = max(max(s_widths), minwidth)
+    maxwidth = max(max(_flat_list(s_widths)), minwidth)
     # TODO: refactor column alignment in single-line and multiline modes
     if is_multiline:
         if not enable_widechars and not has_invisible:
             padded_strings = [
                 "\n".join([padfn(maxwidth, s) for s in ms.splitlines()])
-                for ms in strings]
+                for ms in strings
+            ]
         else:
             # enable wide-character width corrections
-            s_lens = [max((len(s) for s in re.split("[\r\n]", ms))) for ms in strings]
-            visible_widths = [maxwidth - (w - l) for w, l in zip(s_widths, s_lens)]
+            s_lens = [[len(s) for s in re.split("[\r\n]", ms)] for ms in strings]
+            visible_widths = [
+                [maxwidth - (w - l) for w, l in zip(mw, ml)]
+                for mw, ml in zip(s_widths, s_lens)
+            ]
             # wcswidth and _visible_width don't count invisible characters;
             # padfn doesn't need to apply another correction
-            padded_strings = ["\n".join([padfn(w, s) for s in (ms.splitlines() or ms)])
-                              for ms, w in zip(strings, visible_widths)]
+            padded_strings = [
+                "\n".join([padfn(w, s) for s, w in zip((ms.splitlines() or ms), mw)])
+                for ms, mw in zip(strings, visible_widths)
+            ]
     else:  # single-line cell values
         if not enable_widechars and not has_invisible:
             padded_strings = [padfn(maxwidth, s) for s in strings]
@@ -723,8 +914,22 @@ def _align_column(strings, alignment, minwidth=0,
 
 
 def _more_generic(type1, type2):
-    types = { _none_type: 0, _bool_type: 1, int: 2, float: 3, _binary_type: 4, _text_type: 5 }
-    invtypes = { 5: _text_type, 4: _binary_type, 3: float, 2: int, 1: _bool_type, 0: _none_type }
+    types = {
+        _none_type: 0,
+        _bool_type: 1,
+        int: 2,
+        float: 3,
+        _binary_type: 4,
+        _text_type: 5,
+    }
+    invtypes = {
+        5: _text_type,
+        4: _binary_type,
+        3: float,
+        2: int,
+        1: _bool_type,
+        0: _none_type,
+    }
     moregeneric = max(types.get(type1, 5), types.get(type2, 5))
     return invtypes[moregeneric]
 
@@ -751,12 +956,12 @@ def _column_type(strings, has_invisible=True, numparse=True):
     True
 
     """
-    types = [_type(s, has_invisible, numparse) for s in strings ]
+    types = [_type(s, has_invisible, numparse) for s in strings]
     return reduce(_more_generic, types, _bool_type)
 
 
 def _format(val, valtype, floatfmt, missingval="", has_invisible=True):
-    """Format a value accoding to its type.
+    """Format a value according to its type.
 
     Unicode is supported:
 
@@ -766,7 +971,7 @@ def _format(val, valtype, floatfmt, missingval="", has_invisible=True):
         tabulate(tbl, headers=hrow) == good_result
     True
 
-    """
+    """  # noqa
     if val is None:
         return missingval
 
@@ -778,7 +983,9 @@ def _format(val, valtype, floatfmt, missingval="", has_invisible=True):
         except TypeError:
             return _text_type(val)
     elif valtype is float:
-        is_a_colored_number = has_invisible and isinstance(val, (_text_type, _binary_type))
+        is_a_colored_number = has_invisible and isinstance(
+            val, (_text_type, _binary_type)
+        )
         if is_a_colored_number:
             raw_val = _strip_invisible(val)
             formatted_val = format(float(raw_val), floatfmt)
@@ -789,11 +996,15 @@ def _format(val, valtype, floatfmt, missingval="", has_invisible=True):
         return "{0}".format(val)
 
 
-def _align_header(header, alignment, width, visible_width, is_multiline=False, width_fn=None):
+def _align_header(
+    header, alignment, width, visible_width, is_multiline=False, width_fn=None
+):
     "Pad string header to width chars given known visible_width of the header."
     if is_multiline:
         header_lines = re.split(_multiline_codes, header)
-        padded_lines = [_align_header(h, alignment, width, width_fn(h)) for h in header_lines]
+        padded_lines = [
+            _align_header(h, alignment, width, width_fn(h)) for h in header_lines
+        ]
         return "\n".join(padded_lines)
     # else: not multiline
     ninvisible = len(header) - visible_width
@@ -813,10 +1024,10 @@ def _prepend_row_index(rows, index):
     if index is None or index is False:
         return rows
     if len(index) != len(rows):
-        print('index=', index)
-        print('rows=', rows)
-        raise ValueError('index must be as long as the number of data rows')
-    rows = [[v]+list(row) for v,row in zip(index, rows)]
+        print("index=", index)
+        print("rows=", rows)
+        raise ValueError("index must be as long as the number of data rows")
+    rows = [[v] + list(row) for v, row in zip(index, rows)]
     return rows
 
 
@@ -861,9 +1072,9 @@ def _normalize_tabular_data(tabular_data, headers, showindex="default"):
 
     try:
         bool(headers)
-        is_headers2bool_broken = False
-    except ValueError: # numpy.ndarray, pandas.core.index.Index, ...
-        is_headers2bool_broken = True
+        is_headers2bool_broken = False  # noqa
+    except ValueError:  # numpy.ndarray, pandas.core.index.Index, ...
+        is_headers2bool_broken = True  # noqa
         headers = list(headers)
 
     index = None
@@ -872,11 +1083,16 @@ def _normalize_tabular_data(tabular_data, headers, showindex="default"):
         if hasattr(tabular_data.values, "__call__"):
             # likely a conventional dict
             keys = tabular_data.keys()
-            rows = list(zip_longest(*tabular_data.values()))  # columns have to be transposed
+            rows = list(
+                zip_longest(*tabular_data.values())
+            )  # columns have to be transposed
         elif hasattr(tabular_data, "index"):
             # values is a property, has .index => it's likely a pandas.DataFrame (pandas 0.11.0)
             keys = list(tabular_data)
-            if tabular_data.index.name is not None:
+            if (
+                showindex in ["default", "always", True]
+                and tabular_data.index.name is not None
+            ):
                 if isinstance(tabular_data.index.name, list):
                     keys[:0] = tabular_data.index.name
                 else:
@@ -889,30 +1105,33 @@ def _normalize_tabular_data(tabular_data, headers, showindex="default"):
             raise ValueError("tabular data doesn't appear to be a dict or a DataFrame")
 
         if headers == "keys":
-            headers = list(map(_text_type,keys))  # headers should be strings
+            headers = list(map(_text_type, keys))  # headers should be strings
 
     else:  # it's a usual an iterable of iterables, or a NumPy array
         rows = list(tabular_data)
 
-        if (headers == "keys" and not rows):
+        if headers == "keys" and not rows:
             # an empty table (issue #81)
             headers = []
-        elif (headers == "keys" and
-            hasattr(tabular_data, "dtype") and
-            getattr(tabular_data.dtype, "names")):
+        elif (
+            headers == "keys"
+            and hasattr(tabular_data, "dtype")
+            and getattr(tabular_data.dtype, "names")
+        ):
             # numpy record array
             headers = tabular_data.dtype.names
-        elif (headers == "keys"
-              and len(rows) > 0
-              and isinstance(rows[0], tuple)
-              and hasattr(rows[0], "_fields")):
+        elif (
+            headers == "keys"
+            and len(rows) > 0
+            and isinstance(rows[0], tuple)
+            and hasattr(rows[0], "_fields")
+        ):
             # namedtuple
             headers = list(map(_text_type, rows[0]._fields))
-        elif (len(rows) > 0
-              and isinstance(rows[0], dict)):
-            # dict or OrderedDict
-            uniq_keys = set() # implements hashed lookup
-            keys = [] # storage for set
+        elif len(rows) > 0 and hasattr(rows[0], "keys") and hasattr(rows[0], "values"):
+            # dict-like object
+            uniq_keys = set()  # implements hashed lookup
+            keys = []  # storage for set
             if headers == "firstrow":
                 firstdict = rows[0] if len(rows) > 0 else {}
                 keys.extend(firstdict.keys())
@@ -920,11 +1139,11 @@ def _normalize_tabular_data(tabular_data, headers, showindex="default"):
                 rows = rows[1:]
             for row in rows:
                 for k in row.keys():
-                    #Save unique items in input order
+                    # Save unique items in input order
                     if k not in uniq_keys:
                         keys.append(k)
                         uniq_keys.add(k)
-            if headers == 'keys':
+            if headers == "keys":
                 headers = keys
             elif isinstance(headers, dict):
                 # a dict of headers for a list of dicts
@@ -937,13 +1156,17 @@ def _normalize_tabular_data(tabular_data, headers, showindex="default"):
                 else:
                     headers = []
             elif headers:
-                raise ValueError('headers for a list of dicts is not a dict or a keyword')
+                raise ValueError(
+                    "headers for a list of dicts is not a dict or a keyword"
+                )
             rows = [[row.get(k) for k in keys] for row in rows]
 
-        elif (headers == "keys"
-              and hasattr(tabular_data, "description")
-              and hasattr(tabular_data, "fetchone")
-              and hasattr(tabular_data, "rowcount")):
+        elif (
+            headers == "keys"
+            and hasattr(tabular_data, "description")
+            and hasattr(tabular_data, "fetchone")
+            and hasattr(tabular_data, "rowcount")
+        ):
             # Python Database API cursor object (PEP 0249)
             # print tabulate(cursor, headers='keys')
             headers = [column[0] for column in tabular_data.description]
@@ -959,11 +1182,11 @@ def _normalize_tabular_data(tabular_data, headers, showindex="default"):
             index = index[1:]
         else:
             headers = rows[0]
-        headers = list(map(_text_type, headers)) # headers should be strings
+        headers = list(map(_text_type, headers))  # headers should be strings
         rows = rows[1:]
 
-    headers = list(map(_text_type,headers))
-    rows = list(map(list,rows))
+    headers = list(map(_text_type, headers))
+    rows = list(map(list, rows))
 
     # add or remove an index column
     showindex_is_a_str = type(showindex) in [_text_type, _binary_type]
@@ -980,19 +1203,26 @@ def _normalize_tabular_data(tabular_data, headers, showindex="default"):
 
     # pad with empty headers for initial columns if necessary
     if headers and len(rows) > 0:
-       nhs = len(headers)
-       ncols = len(rows[0])
-       if nhs < ncols:
-           headers = [""]*(ncols - nhs) + headers
+        nhs = len(headers)
+        ncols = len(rows[0])
+        if nhs < ncols:
+            headers = [""] * (ncols - nhs) + headers
 
     return rows, headers
 
 
-
-def tabulate(tabular_data, headers=(), tablefmt="simple",
-             floatfmt=_DEFAULT_FLOATFMT, numalign="decimal", stralign="left",
-             missingval=_DEFAULT_MISSINGVAL, showindex="default", disable_numparse=False,
-             colalign=None):
+def tabulate(
+    tabular_data,
+    headers=(),
+    tablefmt="simple",
+    floatfmt=_DEFAULT_FLOATFMT,
+    numalign=_DEFAULT_ALIGN,
+    stralign=_DEFAULT_ALIGN,
+    missingval=_DEFAULT_MISSINGVAL,
+    showindex="default",
+    disable_numparse=False,
+    colalign=None,
+):
     """Format a fixed width table for pretty printing.
 
     >>> print(tabulate([[1, 2.34], [-56, "8.999"], ["2", "10001"]]))
@@ -1077,8 +1307,8 @@ def tabulate(tabular_data, headers=(), tablefmt="simple",
 
     Various plain-text table formats (`tablefmt`) are supported:
     'plain', 'simple', 'grid', 'pipe', 'orgtbl', 'rst', 'mediawiki',
-    'latex', 'latex_raw' and 'latex_booktabs'. Variable `tabulate_formats`
-    contains the list of currently supported formats.
+    'latex', 'latex_raw', 'latex_booktabs', 'latex_longtable' and tsv.
+    Variable `tabulate_formats`contains the list of currently supported formats.
 
     "plain" format doesn't use any pseudographics to draw tables,
     it separates columns with a double space:
@@ -1214,7 +1444,10 @@ def tabulate(tabular_data, headers=(), tablefmt="simple",
     | eggs      || align="right"|  451
     |}
 
-    "html" produces HTML markup:
+    "html" produces HTML markup as an html.escape'd str
+    with a ._repr_html_ method so that Jupyter Lab and Notebook display the HTML
+    and a .str property so that the raw HTML remains accessible
+    the unsafehtml table format can be used if an unescaped HTML format is required:
 
     >>> print(tabulate([["strings", "numbers"], ["spam", 41.9999], ["eggs", "451.0"]],
     ...                headers="firstrow", tablefmt="html"))
@@ -1261,6 +1494,18 @@ def tabulate(tabular_data, headers=(), tablefmt="simple",
     \\bottomrule
     \\end{tabular}
 
+    "latex_longtable" produces a tabular environment that can stretch along
+    multiple pages, using the longtable package for LaTeX.
+
+    >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]], tablefmt="latex_longtable"))
+    \\begin{longtable}{lr}
+    \\hline
+     spam &  41.9999 \\\\
+     eggs & 451      \\\\
+    \\hline
+    \\end{longtable}
+
+
     Number parsing
     --------------
     By default, anything which can be parsed as a number is a number.
@@ -1275,10 +1520,12 @@ def tabulate(tabular_data, headers=(), tablefmt="simple",
     e.g. `disable_numparse=[0, 2]` would disable number parsing only on the
     first and third columns.
     """
+
     if tabular_data is None:
         tabular_data = []
     list_of_lists, headers = _normalize_tabular_data(
-            tabular_data, headers, showindex=showindex)
+        tabular_data, headers, showindex=showindex
+    )
 
     fmt = tablefmt
     if not isinstance(fmt, TableFormat):
@@ -1286,17 +1533,39 @@ def tabulate(tabular_data, headers=(), tablefmt="simple",
 
     # empty values in the first column of RST tables should be escaped (issue #82)
     # "" should be escaped as "\\ " or ".."
-    if tablefmt == 'rst':
+    if tablefmt == "rst":
         list_of_lists, headers = _rst_escape_first_column(list_of_lists, headers)
+
+    # PrettyTable formatting does not use any extra padding.
+    # Numbers are not parsed and are treated the same as strings for alignment.
+    # Check if pretty is the format being used and override the defaults so it
+    # does not impact other formats.
+    min_padding = MIN_PADDING
+    if tablefmt == "pretty":
+        min_padding = 0
+        disable_numparse = True
+        numalign = "center" if numalign == _DEFAULT_ALIGN else numalign
+        stralign = "center" if stralign == _DEFAULT_ALIGN else stralign
+    else:
+        numalign = "decimal" if numalign == _DEFAULT_ALIGN else numalign
+        stralign = "left" if stralign == _DEFAULT_ALIGN else stralign
 
     # optimization: look for ANSI control codes once,
     # enable smart width functions only if a control code is found
-    plain_text = '\t'.join(['\t'.join(map(_text_type, headers))] + \
-                            ['\t'.join(map(_text_type, row)) for row in list_of_lists])
+    plain_text = "\t".join(
+        ["\t".join(map(_text_type, headers))]
+        + ["\t".join(map(_text_type, row)) for row in list_of_lists]
+    )
 
     has_invisible = re.search(_invisible_codes, plain_text)
+    if not has_invisible:
+        has_invisible = re.search(_invisible_codes_link, plain_text)
     enable_widechars = wcwidth is not None and WIDE_CHARS_MODE
-    if tablefmt in multiline_formats and _is_multiline(plain_text):
+    if (
+        not isinstance(tablefmt, TableFormat)
+        and tablefmt in multiline_formats
+        and _is_multiline(plain_text)
+    ):
         tablefmt = multiline_formats.get(tablefmt, tablefmt)
         is_multiline = True
     else:
@@ -1306,25 +1575,28 @@ def tabulate(tabular_data, headers=(), tablefmt="simple",
     # format rows and columns, convert numeric values to strings
     cols = list(zip_longest(*list_of_lists))
     numparses = _expand_numparse(disable_numparse, len(cols))
-    coltypes = [_column_type(col, numparse=np) for col, np in
-                zip(cols, numparses)]
-    if isinstance(floatfmt, str): #old version
-        float_formats = len(cols) * [floatfmt] # just duplicate the string to use in each column
-    else: # if floatfmt is list, tuple etc we have one per column
+    coltypes = [_column_type(col, numparse=np) for col, np in zip(cols, numparses)]
+    if isinstance(floatfmt, str):  # old version
+        float_formats = len(cols) * [
+            floatfmt
+        ]  # just duplicate the string to use in each column
+    else:  # if floatfmt is list, tuple etc we have one per column
         float_formats = list(floatfmt)
         if len(float_formats) < len(cols):
-            float_formats.extend( (len(cols)-len(float_formats)) * [_DEFAULT_FLOATFMT] )
+            float_formats.extend((len(cols) - len(float_formats)) * [_DEFAULT_FLOATFMT])
     if isinstance(missingval, str):
         missing_vals = len(cols) * [missingval]
     else:
         missing_vals = list(missingval)
         if len(missing_vals) < len(cols):
-            missing_vals.extend( (len(cols)-len(missing_vals)) * [_DEFAULT_MISSINGVAL] )
-    cols = [[_format(v, ct, fl_fmt, miss_v, has_invisible) for v in c]
-             for c, ct, fl_fmt, miss_v in zip(cols, coltypes, float_formats, missing_vals)]
+            missing_vals.extend((len(cols) - len(missing_vals)) * [_DEFAULT_MISSINGVAL])
+    cols = [
+        [_format(v, ct, fl_fmt, miss_v, has_invisible) for v in c]
+        for c, ct, fl_fmt, miss_v in zip(cols, coltypes, float_formats, missing_vals)
+    ]
 
     # align columns
-    aligns = [numalign if ct in {int, float} else stralign for ct in coltypes]
+    aligns = [numalign if ct in [int, float] else stralign for ct in coltypes]
     if colalign is not None:
         assert isinstance(colalign, Iterable)
         for idx, align in enumerate(colalign):
@@ -1340,7 +1612,7 @@ def tabulate(tabular_data, headers=(), tablefmt="simple",
 
     if headers:
         # align headers and add headers
-        t_cols = cols or [['']] * len(headers)
+        t_cols = cols or [[""]] * len(headers)
         t_aligns = aligns or [stralign] * len(headers)
         minwidths = [
             max(minw, max(width_fn(cl) for cl in c))
@@ -1415,12 +1687,16 @@ def _append_basic_row(lines, padded_cells, colwidths, colaligns, rowfmt):
     return lines
 
 
-def _append_multiline_row(lines, padded_multiline_cells, padded_widths, colaligns, rowfmt, pad):
-    colwidths = [w - 2*pad for w in padded_widths]
+def _append_multiline_row(
+    lines, padded_multiline_cells, padded_widths, colaligns, rowfmt, pad
+):
+    colwidths = [w - 2 * pad for w in padded_widths]
     cells_lines = [c.splitlines() for c in padded_multiline_cells]
-    nlines = max(map(len, cells_lines)) # number of lines in the row
+    nlines = max(map(len, cells_lines))  # number of lines in the row
     # vertically pad cells where some lines are missing
-    cells_lines = [(cl + [' '*w]*(nlines - len(cl))) for cl, w in zip(cells_lines, colwidths)]
+    cells_lines = [
+        (cl + [" " * w] * (nlines - len(cl))) for cl, w in zip(cells_lines, colwidths)
+    ]
     lines_cells = [[cl[i] for cl in cells_lines] for i in range(nlines)]
     for ln in lines_cells:
         padded_ln = _pad_row(ln, pad)
@@ -1435,14 +1711,27 @@ def _build_line(colwidths, colaligns, linefmt):
     if hasattr(linefmt, "__call__"):
         return linefmt(colwidths, colaligns)
     else:
-        begin, fill, sep,  end = linefmt
-        cells = [fill*w for w in colwidths]
+        begin, fill, sep, end = linefmt
+        cells = [fill * w for w in colwidths]
         return _build_simple_row(cells, (begin, sep, end))
 
 
 def _append_line(lines, colwidths, colaligns, linefmt):
     lines.append(_build_line(colwidths, colaligns, linefmt))
     return lines
+
+
+class JupyterHTMLStr(str):
+    """Wrap the string with a _repr_html_ method so that Jupyter
+    displays the HTML table"""
+
+    def _repr_html_(self):
+        return self
+
+    @property
+    def str(self):
+        """add a .str property so that the raw string is still accessible"""
+        return self
 
 
 def _format_table(fmt, headers, rows, colwidths, colaligns, is_multiline):
@@ -1459,7 +1748,7 @@ def _format_table(fmt, headers, rows, colwidths, colaligns, is_multiline):
         padded_widths = [(w + 2*pad) for w in colwidths]
 
     if is_multiline:
-        pad_row = lambda row, _: row  # do it later, in _append_multiline_row
+        pad_row = lambda row, _: row  # noqa do it later, in _append_multiline_row
         append_row = partial(_append_multiline_row, pad=pad)
     else:
         pad_row = _pad_row
@@ -1498,6 +1787,10 @@ def _format_table(fmt, headers, rows, colwidths, colaligns, is_multiline):
         _append_line(lines, padded_widths, colaligns, fmt.linebelow)
 
     if headers or rows:
-        return "\n".join(lines)
-    else: # a completely empty table
+        output = "\n".join(lines)
+        if fmt.lineabove == _html_begin_table_without_header:
+            return JupyterHTMLStr(output)
+        else:
+            return output
+    else:  # a completely empty table
         return ""
