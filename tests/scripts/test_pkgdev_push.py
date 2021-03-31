@@ -38,8 +38,8 @@ class TestPkgdevPushParseArgs:
         """Unknown arguments for ``pkgdev push`` are passed to ``git push``."""
         git_repo = make_git_repo(repo.location)
         with chdir(git_repo.path):
-            options, _ = tool.parse_args(['push', 'origin', 'master'])
-            assert options.push_args == ['origin', 'master']
+            options, _ = tool.parse_args(['push', 'origin', 'main'])
+            assert options.push_args == ['origin', 'main']
             options, _ = tool.parse_args(['push', '-n', '--signed'])
             assert '--dry-run' in options.push_args
             assert '--signed' in options.push_args
@@ -82,8 +82,8 @@ class TestPkgdevPush:
         self.child_git_repo.add_all('cat/pkg-0')
         # set up parent repo as origin and push to it
         self.child_git_repo.run(['git', 'remote', 'add', 'origin', self.parent_git_repo.path])
-        self.child_git_repo.run(['git', 'push', '-u', 'origin', 'master'])
-        self.child_git_repo.run(['git', 'remote', 'set-head', 'origin', 'master'])
+        self.child_git_repo.run(['git', 'push', '-u', 'origin', 'main'])
+        self.child_git_repo.run(['git', 'remote', 'set-head', 'origin', 'main'])
 
     def test_push(self, capsys):
         self.child_repo.create_ebuild('cat/pkg-1')

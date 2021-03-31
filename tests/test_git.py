@@ -24,4 +24,4 @@ class TestGitRun:
     def test_successful_run(self, git_repo):
         with chdir(git_repo.path):
             p = git.run('rev-parse', '--abbrev-ref', 'HEAD', stdout=subprocess.PIPE)
-        assert p.stdout.strip() == 'master'
+        assert p.stdout.strip() == 'main'
