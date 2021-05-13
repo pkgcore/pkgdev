@@ -1,0 +1,138 @@
+# bash completion for pkgdev
+
+_pkgdev() {
+    local i=1 cmd cur prev words cword split
+    _init_completion || return
+
+    local subcommands="
+        commit
+        manifest
+        mask
+        push
+        showkw
+    "
+
+    local base_options="
+        -h --help
+        --version
+        --debug
+        -q --quiet
+        -v --verbose
+        --color
+    "
+
+    local boolean_options="
+        true
+        false
+    "
+
+    _list_repo_atoms() {
+        builtin cd "$(git rev-parse --show-toplevel)" || return
+        if [[ $cur == */* ]]; then
+            compgen -W "$(compgen -G "${cur}*" )" -- "${cur}"
+        else
+            compgen -W "$(compgen -G "${cur}*" -S / )" -- "${cur}"
+        fi
+    }
+
+    if [[ ${prev} = "--color" ]]; then
+        COMPREPLY=($(compgen -W "${boolean_options}" -- "${cur}"))
+        return
+    fi
+    COMPREPLY=($(compgen -W "${base_options}" -- "${cur}"))
+
+    # find the subcommand
+    while [[ "${i}" -lt "${COMP_CWORD}" ]]; do
+        local s="${COMP_WORDS[i]}"
+        case "${s}" in
+            -*) ;;
+            *)
+                cmd="${s}"
+                break
+                ;;
+        esac
+        ((i++))
+    done
+
+    if [[ "${i}" -eq "${COMP_CWORD}" ]]; then
+        COMPREPLY+=($(compgen -W "${subcommands}" -- "${cur}"))
+        return
+    fi
+
+    local subcmd_options
+    case "${cmd}" in
+        commit)
+            subcmd_options="
+                -b --bug
+                -c --closes
+                -T --tag
+                -n --dry-run
+                -s --scan
+                -A --ask
+                --mangle
+                -m --message
+                -M --message-template
+                -u --update
+                -a --all
+            "
+
+            case "${prev}" in
+                -[bcTm] | --bug | --closes | --tag | --message)
+                    COMPREPLY=()
+                    ;;
+                -M | --message-template)
+                    COMPREPLY=($(compgen -f -- "${cur}"))
+                    ;;
+                -s | --scan | --mangle)
+                    COMPREPLY=($(compgen -W "${boolean_options}" -- "${cur}"))
+                    ;;
+                *)
+                    COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+                    ;;
+            esac
+            ;;
+        manifest)
+            subcmd_options="
+                -f --force
+                -m --mirrors
+                -d --distdir
+            "
+
+            case "${prev}" in
+                -d | --distdir)
+                    COMPREPLY=($(compgen -d -- "${cur}"))
+                    ;;
+                *)
+                    COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+                    COMPREPLY+=($(_list_repo_atoms))
+                    ;;
+            esac
+            ;;
+        mask)
+            subcmd_options="
+                -r --rites
+            "
+
+            case "${prev}" in
+                -r | --rites)
+                    COMPREPLY=()
+                    ;;
+                *)
+                    COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+                    COMPREPLY+=($(_list_repo_atoms))
+                    ;;
+            esac
+            ;;
+        push)
+            subcmd_options="
+                -A --ask
+                -n --dry-run
+            "
+
+            COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+            ;;
+    esac
+}
+complete -F _pkgdev pkgdev
+
+# vim: set ft=bash sw=4 et sts=4 :
