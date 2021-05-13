@@ -16,6 +16,7 @@ setup(**dict(
     description='collection of tools for Gentoo development',
     url='https://github.com/pkgcore/pkgdev',
     data_files=list(chain(
+        pkgdist.data_mapping('share/bash-completion/completions', 'completion/bash'),
         pkgdist.data_mapping('share/zsh/site-functions', 'completion/zsh'),
     )),
     classifiers=[
