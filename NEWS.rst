@@ -2,6 +2,16 @@
 Release Notes
 =============
 
+pkgdev 0.1.4 (2021-05-25)
+-------------------------
+
+- pkgdev show: Analog to eshowkw from gentoolkit migrated from pkgcore's
+  pshowkw.
+
+- pkgdev manifest: Add -d/--distdir option for custom DISTDIR.
+
+- pkgdev mask: Change removal format to a 'tag: value' style.
+
 pkgdev 0.1.3 (2021-03-26)
 -------------------------
 
