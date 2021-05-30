@@ -27,6 +27,7 @@ case $state in
       manifest:'update package manifests'
       mask:'mask packages'
       push:'run QA checks on commits and push them'
+      showkw:'show package keywords'
     )
 
     _describe -t subcommands subcommand subcommands && ret=0
@@ -71,6 +72,19 @@ case $state in
           $base_options \
           {'(--ask)-A','(-A)--ask'}'[confirm pushing commits with QA errors]' \
           {'(--dry-run)-n','(-n)--dry-run'}'[pretend to push commits]' \
+          && ret=0
+        ;;
+      (showkw)
+        _arguments -C -A '-*' \
+          $base_options \
+          {'(--format)-f','(-f)--format'}'[keywords table format]' \
+          {'(--collapse)-c','(-c)--collapse'}'[show collapsed list of arches]' \
+          {'(--stable)-s','(-s)--stable'}'[show stable arches]' \
+          {'(--unstable)-u','(-u)--unstable'}'[show unstable arches]' \
+          {'(--only-unstable)-o','(-o)--only-unstable'}'[show arches that only have unstable keywords]' \
+          {'(--prefix)-p','(-p)--prefix'}'[show prefix and non-native arches]' \
+          {'(--arch)-a','(-a)--arch'}'[select arches to display]:arch' \
+          {'(--repo)-r','(-r)--repo'}'[repo to query]:repo' \
           && ret=0
         ;;
       (*)
