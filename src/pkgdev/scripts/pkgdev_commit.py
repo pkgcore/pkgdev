@@ -9,12 +9,14 @@ import tempfile
 import textwrap
 from collections import defaultdict, deque, UserDict
 from dataclasses import dataclass
+from functools import partial
 from itertools import chain
 
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import MalformedAtom
 from pkgcore.ebuild.atom import atom as atom_cls
-from pkgcore.ebuild.repository import UnconfiguredTree
+from pkgcore.ebuild.repository import UnconfiguredTree, tree
+from pkgcore.ebuild.repo_objs import RepoConfig
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
@@ -147,32 +149,21 @@ add_actions.add_argument(
     help='stage all changed/new/removed files')
 
 
-class _HistoricalRepo(UnconfiguredTree):
+class HistoricalRepo(UnconfiguredTree):
     """Repository of historical packages stored in a temporary directory."""
 
-    def __init__(self, repo):
-        self.__parent_repo = repo
-        self.__tmpdir = tempfile.TemporaryDirectory()
-        self.__created = False
-        repo_dir = self.__tmpdir.name
-
-        # set up some basic repo files so pkgcore doesn't complain
-        os.makedirs(pjoin(repo_dir, 'metadata'))
-        with open(pjoin(repo_dir, 'metadata', 'layout.conf'), 'w') as f:
-            f.write(f"masters = {' '.join(x.repo_id for x in repo.trees)}\n")
-        os.makedirs(pjoin(repo_dir, 'profiles'))
-        with open(pjoin(repo_dir, 'profiles', 'repo_name'), 'w') as f:
-            f.write(f'{repo.repo_id}-old\n')
-        super().__init__(repo_dir)
+    def __init__(self, parent_repo, tmpdir, *args, **kwargs):
+        self.__parent_repo = parent_repo
+        # cache tmpdir to delay cleanup until exit
+        self.__tmpdir = tmpdir
+        super().__init__(*args, **kwargs)
 
     def add_pkgs(self, pkgs):
         """Update the repo with a given sequence of packages."""
         self._populate(pkgs)
-        if self.__created:
-            # notify the repo object that new pkgs were added
-            for pkg in pkgs:
-                self.notify_add_package(pkg)
-        self.__created = True
+        # notify the repo object that new pkgs were added
+        for pkg in pkgs:
+            self.notify_add_package(pkg)
 
     def _populate(self, pkgs):
         """Populate the repo with a given sequence of historical packages."""
@@ -217,7 +208,20 @@ class ChangeSummary:
     @jit_attr
     def old_repo(self):
         """Create a repository of historical packages removed from git."""
-        return _HistoricalRepo(self.repo)
+        tmpdir = tempfile.TemporaryDirectory()
+        repo_dir = tmpdir.name
+
+        # set up some basic repo files so pkgcore doesn't complain
+        os.makedirs(pjoin(repo_dir, 'metadata'))
+        with open(pjoin(repo_dir, 'metadata', 'layout.conf'), 'w') as f:
+            f.write(f"masters = {' '.join(x.repo_id for x in self.repo.trees)}\n")
+        os.makedirs(pjoin(repo_dir, 'profiles'))
+        with open(pjoin(repo_dir, 'profiles', 'repo_name'), 'w') as f:
+            f.write(f'{self.repo.repo_id}-old\n')
+
+        repo_config = RepoConfig(repo_dir)
+        tree_cls = partial(HistoricalRepo, self.repo, tmpdir)
+        return tree(self.options.config, repo_config, tree_cls=tree_cls)
 
     def generate(self):
         """Generate summaries for the package changes."""
