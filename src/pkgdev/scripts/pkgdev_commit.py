@@ -400,23 +400,23 @@ class PkgSummary(ChangeSummary):
                         add[mo.group('name')] = mo.group('value')
 
                 watch_vars = {'HOMEPAGE', 'DESCRIPTION', 'LICENSE', 'SRC_URI'}
+                array_targets = {'PYTHON_COMPAT', 'LUA_COMPAT'}
+                string_targets = {'USE_RUBY'}
+                targets = array_targets | string_targets
+
                 updated_vars = drop.keys() & add.keys()
                 if updated := sorted(watch_vars & updated_vars):
                     return f"update {', '.join(updated)}"
-                elif 'PYTHON_COMPAT' in updated_vars:
-                    array_re = re.compile(r'\[\d+\]="(?P<val>.+?)"')
-                    py_re = lambda x: re.sub(r'^python(\d+)_(\d+)$', r'py\1.\2', x)
-                    old = {py_re(m.group('val')) for m in re.finditer(array_re, drop['PYTHON_COMPAT'])}
-                    new = {py_re(m.group('val')) for m in re.finditer(array_re, add['PYTHON_COMPAT'])}
-                    msg = []
-                    if added := sorted(new - old):
-                        msg.append(f"enable {', '.join(added)}")
-                    if dropped := sorted(old - new):
-                        msg.append(f"disable {', '.join(dropped)}")
-                    return ' and '.join(msg)
-                elif 'USE_RUBY' in updated_vars:
-                    old = set(drop['USE_RUBY'].strip('"').split())
-                    new = set(add['USE_RUBY'].strip('"').split())
+                elif (target := targets & updated_vars) and len(target) == 1:
+                    target = next(iter(target))
+                    if target in array_targets:
+                        array_re = re.compile(r'\[\d+\]="(?P<val>.+?)"')
+                        py_re = lambda x: re.sub(r'^python(\d+)_(\d+)$', r'py\1.\2', x)
+                        old = {py_re(m.group('val')) for m in re.finditer(array_re, drop[target])}
+                        new = {py_re(m.group('val')) for m in re.finditer(array_re, add[target])}
+                    else:
+                        old = set(drop[target].strip('"').split())
+                        new = set(add[target].strip('"').split())
                     msg = []
                     if added := sorted(new - old):
                         msg.append(f"enable {', '.join(added)}")
