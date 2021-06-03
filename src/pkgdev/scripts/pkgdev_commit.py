@@ -1,5 +1,6 @@
 import argparse
 import atexit
+import difflib
 import os
 import re
 import shlex
@@ -384,6 +385,35 @@ class PkgSummary(ChangeSummary):
                 if len(msg) <= 50:
                     return msg
                 return action
+            else:
+                # use sourced bash env diffs to determine summaries
+                old_env = old_pkg.environment.data.splitlines()
+                new_env = new_pkg.environment.data.splitlines()
+                var_drop_re = re.compile(r'^-declare .+ (?P<name>\w+)=(?P<value>.+)$')
+                var_add_re = re.compile(r'^\+declare .+ (?P<name>\w+)=(?P<value>.+)$')
+                drop, add = {}, {}
+
+                for x in difflib.unified_diff(old_env, new_env):
+                    if mo := var_drop_re.match(x):
+                        drop[mo.group('name')] = mo.group('value')
+                    elif mo := var_add_re.match(x):
+                        add[mo.group('name')] = mo.group('value')
+
+                watch_vars = {'HOMEPAGE', 'DESCRIPTION', 'LICENSE', 'SRC_URI'}
+                updated_vars = drop.keys() & add.keys()
+                if updated := sorted(watch_vars & updated_vars):
+                    return f"update {', '.join(updated)}"
+                elif 'PYTHON_COMPAT' in updated_vars:
+                    array_re = re.compile(r'\[\d+\]="(?P<val>.+?)"')
+                    py_re = lambda x: re.sub(r'^python(\d+)_(\d+)$', r'py\1.\2', x)
+                    old = {py_re(m.group('val')) for m in re.finditer(array_re, drop['PYTHON_COMPAT'])}
+                    new = {py_re(m.group('val')) for m in re.finditer(array_re, add['PYTHON_COMPAT'])}
+                    msg = []
+                    if added := sorted(new - old):
+                        msg.append(f"add {', '.join(added)}")
+                    if dropped := sorted(old - new):
+                        msg.append(f"drop {', '.join(dropped)}")
+                    return ' and '.join(msg)
 
 
 class GitChanges(UserDict):
