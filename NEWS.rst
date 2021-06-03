@@ -2,6 +2,13 @@
 Release Notes
 =============
 
+pkgdev 0.1.5 (2021-06-03)
+-------------------------
+
+- Fix historical repo creation for eclass sourcing.
+
+- Add initial bash completion support.
+
 pkgdev 0.1.4 (2021-05-25)
 -------------------------
 
