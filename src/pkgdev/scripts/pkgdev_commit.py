@@ -410,9 +410,9 @@ class PkgSummary(ChangeSummary):
                     new = {py_re(m.group('val')) for m in re.finditer(array_re, add['PYTHON_COMPAT'])}
                     msg = []
                     if added := sorted(new - old):
-                        msg.append(f"add {', '.join(added)}")
+                        msg.append(f"enable {', '.join(added)}")
                     if dropped := sorted(old - new):
-                        msg.append(f"drop {', '.join(dropped)}")
+                        msg.append(f"disable {', '.join(dropped)}")
                     return ' and '.join(msg)
 
 
