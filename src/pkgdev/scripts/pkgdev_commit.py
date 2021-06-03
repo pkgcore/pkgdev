@@ -414,6 +414,15 @@ class PkgSummary(ChangeSummary):
                     if dropped := sorted(old - new):
                         msg.append(f"disable {', '.join(dropped)}")
                     return ' and '.join(msg)
+                elif 'USE_RUBY' in updated_vars:
+                    old = set(drop['USE_RUBY'].strip('"').split())
+                    new = set(add['USE_RUBY'].strip('"').split())
+                    msg = []
+                    if added := sorted(new - old):
+                        msg.append(f"enable {', '.join(added)}")
+                    if dropped := sorted(old - new):
+                        msg.append(f"disable {', '.join(dropped)}")
+                    return ' and '.join(msg)
 
 
 class GitChanges(UserDict):
