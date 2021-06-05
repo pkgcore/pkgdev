@@ -1,5 +1,7 @@
 # bash completion for pkgdev
 
+source "/usr/share/bash-completion/helpers/gentoo-common.sh"
+
 _pkgdev() {
     local i=1 cmd cur prev words cword split
     _init_completion || return
@@ -130,6 +132,61 @@ _pkgdev() {
             "
 
             COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+            ;;
+        showkw)
+            subcmd_options="
+                -f --format
+                -c --collapse
+                -s --stable
+                -u --unstable
+                -o --only-unstable
+                -p --prefix
+                -a --arch
+                -r --repo
+            "
+
+            case "${prev}" in
+                -f | --format)
+                    format_options="
+                        fancy_grid
+                        fancy_outline
+                        github
+                        grid
+                        html
+                        jira
+                        latex
+                        latex_booktabs
+                        latex_longtable
+                        latex_raw
+                        mediawiki
+                        moinmoin
+                        orgtbl
+                        pipe
+                        plain
+                        presto
+                        pretty
+                        psql
+                        rst
+                        showkw
+                        simple
+                        textile
+                        tsv
+                        unsafehtml
+                        youtrack
+                    "
+                    COMPREPLY=($(compgen -W "${format_options}" -- "${cur}"))
+                    ;;
+                -r | --repo)
+                    COMPREPLY=($(compgen -W "$(_parsereposconf -l)" -- "${cur}"))
+                    ;;
+                -a | --arch)
+                    COMPREPLY=()
+                    ;;
+                *)
+                    COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+                    COMPREPLY+=($(_list_repo_atoms))
+                    ;;
+            esac
             ;;
     esac
 }
