@@ -417,12 +417,17 @@ class PkgSummary(ChangeSummary):
                     else:
                         old = set(drop[target].strip('"').split())
                         new = set(add[target].strip('"').split())
+
                     msg = []
                     if added := sorted(new - old):
                         msg.append(f"enable {', '.join(added)}")
                     if dropped := sorted(old - new):
                         msg.append(f"disable {', '.join(dropped)}")
-                    return ' and '.join(msg)
+                    msg = ' and '.join(msg)
+                    if len(msg) <= 50:
+                        return msg
+                    else:
+                        return f'update {target} support'
 
 
 class GitChanges(UserDict):
