@@ -615,6 +615,8 @@ def determine_msg_args(options, changes):
         elif changes.prefix:
             # use generated summary if a generated prefix exists
             message.append(changes.prefix + changes.summary)
+        else:
+            message.append('')
 
         if message or options.footer:
             tmp = tempfile.NamedTemporaryFile(mode='w')
