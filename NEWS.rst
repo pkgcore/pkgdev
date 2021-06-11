@@ -2,6 +2,21 @@
 Release Notes
 =============
 
+pkgdev 0.1.6 (2021-06-11)
+-------------------------
+
+- pkgdev showkw: Add bash completion support (#38).
+
+- pkgdev commit: Generate summaries for package changes with profile updates,
+  e.g. renaming a package and updating profiles/updates in the same commit.
+
+- pkgdev commit: Avoid crash when footer content exists with no summary
+  template (#39).
+
+- pkgdev commit: Add initial support for generating summaries from bash diffs.
+  For example, this allows automatic summaries to be generated for simple
+  PYTHON_COMPAT changes.
+
 pkgdev 0.1.5 (2021-06-03)
 -------------------------
 
