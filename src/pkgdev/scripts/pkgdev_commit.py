@@ -344,10 +344,14 @@ class PkgSummary(ChangeSummary):
     @change('R')
     def rename(self):
         """Generate summaries for rename actions."""
-        if len(self.changes) == 1 and not self.revbump:
-            # handle single, non-revbump `git mv` changes
+        if len(self.changes) == 1:
             change = next(iter(self.changes.values()))
-            return f'add {change.atom.fullver}, drop {change.old.fullver}'
+            if change.atom.key != change.old.key:
+                # package rename
+                return f'rename {change.old.key}'
+            elif not self.revbump:
+                # single, non-revbump version rename
+                return f'add {change.atom.fullver}, drop {change.old.fullver}'
 
     @change('M')
     def modify(self):
@@ -460,9 +464,17 @@ class GitChanges(UserDict):
         See https://www.gentoo.org/glep/glep-0066.html#commit-messages for
         details.
         """
-        # changes limited to a single type
-        if len(self.data) == 1:
-            change_type, change_objs = next(iter(self.data.items()))
+        single = len(self.data) == 1
+        pkg_with_profile_update = (
+            len(self.data) == 2 and set(self.data) == {PkgChange, 'profiles'})
+
+        if single or pkg_with_profile_update:
+            if single:
+                change_type, change_objs = next(iter(self.data.items()))
+            else:
+                change_type = PkgChange
+                change_objs = self.data[PkgChange]
+
             if len(change_objs) == 1:
                 # changes limited to a single object
                 return change_objs[0].prefix
