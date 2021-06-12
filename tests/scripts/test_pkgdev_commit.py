@@ -170,7 +170,7 @@ class TestPkgdevCommit:
         self.args = ['pkgdev', 'commit'] + self.scan_args
 
     def test_empty_repo(self, capsys, repo, make_git_repo):
-        git_repo = make_git_repo(repo.location)
+        git_repo = make_git_repo(repo.location, commit=True)
         with patch('sys.argv', self.args), \
                 pytest.raises(SystemExit) as excinfo, \
                 chdir(git_repo.path):
@@ -182,7 +182,7 @@ class TestPkgdevCommit:
 
     def test_git_message_opts(self, repo, make_git_repo, tmp_path):
         """Verify message-related options are passed through to `git commit`."""
-        git_repo = make_git_repo(repo.location)
+        git_repo = make_git_repo(repo.location, commit=True)
         repo.create_ebuild('cat/pkg-0')
         git_repo.add_all('cat/pkg-0', commit=False)
         path = str(tmp_path / 'msg')

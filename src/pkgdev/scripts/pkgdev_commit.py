@@ -553,9 +553,9 @@ def determine_changes(options):
     if options.git_add_arg:
         git.run('add', options.git_add_arg, options.cwd)
 
-    # determine staged changes
+    # determine staged changes forcing rename search
     p = git.run(
-        'diff', '--name-status', '--cached', '-z',
+        'diff-index', '--find-renames', '--name-status', '--cached', '-z', 'HEAD',
         stdout=subprocess.PIPE)
 
     # ebuild path regex, validation is handled on instantiation
