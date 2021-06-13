@@ -168,9 +168,9 @@ class HistoricalRepo(UnconfiguredTree):
 
     def _populate(self, pkgs):
         """Populate the repo with a given sequence of historical packages."""
-        paths = list({pkg.key for pkg in pkgs})
+        paths = {pkg.key for pkg in pkgs}
         old_files = subprocess.Popen(
-            ['git', 'archive', 'HEAD'] + paths,
+            ['git', 'archive', 'HEAD'] + list(paths),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             cwd=self.__parent_repo.location)
         if old_files.poll():
@@ -246,10 +246,11 @@ class MetadataSummary(ChangeSummary):
     def modify(self):
         """Generate summaries for modify actions."""
         atom = next(iter(self.changes))
-        self.old_repo.add_pkgs([atom])
+        pkgs = self.repo.match(atom)
+        self.old_repo.add_pkgs(pkgs)
         try:
             old_pkg = self.old_repo.match(atom)[0]
-            new_pkg = self.repo.match(atom)[0]
+            new_pkg = pkgs[0]
         except IndexError:  # pragma: no cover
             # broken ebuild should be caught during manifesting or scanning
             return
@@ -358,10 +359,11 @@ class PkgSummary(ChangeSummary):
         """Generate summaries for modify actions."""
         if len(self.changes) == 1:
             atom = next(iter(self.changes))
-            self.old_repo.add_pkgs([atom])
+            pkgs = self.repo.match(atom)
+            self.old_repo.add_pkgs(pkgs)
             try:
                 old_pkg = self.old_repo.match(atom)[0]
-                new_pkg = self.repo.match(atom)[0]
+                new_pkg = pkgs[0]
             except IndexError:  # pragma: no cover
                 # broken ebuild should be caught during manifesting or scanning
                 return
