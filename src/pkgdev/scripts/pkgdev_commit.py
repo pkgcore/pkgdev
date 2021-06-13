@@ -555,7 +555,8 @@ def determine_changes(options):
 
     # determine staged changes forcing rename search
     p = git.run(
-        'diff-index', '--find-renames', '--name-status', '--cached', '-z', 'HEAD',
+        'diff-index', '--diff-filter=ARMD', '--find-renames',
+        '--name-status', '--cached', '-z', 'HEAD',
         stdout=subprocess.PIPE)
 
     # ebuild path regex, validation is handled on instantiation
