@@ -264,6 +264,8 @@ class MetadataSummary(ChangeSummary):
                 return 'add myself as a maintainer'
             if git_email in old - new:
                 return 'drop myself as a maintainer'
+            if old and not new:
+                return 'drop to maintainer-needed'
             return 'update maintainers'
         elif old_pkg.stabilize_allarches != new_pkg.stabilize_allarches:
             status = 'mark' if new_pkg.stabilize_allarches else 'drop'
