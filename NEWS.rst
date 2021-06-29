@@ -2,6 +2,14 @@
 Release Notes
 =============
 
+pkgdev 0.1.7 (2021-06-29)
+-------------------------
+
+- pkgdev commit: Add all matching pkg versions to historical repo (#40).
+
+- pkgdev commit: Use ``git diff-index`` instead of ``git diff`` to avoid config
+  settings affecting output.
+
 pkgdev 0.1.6 (2021-06-11)
 -------------------------
 
