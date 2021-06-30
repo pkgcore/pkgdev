@@ -648,8 +648,8 @@ def determine_msg_args(options, changes):
             # add footer tags
             if options.footer:
                 tmp.write('\n\n')
-                for tag, url in options.footer:
-                    tmp.write(f'{tag}: {url}\n')
+                for tag, value in options.footer:
+                    tmp.write(f'{tag}: {value}\n')
 
             tmp.flush()
 
