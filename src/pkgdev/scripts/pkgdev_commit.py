@@ -278,8 +278,8 @@ class MetadataSummary(ChangeSummary):
             msg = []
             for action, data in (('add', added), ('remove', removed)):
                 if data:
-                    upstreams = [x.type for x in data]
-                    msg.append(f"{action} {', '.join(upstreams)} upstream metadata")
+                    upstreams = ', '.join(sorted(x.type for x in data))
+                    msg.append(f"{action} {upstreams} upstream metadata")
             # return action-specific shorter summary if a single type exists
             if len(msg) == 1 and len(msg[0]) <= 50:
                 return msg[0]

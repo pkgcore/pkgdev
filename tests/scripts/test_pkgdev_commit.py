@@ -603,6 +603,87 @@ class TestPkgdevCommit:
             """))
         assert commit() == 'cat/pkg: update maintainers'
 
+        # add allarches tag
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                    <stabilize-allarches/>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: mark ALLARCHES'
+
+        # drop allarches tag
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: drop ALLARCHES'
+
+        # add upstream metadata
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                    <upstream>
+                        <remote-id type="github">pkgcore/pkgdev</remote-id>
+                        <remote-id type="pypi">pkgdev</remote-id>
+                    </upstream>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: add github, pypi upstream metadata'
+
+        # remove upstream metadata
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                    <upstream>
+                        <remote-id type="github">pkgcore/pkgdev</remote-id>
+                    </upstream>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: remove pypi upstream metadata'
+
+        # update upstream metadata
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                    <upstream>
+                        <remote-id type="github">pkgcore/pkgcheck</remote-id>
+                    </upstream>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: update upstream metadata'
+
     def test_no_summary(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
