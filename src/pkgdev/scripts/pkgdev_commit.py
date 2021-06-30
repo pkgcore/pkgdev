@@ -635,33 +635,33 @@ def determine_msg_args(options, changes):
             # use generated summary if a generated prefix exists
             message.append(changes.prefix + changes.summary)
         else:
+            # use empty string to force user input
             message.append('')
 
-        if message or options.footer:
-            tmp = tempfile.NamedTemporaryFile(mode='w')
-            tmp.write(message[0])
-            if len(message) > 1:
-                # wrap body paragraphs at 85 chars
-                body = ('\n'.join(textwrap.wrap(x, width=85)) for x in message[1:])
-                tmp.write('\n\n' + '\n\n'.join(body))
+        tmp = tempfile.NamedTemporaryFile(mode='w')
+        tmp.write(message[0])
+        if len(message) > 1:
+            # wrap body paragraphs at 85 chars
+            body = ('\n'.join(textwrap.wrap(x, width=85)) for x in message[1:])
+            tmp.write('\n\n' + '\n\n'.join(body))
 
-            # add footer tags
-            if options.footer:
-                tmp.write('\n\n')
-                for tag, value in options.footer:
-                    tmp.write(f'{tag}: {value}\n')
+        # add footer tags
+        if options.footer:
+            tmp.write('\n\n')
+            for tag, value in options.footer:
+                tmp.write(f'{tag}: {value}\n')
 
-            tmp.flush()
+        tmp.flush()
 
-            # force `git commit` to open an editor for uncompleted summary
-            if not message[0] or message[0].endswith(' '):
-                args.extend(['-t', tmp.name])
-            else:
-                args.extend(['-F', tmp.name])
+        # force `git commit` to open an editor for uncompleted summary
+        if not message[0] or message[0].endswith(' '):
+            args.extend(['-t', tmp.name])
+        else:
+            args.extend(['-F', tmp.name])
 
-            # Explicitly register tempfile removal so the object isn't garbage
-            # collected and removed when leaving function scope.
-            atexit.register(tmp.close)
+        # Explicitly register tempfile removal so the object isn't garbage
+        # collected and removed when leaving function scope.
+        atexit.register(tmp.close)
 
     return args
 
