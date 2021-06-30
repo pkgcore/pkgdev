@@ -518,6 +518,91 @@ class TestPkgdevCommit:
         shutil.rmtree(pjoin(git_repo.path, 'newcat/pkg'))
         assert commit() == 'newcat/pkg: treeclean'
 
+    def test_metadata_summaries(self, capsys, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        pkgdir = os.path.dirname(repo.create_ebuild('cat/pkg-0'))
+        # stub metadata
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                </pkgmetadata>
+            """))
+        git_repo.add_all('cat/pkg-0')
+
+        def commit():
+            with os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"), \
+                    patch('sys.argv', self.args + ['-a']), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 0
+            out, err = capsys.readouterr()
+            assert err == out == ''
+            message = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+            return message[0]
+
+        # add yourself
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                    <maintainer type="person">
+                        <email>first.last@email.com</email>
+                        <name>First Last</name>
+                    </maintainer>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: add myself as a maintainer'
+
+        # drop yourself
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: drop myself as a maintainer'
+
+        # drop to maintainer-needed
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: drop to maintainer-needed'
+
+        # add random maintainer
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                </pkgmetadata>
+            """))
+        assert commit() == 'cat/pkg: update maintainers'
+
     def test_no_summary(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
