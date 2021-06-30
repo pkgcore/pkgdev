@@ -173,7 +173,7 @@ class HistoricalRepo(UnconfiguredTree):
             ['git', 'archive', 'HEAD'] + list(paths),
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             cwd=self.__parent_repo.location)
-        if old_files.poll():
+        if old_files.poll():  # pragma: no cover
             error = old_files.stderr.read().decode().strip()
             raise Exception(f'failed populating archive repo: {error}')
         with tarfile.open(mode='r|', fileobj=old_files.stdout) as tar:
@@ -229,7 +229,7 @@ class ChangeSummary:
         statuses = frozenset(x.status for x in self.changes.values())
         try:
             return self.status_funcs[statuses](self)
-        except KeyError:
+        except KeyError:  # pragma: no cover
             pass
 
 
