@@ -348,13 +348,15 @@ class PkgSummary(ChangeSummary):
     def rename(self):
         """Generate summaries for rename actions."""
         if len(self.changes) == 1:
+            if not self.revbump:
+                # single, non-revbump version rename
+                change = next(iter(self.changes.values()))
+                return f'add {change.atom.fullver}, drop {change.old.fullver}'
+        elif len({x.key for x in self.changes}) == 1:
             change = next(iter(self.changes.values()))
             if change.atom.key != change.old.key:
                 # package rename
                 return f'rename {change.old.key}'
-            elif not self.revbump:
-                # single, non-revbump version rename
-                return f'add {change.atom.fullver}, drop {change.old.fullver}'
 
     @change('M')
     def modify(self):

@@ -509,9 +509,14 @@ class TestPkgdevCommit:
             os.remove(pjoin(git_repo.path, f'cat/pkg/pkg-{v}.ebuild'))
         assert commit() == 'cat/pkg: drop versions'
 
-        # treeclean
+        # package rename
+        shutil.copytree(pjoin(git_repo.path, 'cat/pkg'), pjoin(git_repo.path, 'newcat/pkg'))
         shutil.rmtree(pjoin(git_repo.path, 'cat/pkg'))
-        assert commit() == 'cat/pkg: treeclean'
+        assert commit() == 'newcat/pkg: rename cat/pkg'
+
+        # treeclean
+        shutil.rmtree(pjoin(git_repo.path, 'newcat/pkg'))
+        assert commit() == 'newcat/pkg: treeclean'
 
     def test_non_gentoo_file_mangling(self, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
