@@ -518,7 +518,7 @@ class TestPkgdevCommit:
         shutil.rmtree(pjoin(git_repo.path, 'newcat/pkg'))
         assert commit() == 'newcat/pkg: treeclean'
 
-    def test_footer_with_no_summary(self, capsys, repo, make_git_repo):
+    def test_no_summary(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
         git_repo.add_all('cat/pkg-0')
@@ -534,8 +534,15 @@ class TestPkgdevCommit:
             assert err == out == ''
             return git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
 
+        # no commit message content
         for i in range(10):
-            with open(pjoin(git_repo.path, f'file{i}'), 'w') as f:
+            with open(pjoin(git_repo.path, f'file-a-{i}'), 'w') as f:
+                f.write('stub\n')
+        assert commit(['-a']) == ['summary']
+
+        # footer exists with no generated summary
+        for i in range(10):
+            with open(pjoin(git_repo.path, f'file-b-{i}'), 'w') as f:
                 f.write('stub\n')
         assert commit(['-a', '-T', 'tag:value']) == ['summary', '', 'Tag: value']
 
