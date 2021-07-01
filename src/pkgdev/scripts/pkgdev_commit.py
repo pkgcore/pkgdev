@@ -224,13 +224,15 @@ class ChangeSummary:
         tree_cls = partial(HistoricalRepo, self.repo, tmpdir)
         return tree(self.options.config, repo_config, tree_cls=tree_cls)
 
-    def generate(self):
-        """Generate summaries for the package changes."""
+    def __str__(self):
+        """Serialize git changes into commit summary strings."""
         statuses = frozenset(x.status for x in self.changes.values())
         try:
-            return self.status_funcs[statuses](self)
+            if s := self.status_funcs[statuses](self):
+                return s
         except KeyError:  # pragma: no cover
             pass
+        return ''
 
 
 class MetadataSummary(ChangeSummary):
@@ -443,10 +445,63 @@ class PkgSummary(ChangeSummary):
 class GitChanges(UserDict):
     """Mapping of change objects for staged git changes."""
 
-    def __init__(self, options, changes):
-        super().__init__(changes)
+    def __init__(self, options):
         self._options = options
         self._repo = options.repo
+        super().__init__(self._generate_mapping())
+
+    def _generate_mapping(self):
+        """Generate mapping for staged changes."""
+        # stage changes as requested
+        if self._options.git_add_arg:
+            git.run('add', self._options.git_add_arg, self._options.cwd)
+
+        # determine staged changes forcing rename search
+        p = git.run(
+            'diff-index', '--diff-filter=ARMD', '--find-renames',
+            '--name-status', '--cached', '-z', 'HEAD',
+            stdout=subprocess.PIPE)
+
+        # ebuild path regex, validation is handled on instantiation
+        _ebuild_re = re.compile(r'^(?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
+        _eclass_re = re.compile(r'^eclass/(?P<name>[^/]+\.eclass)$')
+
+        # if no changes exist, exit early
+        if not p.stdout:
+            commit.error('no staged changes exist')
+
+        data = deque(p.stdout.strip('\x00').split('\x00'))
+        changes = defaultdict(OrderedSet)
+        while data:
+            status = data.popleft()
+            old_path = None
+            if status.startswith('R'):
+                status = 'R'
+                old_path = data.popleft()
+            path = data.popleft()
+            path_components = path.split(os.sep)
+            if path_components[0] in self._repo.categories and len(path_components) > 2:
+                if mo := _ebuild_re.match(path):
+                    # ebuild changes
+                    try:
+                        atom = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
+                        old = None
+                        if status == 'R' and (om := _ebuild_re.match(old_path)):
+                            old = atom_cls(f"={om.group('category')}/{om.group('package')}")
+                        changes[PkgChange].add(PkgChange(
+                            status, path, atom=atom, ebuild=True, old=old))
+                    except MalformedAtom:
+                        continue
+                else:
+                    # non-ebuild package level changes
+                    atom = atom_cls(os.sep.join(path_components[:2]))
+                    changes[PkgChange].add(PkgChange(status, path, atom=atom, ebuild=False))
+            elif mo := _eclass_re.match(path):
+                changes[EclassChange].add(EclassChange(status, path, name=mo.group('name')))
+            else:
+                changes[path_components[0]].add(Change(status, path))
+
+        return changes
 
     @jit_attr
     def pkg_changes(self):
@@ -509,10 +564,8 @@ class GitChanges(UserDict):
                     if self.pkg_changes[0].path.endswith('/Manifest'):
                         return 'update Manifest'
                     elif self.pkg_changes[0].path.endswith('/metadata.xml'):
-                        if summary := MetadataSummary(self._options, self.pkg_changes).generate():
-                            return summary
-            elif summary := PkgSummary(self._options, self.ebuild_changes).generate():
-                return summary
+                        return str(MetadataSummary(self._options, self.pkg_changes))
+            return str(PkgSummary(self._options, self.ebuild_changes))
         return ''
 
 
@@ -551,60 +604,6 @@ class PkgChange(Change):
     @property
     def prefix(self):
         return f'{self.atom.key}: '
-
-
-def determine_changes(options):
-    """Determine changes staged in git."""
-    # stage changes as requested
-    if options.git_add_arg:
-        git.run('add', options.git_add_arg, options.cwd)
-
-    # determine staged changes forcing rename search
-    p = git.run(
-        'diff-index', '--diff-filter=ARMD', '--find-renames',
-        '--name-status', '--cached', '-z', 'HEAD',
-        stdout=subprocess.PIPE)
-
-    # ebuild path regex, validation is handled on instantiation
-    _ebuild_re = re.compile(r'^(?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
-    _eclass_re = re.compile(r'^eclass/(?P<name>[^/]+\.eclass)$')
-
-    # if no changes exist, exit early
-    if not p.stdout:
-        commit.error('no staged changes exist')
-
-    data = deque(p.stdout.strip('\x00').split('\x00'))
-    changes = defaultdict(OrderedSet)
-    while data:
-        status = data.popleft()
-        old_path = None
-        if status.startswith('R'):
-            status = 'R'
-            old_path = data.popleft()
-        path = data.popleft()
-        path_components = path.split(os.sep)
-        if path_components[0] in options.repo.categories and len(path_components) > 2:
-            if mo := _ebuild_re.match(path):
-                # ebuild changes
-                try:
-                    atom = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
-                    old = None
-                    if status == 'R' and (om := _ebuild_re.match(old_path)):
-                        old = atom_cls(f"={om.group('category')}/{om.group('package')}")
-                    changes[PkgChange].add(PkgChange(
-                        status, path, atom=atom, ebuild=True, old=old))
-                except MalformedAtom:
-                    continue
-            else:
-                # non-ebuild package level changes
-                atom = atom_cls(os.sep.join(path_components[:2]))
-                changes[PkgChange].add(PkgChange(status, path, atom=atom, ebuild=False))
-        elif mo := _eclass_re.match(path):
-            changes[EclassChange].add(EclassChange(status, path, name=mo.group('name')))
-        else:
-            changes[path_components[0]].add(Change(status, path))
-
-    return GitChanges(options, changes)
 
 
 def determine_msg_args(options, changes):
@@ -691,7 +690,7 @@ def _commit(options, out, err):
     repo = options.repo
     git_add_files = []
     # determine changes from staged files
-    changes = determine_changes(options)
+    changes = GitChanges(options)
 
     _untracked_ebuild_re = re.compile(r'^\?\? (?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
     # update manifests for existing packages
