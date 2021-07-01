@@ -36,6 +36,7 @@ class ArgumentParser(arghparse.ArgumentParser):
 
     def parse_known_args(self, args=None, namespace=None):
         namespace.footer = OrderedSet()
+        namespace.git_add_files = []
         namespace, args = super().parse_known_args(args, namespace)
         if namespace.dry_run:
             args.append('--dry-run')
@@ -685,14 +686,11 @@ def _commit_validate(parser, namespace):
         namespace.commit_args.extend(['--signoff', '--gpg-sign'])
 
 
-@commit.bind_main_func
-def _commit(options, out, err):
+def update_manifests(options, out, err, changes):
+    """Update package manifests for any staged ebuild changes."""
     repo = options.repo
-    git_add_files = []
-    # determine changes from staged files
-    changes = GitChanges(options)
+    untracked_ebuild_re = re.compile(r'^\?\? (?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
 
-    _untracked_ebuild_re = re.compile(r'^\?\? (?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
     # update manifests for existing packages
     if atoms := {x.atom.unversioned_atom for x in changes.ebuild_changes}:
         if pkgs := {x.versioned_atom for x in repo.itermatch(packages.OrRestriction(*atoms))}:
@@ -701,7 +699,7 @@ def _commit(options, out, err):
                 'status', '--porcelain=v1', '-u', '-z', "*.ebuild",
                 cwd=repo.location, stdout=subprocess.PIPE)
             for path in p.stdout.strip('\x00').split('\x00'):
-                if mo := _untracked_ebuild_re.match(path):
+                if mo := untracked_ebuild_re.match(path):
                     try:
                         untracked = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
                         pkgs.discard(untracked)
@@ -717,7 +715,21 @@ def _commit(options, out, err):
 
             # include existing Manifest files for staging
             manifests = (pjoin(repo.location, f'{x.key}/Manifest') for x in atoms)
-            git_add_files.extend(filter(os.path.exists, manifests))
+            options.git_add_files.extend(filter(os.path.exists, manifests))
+
+    return 0
+
+
+@commit.bind_main_func
+def _commit(options, out, err):
+    repo = options.repo
+
+    # determine changes from staged files
+    changes = GitChanges(options)
+
+    # update package manifests
+    if update_manifests(options, out, err, changes):
+        return 1
 
     # mangle files
     if options.mangle:
@@ -725,11 +737,11 @@ def _commit(options, out, err):
         skip_regex = re.compile(rf'^{repo.location}/[^/]+/[^/]+/files/.+$')
         mangler = GentooMangler if options.gentoo_repo else Mangler
         paths = (pjoin(repo.location, x) for x in changes.paths)
-        git_add_files.extend(mangler(paths, skip_regex=skip_regex))
+        options.git_add_files.extend(mangler(paths, skip_regex=skip_regex))
 
     # stage modified files
-    if git_add_files:
-        git.run('add', *git_add_files, cwd=repo.location)
+    if options.git_add_files:
+        git.run('add', *options.git_add_files, cwd=repo.location)
 
     # scan staged changes for QA issues if requested
     if options.scan:
