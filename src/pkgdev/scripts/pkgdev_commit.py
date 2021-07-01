@@ -446,6 +446,10 @@ class PkgSummary(ChangeSummary):
 class GitChanges(UserDict):
     """Mapping of change objects for staged git changes."""
 
+    # ebuild path regex, validation is handled on instantiation
+    _ebuild_re = re.compile(r'^(?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
+    _eclass_re = re.compile(r'^eclass/(?P<name>[^/]+\.eclass)$')
+
     def __init__(self, options):
         self._options = options
         self._repo = options.repo
@@ -463,10 +467,6 @@ class GitChanges(UserDict):
             '--name-status', '--cached', '-z', 'HEAD',
             stdout=subprocess.PIPE)
 
-        # ebuild path regex, validation is handled on instantiation
-        _ebuild_re = re.compile(r'^(?P<category>[^/]+)/[^/]+/(?P<package>[^/]+)\.ebuild$')
-        _eclass_re = re.compile(r'^eclass/(?P<name>[^/]+\.eclass)$')
-
         # if no changes exist, exit early
         if not p.stdout:
             commit.error('no staged changes exist')
@@ -482,12 +482,12 @@ class GitChanges(UserDict):
             path = data.popleft()
             path_components = path.split(os.sep)
             if path_components[0] in self._repo.categories and len(path_components) > 2:
-                if mo := _ebuild_re.match(path):
+                if mo := self._ebuild_re.match(path):
                     # ebuild changes
                     try:
                         atom = atom_cls(f"={mo.group('category')}/{mo.group('package')}")
                         old = None
-                        if status == 'R' and (om := _ebuild_re.match(old_path)):
+                        if status == 'R' and (om := self._ebuild_re.match(old_path)):
                             old = atom_cls(f"={om.group('category')}/{om.group('package')}")
                         changes[PkgChange].add(PkgChange(
                             status, path, atom=atom, ebuild=True, old=old))
@@ -497,7 +497,7 @@ class GitChanges(UserDict):
                     # non-ebuild package level changes
                     atom = atom_cls(os.sep.join(path_components[:2]))
                     changes[PkgChange].add(PkgChange(status, path, atom=atom, ebuild=False))
-            elif mo := _eclass_re.match(path):
+            elif mo := self._eclass_re.match(path):
                 changes[EclassChange].add(EclassChange(status, path, name=mo.group('name')))
             else:
                 changes[path_components[0]].add(Change(status, path))
