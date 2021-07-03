@@ -714,7 +714,7 @@ def update_manifests(options, out, err, changes):
                 return 1
 
             # include existing Manifest files for staging
-            manifests = (pjoin(repo.location, f'{x.key}/Manifest') for x in atoms)
+            manifests = (pjoin(repo.location, f'{x.key}/Manifest') for x in pkgs)
             options.git_add_files.extend(filter(os.path.exists, manifests))
 
     return 0
