@@ -12,7 +12,7 @@ from snakeoil.cli.exceptions import UserException
 from snakeoil.mappings import OrderedSet
 
 copyright_regex = re.compile(
-    r'^# Copyright (?P<begin>\d{4}-)?(?P<end>\d{4}) (?P<holder>.+)$')
+    r'^# Copyright (?P<date>(?P<begin>\d{4}-)?(?P<end>\d{4})) (?P<holder>.+)$')
 
 
 def mangle(name):
@@ -37,11 +37,11 @@ class Mangler:
     # mapping of mangling types to functions
     _mangle_funcs = {}
 
-    def __init__(self, paths, skip_regex=None):
+    def __init__(self, changes, skip_regex=None):
         self.jobs = os.cpu_count()
         if skip_regex is not None:
-            paths = (x for x in paths if not skip_regex.match(x))
-        self.paths = OrderedSet(paths)
+            changes = (c for c in changes if not skip_regex.match(c.full_path))
+        self.changes = OrderedSet(changes)
 
         # setup for parallelizing the mangling procedure across files
         self._mp_ctx = multiprocessing.get_context('fork')
@@ -58,9 +58,9 @@ class Mangler:
             lambda f, g: lambda x: f(g(self, x)), self._mangle_funcs.values(), lambda x: x)
 
     @mangle('EOF')
-    def _eof(self, data):
+    def _eof(self, change):
         """Drop EOF whitespace and forcibly add EOF newline."""
-        return data.rstrip() + '\n'
+        return change.update(change.data.rstrip() + '\n')
 
     def _kill_pipe(self, *args, error=None):
         """Handle terminating the mangling process group."""
@@ -90,26 +90,20 @@ class Mangler:
 
         return path
 
-    def _mangle_file(self, path):
-        """Run composed mangling function across a given file path."""
-        try:
-            with open(path, 'r+', encoding='utf-8') as f:
-                if orig_data := f.read():
-                    data = self.composed_func(orig_data)
-                    if data != orig_data:
-                        f.seek(0)
-                        f.truncate()
-                        f.write(data)
-                        return path
-        except (FileNotFoundError, UnicodeDecodeError):
-            pass
+    def _mangle(self, change):
+        """Run composed mangling function across a given change."""
+        if orig_data := change.read():
+            change = self.composed_func(change)
+            if change.data != orig_data:
+                change.sync()
+                return change
 
     def _run_manglers(self, paths_q):
         """Consumer that runs mangling functions, queuing mangled paths for output."""
         try:
-            for path in iter(paths_q.get, None):
-                if mangled_path := self._mangle_file(path):
-                    self._mangled_paths_q.put(mangled_path)
+            for change in iter(paths_q.get, None):
+                if mangled_change := self._mangle(change):
+                    self._mangled_paths_q.put(mangled_change.path)
         except Exception:  # pragma: no cover
             # traceback can't be pickled so serialize it
             tb = traceback.format_exc()
@@ -124,8 +118,8 @@ class Mangler:
         pool.close()
 
         # queue paths for processing
-        for path in self.paths:
-            paths_q.put(path)
+        for change in self.changes:
+            paths_q.put(change)
         # notify consumers that no more work exists
         for i in range(self.jobs):
             paths_q.put(None)
@@ -141,10 +135,12 @@ class GentooMangler(Mangler):
     _mangle_funcs = Mangler._mangle_funcs.copy()
 
     @mangle('copyright')
-    def _copyright(self, data):
+    def _copyright(self, change):
         """Fix copyright headers and dates."""
-        lines = data.splitlines()
+        lines = change.data.splitlines()
         if mo := copyright_regex.match(lines[0]):
-            lines[0] = re.sub(mo.group('end'), self._current_year, lines[0])
+            # replace entire date range for new files
+            group = 'date' if change.status == 'A' else 'end'
+            lines[0] = re.sub(mo.group(group), self._current_year, lines[0])
             lines[0] = re.sub('Gentoo Foundation', 'Gentoo Authors', lines[0])
-        return '\n'.join(lines) + '\n'
+        return change.update('\n'.join(lines) + '\n')

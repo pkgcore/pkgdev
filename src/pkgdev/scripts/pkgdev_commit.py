@@ -490,19 +490,26 @@ class GitChanges(UserDict):
                         if status == 'R' and (om := self._ebuild_re.match(old_path)):
                             old = atom_cls(f"={om.group('category')}/{om.group('package')}")
                         changes[PkgChange].add(PkgChange(
-                            status, path, atom=atom, ebuild=True, old=old))
+                            self._repo.location, status, path, atom=atom, ebuild=True, old=old))
                     except MalformedAtom:
                         continue
                 else:
                     # non-ebuild package level changes
                     atom = atom_cls(os.sep.join(path_components[:2]))
-                    changes[PkgChange].add(PkgChange(status, path, atom=atom, ebuild=False))
+                    changes[PkgChange].add(
+                        PkgChange(self._repo.location, status, path, atom=atom, ebuild=False))
             elif mo := self._eclass_re.match(path):
-                changes[EclassChange].add(EclassChange(status, path, name=mo.group('name')))
+                changes[EclassChange].add(
+                    EclassChange(self._repo.location, status, path, name=mo.group('name')))
             else:
-                changes[path_components[0]].add(Change(status, path))
+                changes[path_components[0]].add(Change(self._repo.location, status, path))
 
         return changes
+
+    @jit_attr
+    def all(self):
+        """Ordered set of all change objects."""
+        return OrderedFrozenSet(chain.from_iterable(self.data.values()))
 
     @jit_attr
     def pkg_changes(self):
@@ -513,11 +520,6 @@ class GitChanges(UserDict):
     def ebuild_changes(self):
         """Ordered set of all ebuild change objects."""
         return OrderedFrozenSet(x for x in self.pkg_changes if x.ebuild)
-
-    @jit_attr
-    def paths(self):
-        """Ordered set of all staged paths."""
-        return OrderedFrozenSet(x.path for x in chain.from_iterable(self.data.values()))
 
     @jit_attr
     def prefix(self):
@@ -573,8 +575,36 @@ class GitChanges(UserDict):
 @dataclass(frozen=True)
 class Change:
     """Generic file change."""
+    repo: str
     status: str
     path: str
+
+    @property
+    def full_path(self):
+        return pjoin(self.repo, self.path)
+
+    def read(self):
+        """Read data from the change's file."""
+        try:
+            with open(self.full_path, 'r', encoding='utf-8') as f:
+                data = f.read()
+        except (FileNotFoundError, UnicodeDecodeError):
+            data = None
+        object.__setattr__(self, "data", data)
+        return data
+
+    def update(self, data):
+        """Update the change's cached file data."""
+        object.__setattr__(self, "data", data)
+        return self
+
+    def sync(self):
+        """Write the change's cached file data back to its file."""
+        try:
+            with open(self.full_path, 'w', encoding='utf-8') as f:
+                f.write(self.data)
+        except AttributeError:
+            pass
 
     @property
     def prefix(self):
@@ -736,8 +766,8 @@ def _commit(options, out, err):
         # don't mangle FILESDIR content
         skip_regex = re.compile(rf'^{repo.location}/[^/]+/[^/]+/files/.+$')
         mangler = GentooMangler if options.gentoo_repo else Mangler
-        paths = (pjoin(repo.location, x) for x in changes.paths)
-        options.git_add_files.extend(mangler(paths, skip_regex=skip_regex))
+        files = mangler(changes.all, skip_regex=skip_regex)
+        options.git_add_files.extend(files)
 
     # stage modified files
     if options.git_add_files:
