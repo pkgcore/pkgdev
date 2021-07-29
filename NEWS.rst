@@ -2,6 +2,13 @@
 Release Notes
 =============
 
+pkgdev 0.1.8 (2021-07-28)
+-------------------------
+
+- pkgdev commit: Replace entire copyright date range for new files.
+
+- pkgdev commit: Fix summary generation for certain rename conditions.
+
 pkgdev 0.1.7 (2021-06-29)
 -------------------------
 
