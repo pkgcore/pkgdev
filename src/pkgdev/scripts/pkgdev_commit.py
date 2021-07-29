@@ -590,12 +590,13 @@ class Change:
                 data = f.read()
         except (FileNotFoundError, UnicodeDecodeError):
             data = None
-        object.__setattr__(self, "data", data)
+        object.__setattr__(self, 'data', data)
         return data
 
     def update(self, data):
         """Update the change's cached file data."""
-        object.__setattr__(self, "data", data)
+        if data != getattr(self, 'data', None):
+            object.__setattr__(self, 'data', data)
         return self
 
     def sync(self):
