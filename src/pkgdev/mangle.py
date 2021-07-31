@@ -139,16 +139,6 @@ class GentooMangler(Mangler):
         """Fix copyright headers and dates."""
         lines = change.data.splitlines()
         if mo := copyright_regex.match(lines[0]):
-            default = f'1999-{self._current_year}'
-            groups = mo.groupdict()
-            if change.status == 'A' and groups['date'] == default:
-                # replace entire date range for new files using the default
-                lines[0] = re.sub(groups['date'], self._current_year, lines[0])
-            elif groups['begin'] is None and groups['date'] != self._current_year:
-                # use old copyright date as the start of date range
-                date_range = f"{groups['date']}-{self._current_year}"
-                lines[0] = re.sub(groups['date'], date_range, lines[0])
-            else:
-                lines[0] = re.sub(groups['end'], self._current_year, lines[0])
+            lines[0] = re.sub(mo.group('end'), self._current_year, lines[0])
             lines[0] = re.sub('Gentoo Foundation', 'Gentoo Authors', lines[0])
         return change.update('\n'.join(lines) + '\n')
