@@ -2,6 +2,11 @@
 Release Notes
 =============
 
+pkgdev 0.1.9 (2021-07-31)
+-------------------------
+
+- pkgdev commit: Revert copyright mangling to previous behavior.
+
 pkgdev 0.1.8 (2021-07-28)
 -------------------------
 
