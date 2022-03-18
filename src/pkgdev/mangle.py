@@ -14,6 +14,11 @@ from snakeoil.mappings import OrderedSet
 copyright_regex = re.compile(
     r'^# Copyright (?P<date>(?P<begin>\d{4}-)?(?P<end>\d{4})) (?P<holder>.+)$')
 
+keywords_regex = re.compile(
+    r'^(?P<pre>[^#]*\bKEYWORDS=(?P<quote>[\'"]?))'
+    r'(?P<keywords>.*)'
+    r'(?P<post>(?P=quote).*)$')
+
 
 def mangle(name):
     """Decorator to register file mangling methods."""
@@ -61,6 +66,24 @@ class Mangler:
     def _eof(self, change):
         """Drop EOF whitespace and forcibly add EOF newline."""
         return change.update(change.data.rstrip() + '\n')
+
+    @mangle('keywords')
+    def _keywords(self, change):
+        """Fix keywords order."""
+
+        def keywords_sort_key(kw):
+            return tuple(reversed(kw.lstrip('-~').partition('-')))
+
+        lines = change.data.splitlines()
+        for i, line in enumerate(lines):
+            if mo := keywords_regex.match(line):
+                kw = sorted(mo.group('keywords').split(), key=keywords_sort_key)
+                new_kw = ' '.join(kw)
+                if not mo.group('quote'):
+                    new_kw = f'"{new_kw}"'
+                lines[i] = f'{mo.group("pre")}{new_kw}{mo.group("post")}'
+                break
+        return change.update('\n'.join(lines) + '\n')
 
     def _kill_pipe(self, *args, error=None):
         """Handle terminating the mangling process group."""
