@@ -3,8 +3,8 @@ from typing import NamedTuple, List
 from unittest.mock import patch
 import pytest
 
+from snakeoil.contexts import chdir
 from pkgdev.scripts import run
-from snakeoil.contexts import chdir, os_environ
 
 class Profile(NamedTuple):
     """Profile record used to create profiles in a repository."""
@@ -19,7 +19,7 @@ class TestPkgdevShowkwParseArgs:
 
     def test_missing_target(self, capsys, tool):
         with pytest.raises(SystemExit):
-            tool.parse_args(['showkw'])
+            tool.parse_args(['showkw', '--config', 'no'])
         captured = capsys.readouterr()
         assert captured.err.strip() == (
             'pkgdev showkw: error: missing target argument and not in a supported repo')
@@ -27,7 +27,7 @@ class TestPkgdevShowkwParseArgs:
     def test_unknown_arches(self, capsys, tool, make_repo):
         repo = make_repo(arches=['amd64'])
         with pytest.raises(SystemExit):
-            tool.parse_args(['showkw', '-a', 'unknown', '-r', repo.location])
+            tool.parse_args(['showkw', '--config', 'no', '-a', 'unknown', '-r', repo.location])
         captured = capsys.readouterr()
         assert captured.err.strip() == (
             "pkgdev showkw: error: unknown arch: 'unknown' (choices: amd64)")
@@ -35,6 +35,7 @@ class TestPkgdevShowkwParseArgs:
 class TestPkgdevShowkw:
 
     script = partial(run, 'pkgdev')
+    base_args = ['pkgdev', 'showkw', '--config', 'n']
 
     def _create_repo(self, make_repo):
         repo = make_repo(arches=['amd64', 'ia64', 'mips', 'x86'])
@@ -47,7 +48,7 @@ class TestPkgdevShowkw:
         return repo
 
     def _run_and_parse(self, capsys, *args):
-        with patch('sys.argv', ['pkgdev', 'showkw', "--format", "presto", *args]), \
+        with patch('sys.argv', [*self.base_args, "--format", "presto", *args]), \
                 pytest.raises(SystemExit) as excinfo:
             self.script()
         assert excinfo.value.code == None
@@ -63,7 +64,7 @@ class TestPkgdevShowkw:
     def test_match(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
         repo.create_ebuild('foo/bar-0')
-        with patch('sys.argv', ['pkgdev', 'showkw', '-r', repo.location, 'foo/bar']), \
+        with patch('sys.argv', [*self.base_args, '-r', repo.location, 'foo/bar']), \
                 pytest.raises(SystemExit) as excinfo:
             self.script()
         assert excinfo.value.code == None
@@ -74,7 +75,7 @@ class TestPkgdevShowkw:
     def test_match_short_name(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
         repo.create_ebuild('foo/bar-0')
-        with patch('sys.argv', ['pkgdev', 'showkw', '-r', repo.location, 'bar']), \
+        with patch('sys.argv', [*self.base_args, '-r', repo.location, 'bar']), \
                 pytest.raises(SystemExit) as excinfo:
             self.script()
         assert excinfo.value.code == None
@@ -85,7 +86,7 @@ class TestPkgdevShowkw:
     def test_match_cwd_repo(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
         repo.create_ebuild('foo/bar-0')
-        with patch('sys.argv', ['pkgdev', 'showkw', 'foo/bar']), \
+        with patch('sys.argv', [*self.base_args, 'foo/bar']), \
                 pytest.raises(SystemExit) as excinfo, \
                 chdir(repo.location):
             self.script()
@@ -97,7 +98,7 @@ class TestPkgdevShowkw:
     def test_match_cwd_pkg(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
         repo.create_ebuild('foo/bar-0')
-        with patch('sys.argv', ['pkgdev', 'showkw']), \
+        with patch('sys.argv', self.base_args), \
                 pytest.raises(SystemExit) as excinfo, \
                 chdir(repo.location + '/foo/bar'):
             self.script()
@@ -107,7 +108,7 @@ class TestPkgdevShowkw:
 
     def test_no_matches(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
-        with patch('sys.argv', ['pkgdev', 'showkw', '-r', repo.location, 'foo/bar']), \
+        with patch('sys.argv', [*self.base_args, '-r', repo.location, 'foo/bar']), \
                 pytest.raises(SystemExit) as excinfo:
             self.script()
         assert excinfo.value.code == 1
@@ -165,7 +166,7 @@ class TestPkgdevShowkw:
         repo = self._create_repo(make_repo)
         repo.create_ebuild('foo/bar-0', keywords=('amd64', '~ia64', '~mips', '~x86'))
         repo.create_ebuild('foo/bar-1', keywords=('~amd64', '~ia64', '~mips', 'x86'))
-        with patch('sys.argv', ['pkgdev', 'showkw', '-r', repo.location, 'foo/bar', "--collapse", arg]), \
+        with patch('sys.argv', [*self.base_args, '-r', repo.location, 'foo/bar', "--collapse", arg]), \
                 pytest.raises(SystemExit) as excinfo:
             self.script()
         out, err = capsys.readouterr()

@@ -167,7 +167,7 @@ class TestPkgdevCommit:
         self.cache_dir = str(tmp_path)
         self.scan_args = ['--pkgcheck-scan', f'--config no --cache-dir {self.cache_dir}']
         # args for running pkgdev like a script
-        self.args = ['pkgdev', 'commit'] + self.scan_args
+        self.args = ['pkgdev', 'commit', '--config', 'no'] + self.scan_args
 
     def test_empty_repo(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location, commit=True)
@@ -913,6 +913,28 @@ class TestPkgdevCommit:
                 chdir(git_repo.path):
             self.script()
         assert excinfo.value.code == 0
+
+    def test_config_opts(self, capsys, repo, make_git_repo, tmp_path):
+        config_file = str(tmp_path / 'config')
+        with open(config_file, 'w') as f:
+            f.write(textwrap.dedent("""
+                [DEFAULT]
+                commit.scan=
+            """))
+
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+        repo.create_ebuild('cat/pkg-1', license='')
+        git_repo.add_all('cat/pkg-1', commit=False)
+        with patch('sys.argv', ['pkgdev', 'commit', '--config', config_file] + self.scan_args), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        out, err = capsys.readouterr()
+        assert excinfo.value.code == 1
+        assert not err
+        assert 'MissingLicense' in out
 
     def test_failed_manifest(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)

@@ -26,18 +26,19 @@ from snakeoil.klass import jit_attr
 from snakeoil.mappings import OrderedFrozenSet, OrderedSet
 from snakeoil.osutils import pjoin
 
-from .. import git
+from .. import cli, git
 from ..mangle import GentooMangler, Mangler
 from .argparsers import cwd_repo_argparser, git_repo_argparser
 
 
-class ArgumentParser(arghparse.ArgumentParser):
+class ArgumentParser(cli.ArgumentParser):
     """Parse all known arguments, passing unknown arguments to ``git commit``."""
 
     def parse_known_args(self, args=None, namespace=None):
         namespace.footer = OrderedSet()
         namespace.git_add_files = []
         namespace, args = super().parse_known_args(args, namespace)
+
         if namespace.dry_run:
             args.append('--dry-run')
         if namespace.verbosity:

@@ -2,14 +2,13 @@ import argparse
 import shlex
 
 from pkgcheck import reporters, scan
-from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
 
-from .. import git
+from .. import cli, git
 from .argparsers import cwd_repo_argparser, git_repo_argparser
 
 
-class ArgumentParser(arghparse.ArgumentParser):
+class ArgumentParser(cli.ArgumentParser):
     """Parse all known arguments, passing unknown arguments to ``git push``."""
 
     def parse_known_args(self, args=None, namespace=None):

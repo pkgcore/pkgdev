@@ -5,9 +5,10 @@ from pkgcore.restrictions import packages
 from pkgcore.util.parserestrict import parse_match
 from snakeoil.cli import arghparse
 
+from .. import cli
 from .argparsers import cwd_repo_argparser
 
-manifest = arghparse.ArgumentParser(
+manifest = cli.ArgumentParser(
     prog='pkgdev manifest', description='update package manifests',
     parents=(cwd_repo_argparser,))
 manifest.add_argument(

@@ -6,13 +6,13 @@ from functools import partial
 from pkgcore.ebuild import restricts
 from pkgcore.util import commandline
 from pkgcore.util import packages as pkgutils
-from snakeoil.cli import arghparse
 from snakeoil.strings import pluralism
 
+from .. import cli
 from .._vendor.tabulate import tabulate, tabulate_formats
 
 
-showkw = arghparse.ArgumentParser(
+showkw = cli.ArgumentParser(
     prog='pkgdev showkw', description='show package keywords')
 showkw.add_argument(
     'targets', metavar='target', nargs='*',
