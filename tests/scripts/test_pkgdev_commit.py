@@ -806,6 +806,7 @@ class TestPkgdevCommit:
                 lines = f.read().splitlines()
                 mo = copyright_regex.match(lines[0])
                 assert mo.group('end') == str(datetime.today().year)
+                assert mo.group('begin') == years[:4] + '-'
                 assert mo.group('holder') == 'Gentoo Authors'
 
     def test_scan(self, capsys, repo, make_git_repo):
