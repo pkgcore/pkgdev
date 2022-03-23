@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import multiprocessing
 import re
@@ -5,7 +6,7 @@ import signal
 from functools import partial
 from unittest.mock import patch
 
-from pkgdev.mangle import Mangler
+from pkgdev.mangle import GentooMangler, Mangler
 from pkgdev.scripts.pkgdev_commit import Change
 import pytest
 from snakeoil.cli.exceptions import UserException
@@ -51,7 +52,8 @@ class TestMangler:
         path = tmp_path / 'file'
         path.write_text('# comment')
         assert list(Mangler([fake_change(path)])) == [str(path)]
-        assert path.read_text() == '# comment\n'
+        s = path.read_text()
+        assert s == '# comment\n'
 
     def test_iterator_exceptions(self, tmp_path):
         """Test parallelized iterator against unhandled exceptions."""
@@ -102,3 +104,41 @@ class TestMangler:
             os.kill(p.pid, signal.SIGINT)
             p.join()
             assert p.exitcode == 0
+
+class TestGentooMangler:
+
+    @pytest.mark.parametrize("range_year",
+        (
+            f"1999-{datetime.today().year}",
+            f"{datetime.today().year - 1}-{datetime.today().year}",
+            f"{datetime.today().year}",
+        )
+    )
+    def test_copyright_no_mangle(self, tmp_path, range_year):
+        path = tmp_path / 'file'
+        path.write_text(
+            f'# Copyright {range_year} Gentoo Authors\n'
+            '# Distributed under the terms of the GNU General Public License v2\n'
+        )
+        assert list(GentooMangler([fake_change(path)])) == []
+
+    @pytest.mark.parametrize(("range_year", "expected_prefix"),
+        (
+            (f"1999-{datetime.today().year - 1}", f"1999-"),
+            (f"{datetime.today().year - 2}-{datetime.today().year - 1}", f"{datetime.today().year - 2}-"),
+            # (f"{datetime.today().year - 1}", f"{datetime.today().year - 1}-"), # This one is a current bug!
+        )
+    )
+    @pytest.mark.parametrize("copyright_holder", ("Gentoo Foundation", "Gentoo Authors"))
+    def test_copyright_mangler(self, tmp_path, range_year, expected_prefix, copyright_holder):
+        path = tmp_path / 'file'
+        path.write_text(
+            f'# Copyright {range_year} {copyright_holder}\n'
+            '# Distributed under the terms of the GNU General Public License v2\n'
+        )
+        assert list(GentooMangler([fake_change(path)])) == [str(path)]
+        s = path.read_text()
+        assert s == (
+            f'# Copyright {expected_prefix}{datetime.today().year} Gentoo Authors\n'
+            '# Distributed under the terms of the GNU General Public License v2\n'
+        )
