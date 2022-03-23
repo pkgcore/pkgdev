@@ -7,7 +7,7 @@ from io import StringIO
 from unittest.mock import patch
 
 import pytest
-from pkgdev.mangle import copyright_regex
+from pkgdev.mangle import copyright_regex, keywords_regex
 from pkgdev.scripts import run
 from snakeoil.contexts import chdir, os_environ
 from snakeoil.osutils import pjoin
@@ -808,6 +808,27 @@ class TestPkgdevCommit:
                 assert mo.group('end') == str(datetime.today().year)
                 assert mo.group('begin') == years[:4] + '-'
                 assert mo.group('holder') == 'Gentoo Authors'
+
+        for original, expected in (
+                ('"arm64 amd64 x86"', 'amd64 arm64 x86'),
+                ('"arm64 amd64 ~x86"', 'amd64 arm64 ~x86'),
+                ('"arm64 ~x86 amd64"', 'amd64 arm64 ~x86'),
+                ('"arm64 ~x86 ~amd64"', '~amd64 arm64 ~x86'),
+                ('arm64 ~x86 ~amd64', '~amd64 arm64 ~x86'),
+                ):
+            # munge the keywords
+            with open(ebuild_path, 'r+') as f:
+                lines = f.read().splitlines()
+                lines[-1] = f'KEYWORDS={original}'
+                f.seek(0)
+                f.truncate()
+                f.write('\n'.join(lines) + '\n')
+            commit(['-n', '-u', '-m', 'mangling'])
+            # verify the keywords were updated
+            with open(ebuild_path) as f:
+                lines = f.read().splitlines()
+                mo = keywords_regex.match(lines[-1])
+                assert mo.group('keywords') == expected
 
     def test_scan(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
