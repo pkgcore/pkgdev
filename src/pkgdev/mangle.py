@@ -85,6 +85,17 @@ class Mangler:
                 break
         return change.update('\n'.join(lines) + '\n')
 
+    @mangle('metadata.xml')
+    def _metadata(self, change):
+        """Format metadata.xml file."""
+        if not change.path.endswith('/metadata.xml'):
+            return change
+        lines = change.data.splitlines()
+        from lxml import etree
+        root = etree.XML(change.data.encode('utf8'))
+        etree.indent(root, space="\t")
+        return change.update('\n'.join(lines[:2]) + '\n' + etree.tostring(root, encoding=str))
+
     def _kill_pipe(self, *args, error=None):
         """Handle terminating the mangling process group."""
         if self._runner.is_alive():

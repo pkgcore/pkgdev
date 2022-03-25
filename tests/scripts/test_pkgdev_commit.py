@@ -830,6 +830,62 @@ class TestPkgdevCommit:
                 mo = keywords_regex.match(lines[-1])
                 assert mo.group('keywords') == expected
 
+    def test_gentoo_metadata_mangling(self, capsys, make_repo, make_git_repo):
+        repo = make_repo(repo_id='gentoo')
+        git_repo = make_git_repo(repo.location)
+        metadata_path = pjoin(os.path.dirname(repo.create_ebuild('cat/pkg-0')), 'metadata.xml')
+        # stub metadata
+        with open(metadata_path, 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                </pkgmetadata>
+            """))
+        git_repo.add_all('cat/pkg-0')
+
+        def commit():
+            with patch('sys.argv', self.args + ['-n', '-u', '-m', 'mangling']), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            out, err = capsys.readouterr()
+            assert excinfo.value.code == 0
+
+        with open(metadata_path, 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                  <maintainer type="person">
+                    <email>person@email.com</email>
+                    <name>Person</name>
+                  </maintainer>
+                 <upstream>
+                <remote-id type="github">pkgcore/pkgcheck</remote-id>
+                 </upstream>
+                </pkgmetadata>
+            """))
+        commit()
+        with open(metadata_path, 'r') as f:
+            assert f.read() == textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <maintainer type="person">
+                        <email>person@email.com</email>
+                        <name>Person</name>
+                    </maintainer>
+                    <upstream>
+                        <remote-id type="github">pkgcore/pkgcheck</remote-id>
+                    </upstream>
+                </pkgmetadata>
+            """).replace('    ', '\t')
+
     def test_scan(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
