@@ -317,7 +317,10 @@ class PkgSummary(ChangeSummary):
     def add(self):
         """Generate summaries for add actions."""
         if len(self.existing) == len(self.changes):
-            return 'initial import'
+            msg = f"new package, add {', '.join(self.versions)}"
+            if len(self.versions) == 1 or len(msg) <= 50:
+                return msg
+            return 'new package'
         elif not self.revbump:
             msg = f"add {', '.join(self.versions)}"
             if len(self.versions) == 1 or len(msg) <= 50:
