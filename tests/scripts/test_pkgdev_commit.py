@@ -425,7 +425,12 @@ class TestPkgdevCommit:
 
         # initial package import
         repo.create_ebuild('cat/newpkg-0')
-        assert commit() == 'cat/newpkg: initial import'
+        assert commit() == 'cat/newpkg: new package, add 0'
+
+        # initial package import, overflowed title truncated
+        for i in range(10):
+            repo.create_ebuild(f'cat/newpkg2-{i}.0.0')
+        assert commit() == 'cat/newpkg2: new package'
 
         # single addition
         repo.create_ebuild('cat/pkg-1')
