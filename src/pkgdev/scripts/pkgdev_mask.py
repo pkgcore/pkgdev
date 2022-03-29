@@ -17,6 +17,7 @@ from pkgcore.ebuild.profiles import ProfileNode
 from snakeoil.bash import iter_read_bash
 from snakeoil.cli import arghparse
 from snakeoil.osutils import pjoin
+from snakeoil.strings import pluralism
 
 from .. import git
 from .argparsers import cwd_repo_argparser, git_repo_argparser
@@ -42,6 +43,13 @@ mask_opts.add_argument(
         Mark a mask entry for last rites. This defaults to 30 days until
         package removal but accepts an optional argument for the number of
         days.
+    """)
+mask_opts.add_argument(
+    '-b', '--bug', dest='bugs', action='append', type=arghparse.positive_int,
+    help='reference bug in the mask comment',
+    docs="""
+        Add a reference to a bug in the mask comment. May be specified multiple
+        times to reference multiple bugs.
     """)
 
 
@@ -166,9 +174,14 @@ class MaskFile:
         return ''.join(self.header) + '\n\n'.join(map(str, self.masks))
 
 
-def get_comment():
+def get_comment(bugs):
     """Spawn editor to get mask comment."""
     tmp = tempfile.NamedTemporaryFile(mode='w')
+    if bugs:
+        # Bug(s) #A, #B, #C
+        bug_list = ", ".join(f'#{b}' for b in bugs)
+        s = pluralism(bugs)
+        tmp.write(f'\nBug{s} {bug_list}')
     tmp.write(textwrap.dedent("""
 
         # Please enter the mask message. Lines starting with '#' will be ignored.
@@ -226,7 +239,7 @@ def _mask(options, out, err):
         'author': author,
         'email': email,
         'date': today.strftime('%Y-%m-%d'),
-        'comment': get_comment(),
+        'comment': get_comment(options.bugs),
         'atoms': options.atoms,
     }
 
