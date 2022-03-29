@@ -199,3 +199,36 @@ class TestPkgdevMask:
                 cat/pkg
             """)
             self.masks_path.write_text("")  # Reset the contents of package.mask
+
+    def test_mask_bugs(self):
+        removal_date = self.today + timedelta(days=30)
+        today = self.today.strftime('%Y-%m-%d')
+        removal = removal_date.strftime('%Y-%m-%d')
+        for bflag in ('-b', '--bug'):
+            for (bug_nums, expected) in [
+                (['42'], 'Bug #42'),
+                (['42', '43'], 'Bugs #42, #43'),
+            ]:
+                args = []
+                for bug_num in bug_nums:
+                    args += [bflag, bug_num]
+                with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                        patch('sys.argv', self.args + ['cat/pkg'] + args), \
+                        pytest.raises(SystemExit), \
+                        chdir(pjoin(self.repo.path)):
+                    self.script()
+
+                assert self.masks_path.read_text() == textwrap.dedent(f"""\
+                    # First Last <first.last@email.com> ({today})
+                    # mask comment
+                    # {expected}
+                    cat/pkg
+                """)
+                self.masks_path.write_text("")  # Reset the contents of package.mask
+
+    def test_mask_bug_bad(self, capsys, tool):
+        for (arg, expected) in [('-1', 'must be >= 1'), ('foo', 'invalid integer value')]:
+            with pytest.raises(SystemExit):
+                tool.parse_args(['mask', '--bug', arg])
+            out, err = capsys.readouterr()
+            assert err.strip() == f'pkgdev mask: error: argument -b/--bug: {expected}'
