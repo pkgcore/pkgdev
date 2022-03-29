@@ -3,6 +3,7 @@ import re
 import shlex
 import subprocess
 import tempfile
+import textwrap
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -168,7 +169,24 @@ class MaskFile:
 def get_comment():
     """Spawn editor to get mask comment."""
     tmp = tempfile.NamedTemporaryFile(mode='w')
-    tmp.write("\n\n# Please enter the mask message. Lines starting with '#' will be ignored.\n")
+    tmp.write(textwrap.dedent("""
+
+        # Please enter the mask message. Lines starting with '#' will be ignored.
+        #
+        # - Best last rites (removal) practices -
+        #
+        # Include the following info:
+        # a) reason for masking
+        # b) bug # for the removal (and yes you should have one)
+        # c) date of removal (either the date or "in x days")
+        #
+        # Example:
+        #
+        # Masked for removal in 30 days.  Doesn't work
+        # with new libfoo. Upstream dead, gtk-1, smells
+        # funny.
+        # Bug #987654
+    """))
     tmp.flush()
 
     editor = shlex.split(os.environ.get('VISUAL', os.environ.get('EDITOR', 'nano')))
