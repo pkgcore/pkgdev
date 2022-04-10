@@ -2,6 +2,23 @@
 Release Notes
 =============
 
+pkgdev 0.2.0 (2022-04-10)
+-------------------------
+
+- pkgdev commit: Mangle copyright header from single year into year range when
+  appropriate (thanks to Thomas Bracht Laumann Jespersen, #49)
+
+- pkgdev commit: Always sort KEYWORDS via mangler (Arthur Zamarin, #47)
+
+- pkgdev commit: For new packages, include version in commit message ("new
+  package, add ${PV}") (Arthur Zamarin, #53)
+
+- pkgdev mask: Extend mask comment template (thanks to Thomas Bracht Laumann
+  Jespersen, #56)
+
+- pkgdev mask: Accept -b/--bug for referencing bugs (thanks to Thomas Bracht
+  Laumann Jespersen, #56)
+
 pkgdev 0.1.9 (2021-07-31)
 -------------------------
 
