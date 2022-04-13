@@ -182,23 +182,25 @@ class TestPkgdevMask:
         assert self.profile.masks == frozenset([atom_cls('cat/masked'), atom_cls('=cat/pkg-0')])
 
     def test_last_rites(self):
-        removal_date = self.today + timedelta(days=30)
-        today = self.today.strftime('%Y-%m-%d')
-        removal = removal_date.strftime('%Y-%m-%d')
         for rflag in ('-r', '--rites'):
-            with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
-                    patch('sys.argv', self.args + ['cat/pkg', rflag]), \
-                    pytest.raises(SystemExit), \
-                    chdir(pjoin(self.repo.path)):
-                self.script()
+            for args in ([rflag], [rflag, '14']):
+                with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                        patch('sys.argv', self.args + ['cat/pkg'] + args), \
+                        pytest.raises(SystemExit), \
+                        chdir(pjoin(self.repo.path)):
+                    self.script()
 
-            assert self.masks_path.read_text() == textwrap.dedent(f"""\
-                # First Last <first.last@email.com> ({today})
-                # mask comment
-                # Removal: {removal}
-                cat/pkg
-            """)
-            self.masks_path.write_text("")  # Reset the contents of package.mask
+                days = 30 if len(args) == 1 else int(args[1])
+                removal_date = self.today + timedelta(days=days)
+                today = self.today.strftime('%Y-%m-%d')
+                removal = removal_date.strftime('%Y-%m-%d')
+                assert self.masks_path.read_text() == textwrap.dedent(f"""\
+                    # First Last <first.last@email.com> ({today})
+                    # mask comment
+                    # Removal: {removal}
+                    cat/pkg
+                """)
+                self.masks_path.write_text("")  # Reset the contents of package.mask
 
     def test_mask_bugs(self):
         removal_date = self.today + timedelta(days=30)
