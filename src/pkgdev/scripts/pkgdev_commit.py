@@ -382,13 +382,18 @@ class PkgSummary(ChangeSummary):
             if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
                 return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
             elif new_pkg.keywords != old_pkg.keywords:
+                repo_stable = set(self.repo.config.arches_desc['stable'])
                 new_keywords = set(new_pkg.keywords)
                 old_keywords = set(old_pkg.keywords)
                 added = new_keywords - old_keywords
                 removed = old_keywords - new_keywords
                 if removed == {f'~{x}' for x in added}:
                     action = f'stabilize {atom.fullver}'
-                    msg = f"{action} for {', '.join(sorted(added))}"
+                    if (new_pkg.stabilize_allarches and repo_stable and
+                            not repo_stable.intersection(x.lstrip('~') for x in new_keywords - removed if x[0] == '~')):
+                        msg = f"{action} for ALLARCHES"
+                    else:
+                        msg = f"{action} for {', '.join(sorted(added))}"
                 elif removed == {x.lstrip('~') for x in added}:
                     action = f'destabilize {atom.fullver}'
                     msg = f"{action} for {', '.join(sorted(added))}"

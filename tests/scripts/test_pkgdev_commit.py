@@ -454,25 +454,9 @@ class TestPkgdevCommit:
         )
         assert commit() == 'cat/pkg: add 5, drop 4'
 
-        # keyword version
-        repo.create_ebuild('cat/pkg-6')
-        git_repo.add_all('cat/pkg-6')
-        repo.create_ebuild('cat/pkg-6', keywords=['~amd64'])
-        assert commit() == 'cat/pkg: keyword 6 for ~amd64'
-
-        # stabilize version
-        repo.create_ebuild('cat/pkg-6', keywords=['amd64'])
-        assert commit() == 'cat/pkg: stabilize 6 for amd64'
-
-        # destabilize version
-        repo.create_ebuild('cat/pkg-6', keywords=['~amd64'])
-        assert commit() == 'cat/pkg: destabilize 6 for ~amd64'
-
-        # unkeyword version
-        repo.create_ebuild('cat/pkg-6', eapi='6')
-        assert commit() == 'cat/pkg: unkeyword 6 for ~amd64'
-
         # bump EAPI
+        repo.create_ebuild('cat/pkg-6', eapi='6')
+        git_repo.add_all('cat/pkg-6')
         repo.create_ebuild('cat/pkg-6', eapi='7')
         assert commit() == 'cat/pkg: update EAPI 6 -> 7'
 
@@ -551,6 +535,74 @@ class TestPkgdevCommit:
         # treeclean
         shutil.rmtree(pjoin(git_repo.path, 'newcat/pkg'))
         assert commit() == 'newcat/pkg: treeclean'
+
+    def test_generated_commit_summaries_keywords(self, capsys, make_repo, make_git_repo):
+        repo = make_repo(arches=['amd64', 'arm64', 'ia64', 'x86'])
+        git_repo = make_git_repo(repo.location)
+        pkgdir = os.path.dirname(repo.create_ebuild('cat/pkg-0'))
+        with open(pjoin(pkgdir, 'metadata.xml'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                <?xml version="1.0" encoding="UTF-8"?>
+                <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                <pkgmetadata>
+                    <stabilize-allarches/>
+                </pkgmetadata>
+            """))
+        git_repo.add_all('cat/pkg-0')
+
+        def commit():
+            with os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"), \
+                    patch('sys.argv', self.args + ['-a']), \
+                    pytest.raises(SystemExit) as excinfo, \
+                    chdir(git_repo.path):
+                self.script()
+            assert excinfo.value.code == 0
+            out, err = capsys.readouterr()
+            assert err == out == ''
+            message = git_repo.log(['-1', '--pretty=tformat:%B', 'HEAD'])
+            return message[0]
+
+        # keyword version
+        repo.create_ebuild('cat/pkg-0', keywords=['~amd64'])
+        assert commit() == 'cat/pkg: keyword 0 for ~amd64'
+
+        # stabilize version
+        repo.create_ebuild('cat/pkg-0', keywords=['amd64'])
+        assert commit() == 'cat/pkg: stabilize 0 for amd64'
+
+        # destabilize version
+        repo.create_ebuild('cat/pkg-0', keywords=['~amd64'])
+        assert commit() == 'cat/pkg: destabilize 0 for ~amd64'
+
+        # unkeyword version
+        repo.create_ebuild('cat/pkg-0')
+        assert commit() == 'cat/pkg: unkeyword 0 for ~amd64'
+
+        with open(pjoin(repo.location, 'profiles', 'arches.desc'), 'w') as f:
+            f.write(textwrap.dedent("""\
+                amd64 stable
+                arm64 stable
+                ia64  testing
+                x86   stable
+            """))
+        git_repo.add_all('set arches.desc')
+
+        repo.create_ebuild('cat/pkg-0', keywords=['~amd64', '~arm64', '~ia64', '~x86'])
+        git_repo.add_all('cat/pkg-0')
+
+        # stabilize version
+        repo.create_ebuild('cat/pkg-0', keywords=['amd64', '~arm64', '~ia64', '~x86'])
+        assert commit() == 'cat/pkg: stabilize 0 for amd64'
+
+        # stabilize version ALLARCHES
+        repo.create_ebuild('cat/pkg-0', keywords=['amd64', 'arm64', '~ia64', 'x86'])
+        assert commit() == 'cat/pkg: stabilize 0 for ALLARCHES'
+
+        # stabilize version
+        repo.create_ebuild('cat/newpkg-0', keywords=['~amd64', '~arm64', '~ia64', '~x86'])
+        git_repo.add_all('cat/newpkg')
+        repo.create_ebuild('cat/newpkg-0', keywords=['amd64', 'arm64', '~ia64', 'x86'])
+        assert commit() == 'cat/newpkg: stabilize 0 for amd64, arm64, x86'
 
     def test_metadata_summaries(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
