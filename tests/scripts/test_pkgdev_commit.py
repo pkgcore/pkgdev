@@ -476,6 +476,35 @@ class TestPkgdevCommit:
         repo.create_ebuild('cat/pkg-6', eapi='7')
         assert commit() == 'cat/pkg: update EAPI 6 -> 7'
 
+        # update description
+        repo.create_ebuild('cat/pkg-7')
+        git_repo.add_all('cat/pkg-7')
+        repo.create_ebuild('cat/pkg-7', description='something')
+        assert commit() == 'cat/pkg: update DESCRIPTION'
+
+        # update description & homepage
+        repo.create_ebuild('cat/pkg-7', description='another something', homepage='https://gentoo.org')
+        assert commit() == 'cat/pkg: update DESCRIPTION, HOMEPAGE'
+
+        # update string_targets (USE_RUBY)
+        repo.create_ebuild('cat/pkg-8', use_ruby='ruby27')
+        git_repo.add_all('cat/pkg-8')
+        repo.create_ebuild('cat/pkg-8', use_ruby='ruby27 ruby30')
+        assert commit() == 'cat/pkg: enable ruby30'
+        repo.create_ebuild('cat/pkg-8', use_ruby='ruby30')
+        assert commit() == 'cat/pkg: disable ruby27'
+        repo.create_ebuild('cat/pkg-8', use_ruby=' '.join(f'ruby{i}' for i in range(30, 40)))
+        assert commit() == 'cat/pkg: update USE_RUBY support'
+
+        # update array_targets (PYTHON_COMPAT)
+        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_9 )')
+        git_repo.add_all('cat/pkg-9')
+        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_{9..10} )')
+        assert commit() == 'cat/pkg: enable py3.10'
+        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_10 )')
+        assert commit() == 'cat/pkg: disable py3.9'
+
+
         # multiple ebuild modifications don't get a generated summary
         repo.create_ebuild('cat/pkg-5', keywords=['~amd64'])
         repo.create_ebuild('cat/pkg-6', keywords=['~amd64'])
