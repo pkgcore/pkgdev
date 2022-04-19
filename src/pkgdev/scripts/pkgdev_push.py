@@ -2,6 +2,7 @@ import argparse
 import shlex
 
 from pkgcheck import reporters, scan
+from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
 
 from .. import cli, git
@@ -26,7 +27,7 @@ push = ArgumentParser(
 push.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
 push_opts = push.add_argument_group('push options')
 push_opts.add_argument(
-    '-A', '--ask', action='store_true',
+    '-A', '--ask', nargs='?', const=True, action=arghparse.StoreBool,
     help='confirm pushing commits with QA errors')
 push_opts.add_argument(
     '-n', '--dry-run', action='store_true',

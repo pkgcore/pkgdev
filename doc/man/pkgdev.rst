@@ -7,6 +7,8 @@ pkgdev
 .. include:: pkgdev/_options.rst
 .. include:: pkgdev/_subcommands.rst
 
+.. include:: config.rst
+
 Reporting Bugs
 ==============
 

@@ -103,7 +103,7 @@ commit_opts.add_argument(
         out if any failures are found.
     """)
 commit_opts.add_argument(
-    '-A', '--ask', action='store_true',
+    '-A', '--ask', nargs='?', const=True, action=arghparse.StoreBool,
     help='confirm creating commit with QA errors',
     docs="""
         When running with the -s/--scan option enabled, ``pkgdev commit`` will
