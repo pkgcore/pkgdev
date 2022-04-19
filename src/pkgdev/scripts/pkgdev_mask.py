@@ -51,11 +51,26 @@ mask_opts.add_argument(
         Add a reference to a bug in the mask comment. May be specified multiple
         times to reference multiple bugs.
     """)
+mask_opts.add_argument(
+    '--email', action='store_true',
+    help='spawn email composer with prepared email for sending to mailing lists',
+    docs="""
+        Spawn user's preferred email composer with a prepared email for
+        sending a last rites message to Gentoo's mailing list (``gentoo-dev``
+        and ``gentoo-dev-announce``). The user should manually set the Reply-to
+        field for the message to be accepted by ``gentoo-dev-announce``.
+
+        For spawning the preferred email composer, the ``xdg-email`` tool from
+        ``x11-misc/xdg-utils`` package.
+    """)
 
 
 @mask.bind_final_check
 def _mask_validate(parser, namespace):
     atoms = []
+
+    if namespace.email and not namespace.rites:
+        mask.error('last rites required for email support')
 
     if namespace.targets:
         for x in namespace.targets:
@@ -223,6 +238,20 @@ def get_comment(bugs):
     return comment
 
 
+def send_last_rites_email(m: Mask, subject_prefix: str):
+    try:
+        atoms = ', '.join(map(str, m.atoms))
+        subprocess.run(args=[
+            'xdg-email', '--utf8',
+            '--cc', 'gentoo-dev@lists.gentoo.org',
+            '--subject', f'{subject_prefix}: {atoms}',
+            '--body', str(m),
+            'gentoo-dev-announce@lists.gentoo.org'
+        ], check=True)
+    except subprocess.CalledProcessError:
+        mask.error('failed opening email composer')
+
+
 @mask.bind_main_func
 def _mask(options, out, err):
     mask_file = MaskFile(pjoin(options.repo.location, 'profiles/package.mask'))
@@ -248,7 +277,11 @@ def _mask(options, out, err):
         removal = removal_date.strftime('%Y-%m-%d')
         mask_args['comment'].append(f'Removal: {removal}')
 
-    mask_file.add(Mask(**mask_args))
+    m = Mask(**mask_args)
+    mask_file.add(m)
     mask_file.write()
+
+    if options.email:
+        send_last_rites_email(m, 'Last rites')
 
     return 0

@@ -65,6 +65,8 @@ case $state in
         _arguments -C -A '-*' \
           $base_options \
           {'(--rites)-r','(-r)--rites'}'[mark for last rites]' \
+          {'(--bugs)-b','(-b)--bugs'}'[reference bug in the mask comment]' \
+          '--email[spawn email composer with prepared email for sending to mailing lists]' \
           && ret=0
         ;;
       (push)

@@ -113,10 +113,12 @@ _pkgdev() {
         mask)
             subcmd_options="
                 -r --rites
+                -b --bugs
+                --email
             "
 
             case "${prev}" in
-                -r | --rites)
+                -[rb] | --rites | --bugs)
                     COMPREPLY=()
                     ;;
                 *)

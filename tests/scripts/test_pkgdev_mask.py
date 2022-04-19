@@ -1,4 +1,5 @@
 import os
+import sys
 import textwrap
 from datetime import datetime, timedelta, timezone
 from functools import partial
@@ -82,6 +83,18 @@ class TestPkgdevMaskParseArgs:
         with chdir(repo.location):
             options, _ = tool.parse_args(['mask', 'cat/pkg'])
         assert options.atoms == [atom_cls('cat/pkg')]
+
+    def test_email_not_rites(self, repo, make_git_repo, capsys, tool):
+        git_repo = make_git_repo(repo.location)
+
+        # masked pkg
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+        with pytest.raises(SystemExit), \
+                chdir(repo.location):
+            tool.parse_args(['mask', '--email', 'cat/pkg'])
+        _, err = capsys.readouterr()
+        assert err.strip() == "pkgdev mask: error: last rites required for email support"
 
 
 class TestPkgdevMask:
@@ -201,6 +214,31 @@ class TestPkgdevMask:
                     cat/pkg
                 """)
                 self.masks_path.write_text("")  # Reset the contents of package.mask
+
+    @pytest.mark.skipif(sys.platform == "darwin", reason="no xdg-email on mac os")
+    def test_last_rites_with_email(self, tmp_path):
+        output_file = tmp_path / 'mail.txt'
+        for rflag in ('-r', '--rites'):
+            with os_environ(EDITOR="sed -i '1s/$/mask comment/'", MAILER=f"> {output_file} echo"), \
+                    patch('sys.argv', self.args + ['cat/pkg', rflag, '--email']), \
+                    pytest.raises(SystemExit), \
+                    chdir(pjoin(self.repo.path)):
+                self.script()
+            out = output_file.read_text()
+            assert 'mailto:gentoo-dev-announce@lists.gentoo.org' in out
+
+            self.masks_path.write_text("")  # Reset the contents of package.mask
+
+    @pytest.mark.skipif(sys.platform == "darwin", reason="no xdg-email on mac os")
+    def test_last_email_bad_mailer(self, capsys):
+        for rflag in ('-r', '--rites'):
+            with os_environ(EDITOR="sed -i '1s/$/mask comment/'", MAILER="false"), \
+                    patch('sys.argv', self.args + ['cat/pkg', rflag, '--email']), \
+                    pytest.raises(SystemExit), \
+                    chdir(pjoin(self.repo.path)):
+                self.script()
+            _, err = capsys.readouterr()
+            assert err.strip() == "pkgdev mask: error: failed opening email composer"
 
     def test_mask_bugs(self):
         removal_date = self.today + timedelta(days=30)
