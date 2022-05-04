@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Set
 from unittest.mock import patch
 
 import pytest
@@ -43,6 +44,55 @@ class TestPkgdevManifestParseArgs:
             options, _ = tool.parse_args(['manifest', 'cat/pkg'])
         matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
         assert matches == ['cat/pkg-0']
+
+    def test_if_modified_target(self, repo, make_git_repo, tool):
+        def manifest_matches() -> Set[str]:
+            repo.sync()
+            with chdir(repo.location):
+                options, _ = tool.parse_args(['manifest', '--if-modified'])
+            return {x.cpvstr for x in repo.itermatch(options.restriction)}
+
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/oldpkg-0')
+        git_repo.add_all('cat/oldpkg-0')
+
+        # New package
+        repo.create_ebuild('cat/newpkg-0')
+        assert manifest_matches() == {'cat/newpkg-0'}
+        git_repo.add_all('cat/newpkg-0')
+
+        # Untracked file
+        ebuild_path = repo.create_ebuild('cat/newpkg-1')
+        assert manifest_matches() == {'cat/newpkg-1'}
+
+        # Staged file
+        git_repo.add(ebuild_path, commit=False)
+        assert manifest_matches() == {'cat/newpkg-1'}
+
+        # No modified files
+        git_repo.add_all('cat/newpkg-1')
+        assert manifest_matches() == set()
+
+        # Modified file
+        ebuild_path = repo.create_ebuild('cat/newpkg-1', eapi=8)
+        assert manifest_matches() == {'cat/newpkg-1'}
+        git_repo.add_all('cat/newpkg-1: eapi 8')
+
+        # Renamed file
+        git_repo.remove(ebuild_path, commit=False)
+        ebuild_path = repo.create_ebuild('cat/newpkg-2')
+        git_repo.add(ebuild_path, commit=False)
+        assert manifest_matches() == {'cat/newpkg-2'}
+        git_repo.add_all('cat/newpkg-2: rename')
+
+        # Deleted file
+        git_repo.remove(ebuild_path, commit=False)
+        assert manifest_matches() == set()
+
+        # Deleted package
+        ebuild_path = repo.create_ebuild('cat/newpkg-0')
+        git_repo.remove(ebuild_path, commit=False)
+        assert manifest_matches() == set()
 
     def test_non_repo_dir_target(self, tmp_path, repo, capsys, tool):
         with pytest.raises(SystemExit) as excinfo, \

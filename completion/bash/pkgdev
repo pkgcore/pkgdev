@@ -98,6 +98,7 @@ _pkgdev() {
                 -f --force
                 -m --mirrors
                 -d --distdir
+                --if-modified
             "
 
             case "${prev}" in

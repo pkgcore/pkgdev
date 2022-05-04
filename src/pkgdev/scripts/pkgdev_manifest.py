@@ -1,11 +1,13 @@
 import os
+import re
+import subprocess
 
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
 from pkgcore.util.parserestrict import parse_match
 from snakeoil.cli import arghparse
 
-from .. import cli
+from .. import cli, git
 from .argparsers import cwd_repo_argparser
 
 manifest = cli.ArgumentParser(
@@ -43,17 +45,21 @@ manifest_opts.add_argument(
         default because manifest generation is often performed when adding new
         ebuilds with distfiles that aren't on Gentoo mirrors yet.
     """)
+manifest_opts.add_argument(
+    '--if-modified', dest='if_modified', help='Only check packages that have uncommitted modifications',
+    action='store_true',
+    docs="""
+        In addition to matching the specified restriction, restrict to targets
+        which are marked as modified by git, including untracked files.
+    """)
 
 
-@manifest.bind_final_check
-def _manifest_validate(parser, namespace):
-    targets = namespace.target if namespace.target else [namespace.cwd]
+def _restrict_targets(repo, targets):
     restrictions = []
-
     for target in targets:
         if os.path.exists(target):
             try:
-                restrictions.append(namespace.repo.path_restrict(target))
+                restrictions.append(repo.path_restrict(target))
             except ValueError as e:
                 manifest.error(e)
         else:
@@ -61,8 +67,29 @@ def _manifest_validate(parser, namespace):
                 restrictions.append(parse_match(target))
             except ValueError:
                 manifest.error(f'invalid atom: {target!r}')
+    return packages.OrRestriction(*restrictions)
 
-    namespace.restriction = packages.OrRestriction(*restrictions)
+
+def _restrict_modified_files(repo):
+    ebuild_re = re.compile(r'^[ MTARC?]{2} (?P<path>[^/]+/[^/]+/[^/]+\.ebuild)$')
+    p = git.run('status', '--porcelain=v1', '-z', "*.ebuild",
+                cwd=repo.location, stdout=subprocess.PIPE)
+
+    restrictions = []
+    for line in p.stdout.strip('\x00').split('\x00'):
+        if mo := ebuild_re.match(line):
+            restrictions.append(repo.path_restrict(mo.group('path')))
+    return packages.OrRestriction(*restrictions)
+
+
+@manifest.bind_final_check
+def _manifest_validate(parser, namespace):
+    targets = namespace.target if namespace.target else [namespace.cwd]
+
+    namespace.restriction = _restrict_targets(namespace.repo, targets)
+    if namespace.if_modified:
+        namespace.restriction = packages.AndRestriction(namespace.restriction,
+                                                        _restrict_modified_files(namespace.repo))
 
 
 @manifest.bind_main_func

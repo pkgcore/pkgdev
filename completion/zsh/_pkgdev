@@ -59,6 +59,7 @@ case $state in
           {'(--distdir)-d','(-d)--distdir'}'[target download directory]:distdir:_files -/' \
           {'(--force)-f','(-f)--force'}'[forcibly remanifest packages]' \
           {'(--mirrors)-m','(-m)--mirrors'}'[enable fetching from Gentoo mirrors]' \
+          '--if-modified[only check packages that have uncommitted modifications]' \
           && ret=0
         ;;
       (mask)
