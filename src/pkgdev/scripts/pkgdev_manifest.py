@@ -3,7 +3,7 @@ import re
 import subprocess
 
 from pkgcore.operations import observer as observer_mod
-from pkgcore.restrictions import packages
+from pkgcore.restrictions import packages, values
 from pkgcore.util.parserestrict import parse_match
 from snakeoil.cli import arghparse
 
@@ -52,6 +52,13 @@ manifest_opts.add_argument(
         In addition to matching the specified restriction, restrict to targets
         which are marked as modified by git, including untracked files.
     """)
+manifest_opts.add_argument(
+    '--ignore-fetch-restricted', dest='ignore_fetch_restricted', help='Ignore fetch restricted ebuilds',
+    action='store_true',
+    docs="""
+        Ignore attempting to update manifest entries for ebuilds which are
+        fetch restricted.
+    """)
 
 
 def _restrict_targets(repo, targets):
@@ -86,10 +93,12 @@ def _restrict_modified_files(repo):
 def _manifest_validate(parser, namespace):
     targets = namespace.target if namespace.target else [namespace.cwd]
 
-    namespace.restriction = _restrict_targets(namespace.repo, targets)
+    restrictions = [_restrict_targets(namespace.repo, targets)]
     if namespace.if_modified:
-        namespace.restriction = packages.AndRestriction(namespace.restriction,
-                                                        _restrict_modified_files(namespace.repo))
+        restrictions.append(_restrict_modified_files(namespace.repo))
+    if namespace.ignore_fetch_restricted:
+        restrictions.append(packages.PackageRestriction('restrict', values.ContainmentMatch('fetch', negate=True)))
+    namespace.restriction = packages.AndRestriction(*restrictions)
 
 
 @manifest.bind_main_func

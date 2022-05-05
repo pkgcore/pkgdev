@@ -1,5 +1,5 @@
 from functools import partial
-from typing import Set
+from typing import List, Set
 from unittest.mock import patch
 
 import pytest
@@ -93,6 +93,28 @@ class TestPkgdevManifestParseArgs:
         ebuild_path = repo.create_ebuild('cat/newpkg-0')
         git_repo.remove(ebuild_path, commit=False)
         assert manifest_matches() == set()
+
+    def test_ignore_fetch_restricted(self, repo, tool):
+        def manifest_matches() -> List[str]:
+            with chdir(repo.location):
+                options, _ = tool.parse_args(['manifest', '--ignore-fetch-restricted'])
+            return [x.cpvstr for x in repo.itermatch(options.restriction)]
+
+        # No RESTRICT
+        repo.create_ebuild('cat/pkg-0')
+        assert manifest_matches() == ['cat/pkg-0']
+
+        # Not fetch RESTRICT
+        repo.create_ebuild('cat/pkg-0', restrict=('mirror'))
+        assert manifest_matches() == ['cat/pkg-0']
+
+        # fetch RESTRICT
+        repo.create_ebuild('cat/pkg-0', restrict=('fetch'))
+        assert manifest_matches() == []
+
+        # Multiple RESTRICT
+        repo.create_ebuild('cat/pkg-0', restrict=('mirror', 'fetch'))
+        assert manifest_matches() == []
 
     def test_non_repo_dir_target(self, tmp_path, repo, capsys, tool):
         with pytest.raises(SystemExit) as excinfo, \
