@@ -43,6 +43,8 @@ class ArgumentParser(cli.ArgumentParser):
             args.append('--dry-run')
         if namespace.verbosity:
             args.append('-v')
+        if namespace.signoff:
+            args.append('--signoff')
         namespace.commit_args = args
         return namespace, []
 
@@ -119,6 +121,17 @@ commit_opts.add_argument(
 
         This is performed by default for the gentoo repo, but can be forcibly
         disabled or enabled as required.
+    """)
+commit_opts.add_argument(
+    '--signoff', nargs='?', const=True, action=arghparse.StoreBool,
+    help='Add a Signed-off-by at the end of the commit log message',
+    docs="""
+        Add a Signed-off-by trailer by the committer at the end of the commit
+        log message.
+
+        For commiting to the Gentoo repository, under GLEP-76, the commiter
+        shall certify agreement to the Certificate of Origin by adding
+        Signed-off-by line containing the committer's legal name.
     """)
 
 msg_actions = commit_opts.add_mutually_exclusive_group()
@@ -721,9 +734,8 @@ def _commit_validate(parser, namespace):
         namespace.scan_args.extend(shlex.split(namespace.pkgcheck_scan))
     namespace.scan_args.extend(['--exit', 'GentooCI', '--staged'])
 
-    # assume signed commits means also requiring signoffs
     if namespace.repo.config.sign_commits:
-        namespace.commit_args.extend(['--signoff', '--gpg-sign'])
+        namespace.commit_args.append('--gpg-sign')
 
 
 def update_manifests(options, out, err, changes):

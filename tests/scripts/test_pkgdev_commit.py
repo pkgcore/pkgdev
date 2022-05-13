@@ -58,11 +58,19 @@ class TestPkgdevCommitParseArgs:
             options, _ = tool.parse_args(['commit', '-u'])
             assert '--signoff' not in options.commit_args
             assert '--gpg-sign' not in options.commit_args
+
+            options, _ = tool.parse_args(['commit', '-u', '--signoff'])
+            assert '--signoff' in options.commit_args
+            assert '--gpg-sign' not in options.commit_args
         # signed commits enabled by layout.conf setting
         with open(pjoin(git_repo.path, 'metadata/layout.conf'), 'a+') as f:
             f.write('sign-commits = true\n')
         with chdir(repo.location):
             options, _ = tool.parse_args(['commit', '-u'])
+            assert '--signoff' not in options.commit_args
+            assert '--gpg-sign' in options.commit_args
+
+            options, _ = tool.parse_args(['commit', '-u', '--signoff'])
             assert '--signoff' in options.commit_args
             assert '--gpg-sign' in options.commit_args
 

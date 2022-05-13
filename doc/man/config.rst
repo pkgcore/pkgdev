@@ -33,6 +33,11 @@ related values. To find all possible configuration options, run:
     [gentoo]
     push.ask = true
 
+- Sign off all commits for the 'gentoo' repository::
+
+    [gentoo]
+    push.signoff = true
+
 - When committing, stage all files in current working directory (note that this
   option doesn't expect value, therefore no value is defined post equal sign)::
 
