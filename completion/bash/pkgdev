@@ -72,6 +72,7 @@ _pkgdev() {
                 -s --scan
                 -A --ask
                 --mangle
+                --signoff
                 -m --message
                 -M --message-template
                 -u --update

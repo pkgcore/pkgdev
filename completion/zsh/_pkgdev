@@ -47,6 +47,7 @@ case $state in
           {'(--scan)-s','(-s)--scan'}'[run pkgcheck against staged changes]' \
           {'(--ask)-A','(-A)--ask'}'[confirm creating commit with QA errors]' \
           '--mangle[forcibly enable/disable file mangling]' \
+          '--signoff[add a Signed-off-by trailer]' \
           \*{--message,-m}'[specify commit message]:message' \
           {'(--message-template)-M','(-M)--message-template'}'[use commit message template from specified file]:template:_files' \
           {'(--update)-u','(-u)--update'}'[stage all changed files]' \
