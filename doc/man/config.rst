@@ -33,7 +33,8 @@ related values. To find all possible configuration options, run:
     [gentoo]
     push.ask = true
 
-- Sign off all commits for the 'gentoo' repository::
+- Add `Signed-off-by` consenting to the `Certificate of Origin <https://www.gentoo.org/glep/glep-0076.html#certificate-of-origin>`_
+  to all commits for the 'gentoo' repository::
 
     [gentoo]
     push.signoff = true
