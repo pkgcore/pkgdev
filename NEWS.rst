@@ -2,6 +2,28 @@
 Release Notes
 =============
 
+pkgdev 0.2.1 (2022-05-21)
+-------------------------
+
+- pkgdev commit: **BREAKING-CHANGE** disable sign-off by default (Arthur
+  Zamarin, #68)
+
+- pkgdev: add configuration support. For more info look at [#]_.  (Arthur
+  Zamarin, #48, #62)
+
+- pkgdev commit: new summary for stabilizing ALLARCHES (Arthur Zamarin, #61)
+
+- pkgdev mask: offer to send last-rite message email to gentoo-dev ML when
+  last-riting a package (Arthur Zamarin, #63)
+
+- pkgdev manifest: add ``--if-modified`` - restrict manifest targets to those
+  having uncommitted modifications (Arthur Zamarin, #66)
+
+- pkgdev manifest: add ``--ignore-fetch-restricted`` - skip fetch restricted
+  ebuilds (Arthur Zamarin, #67)
+
+.. [#] https://pkgcore.github.io/pkgdev/man/pkgdev.html#config-file-support
+
 pkgdev 0.2.0 (2022-04-10)
 -------------------------
 
