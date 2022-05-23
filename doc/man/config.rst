@@ -34,10 +34,10 @@ related values. To find all possible configuration options, run:
     push.ask = true
 
 - Add `Signed-off-by` consenting to the `Certificate of Origin <https://www.gentoo.org/glep/glep-0076.html#certificate-of-origin>`_
-  to all commits for the 'gentoo' repository::
+  to all commits::
 
-    [gentoo]
-    push.signoff = true
+    [DEFAULT]
+    commit.signoff = true
 
 - When committing, stage all files in current working directory (note that this
   option doesn't expect value, therefore no value is defined post equal sign)::
