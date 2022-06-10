@@ -5,9 +5,10 @@ Config files are supported by most subcommands of ``pkgdev`` from any of three
 locations. Listed in order of increasing precedence these include the
 following:
 
-- system config -- /etc/pkgdev/pkgdev.conf
-- user config -- ~/.config/pkgdev/pkgdev.conf
-- custom config -- specified via the --config option
+- system config -- ``/etc/pkgdev/pkgdev.conf``
+- user config -- ``${XDG_CONFIG_HOME}/pkgdev/pkgdev.conf``
+- user config -- ``~/.config/pkgdev/pkgdev.conf``
+- custom config -- specified via the ``--config`` option
 
 Any settings from a config file with higher precedence will override matching
 settings from a config file with a lower precedence, e.g. user settings
@@ -33,7 +34,8 @@ related values. To find all possible configuration options, run:
     [gentoo]
     push.ask = true
 
-- Add `Signed-off-by` consenting to the `Certificate of Origin <https://www.gentoo.org/glep/glep-0076.html#certificate-of-origin>`_
+- Add `Signed-off-by` consenting to the `Certificate of Origin
+  <https://www.gentoo.org/glep/glep-0076.html#certificate-of-origin>`_
   to all commits::
 
     [DEFAULT]
