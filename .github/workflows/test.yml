@@ -15,10 +15,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         python-version: ['3.8', '3.9', '3.10']
         experimental: [false]
-        # include:
-        #   - os: ubuntu-latest
-        #     python-version: '3.10.0-alpha - 3.10.0'
-        #     experimental: true
+        include:
+          - os: ubuntu-latest
+            python-version: '3.11.0-beta - 3.11'
+            deps: newest-deps
+            experimental: true
 
     steps:
     - name: Checkout code
