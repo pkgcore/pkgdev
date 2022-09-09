@@ -160,7 +160,7 @@ class MaskFile:
             comment = []
             i = mask_lines[0] - 2
             while i >= 0 and (line := lines[i].rstrip()):
-                if not line.startswith('# '):
+                if not line.startswith('# ') and line != '#':
                     mask.error(f'invalid mask entry header, lineno {i + 1}: {line!r}')
                 comment.append(line[2:])
                 i -= 1
@@ -274,8 +274,7 @@ def _mask(options, out, err):
 
     if options.rites:
         removal_date = today + timedelta(days=options.rites)
-        removal = removal_date.strftime('%Y-%m-%d')
-        mask_args['comment'].append(f'Removal: {removal}')
+        mask_args['comment'].append(f'Removal: {removal_date:%Y-%m-%d}')
 
     m = Mask(**mask_args)
     mask_file.add(m)

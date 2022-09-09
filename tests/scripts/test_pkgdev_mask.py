@@ -194,6 +194,29 @@ class TestPkgdevMask:
             self.script()
         assert self.profile.masks == frozenset([atom_cls('cat/masked'), atom_cls('=cat/pkg-0')])
 
+    def test_invalid_header(self, capsys):
+        self.masks_path.write_text(textwrap.dedent("""\
+            # Random Dev <random.dev@email.com> (2022-09-09)
+            #
+            # Larry the Cow was here
+            #
+            # masked
+            cat/masked
+
+            # Larry the Cow <larry@gentoo.org> (2022-09-09)
+            #test
+            # Larry the Cow wasn't here
+            cat/masked2
+        """))
+
+        with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                patch('sys.argv', self.args + ['=cat/pkg-0']), \
+                pytest.raises(SystemExit), \
+                chdir(pjoin(self.repo.path)):
+            self.script()
+        _, err = capsys.readouterr()
+        assert 'invalid mask entry header, lineno 9' in err
+
     def test_invalid_author(self, capsys):
         for line in (
             '# Random Dev <random.dev@email.com>',
