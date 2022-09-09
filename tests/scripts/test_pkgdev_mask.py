@@ -194,6 +194,32 @@ class TestPkgdevMask:
             self.script()
         assert self.profile.masks == frozenset([atom_cls('cat/masked'), atom_cls('=cat/pkg-0')])
 
+    def test_invalid_author(self, capsys):
+        for line in (
+            '# Random Dev <random.dev@email.com>',
+            '# Random Dev <random.dev@email.com) (2021-03-24)',
+            '# Random Dev (2021-03-24)',
+            '# Random Dev <random.dev@email.com> 2021-03-24',
+            '# Random Dev <random.dev@email.com> (24-03-2021)',
+        ):
+            self.masks_path.write_text(textwrap.dedent(f"""\
+                # Random Dev <random.dev@email.com> (2021-03-24)
+                # masked
+                cat/masked
+
+                {line}
+                # masked
+                cat/masked2
+            """))
+
+            with os_environ(EDITOR="sed -i '1s/$/mask comment/'"), \
+                    patch('sys.argv', self.args + ['=cat/pkg-0']), \
+                    pytest.raises(SystemExit), \
+                    chdir(pjoin(self.repo.path)):
+                self.script()
+            _, err = capsys.readouterr()
+            assert 'pkgdev mask: error: invalid author, lineno 5' in err
+
     def test_last_rites(self):
         for rflag in ('-r', '--rites'):
             for args in ([rflag], [rflag, '14']):
