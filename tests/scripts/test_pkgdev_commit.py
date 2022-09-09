@@ -168,7 +168,7 @@ class TestPkgdevCommitParseArgs:
 
 class TestPkgdevCommit:
 
-    script = partial(run, 'pkgdev')
+    script = staticmethod(partial(run, 'pkgdev'))
 
     @pytest.fixture(autouse=True)
     def _setup(self, tmp_path):

@@ -99,7 +99,7 @@ class TestPkgdevMaskParseArgs:
 
 class TestPkgdevMask:
 
-    script = partial(run, 'pkgdev')
+    script = staticmethod(partial(run, 'pkgdev'))
 
     @pytest.fixture(autouse=True)
     def _setup(self, make_repo, make_git_repo):

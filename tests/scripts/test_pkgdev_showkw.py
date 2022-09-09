@@ -34,7 +34,7 @@ class TestPkgdevShowkwParseArgs:
 
 class TestPkgdevShowkw:
 
-    script = partial(run, 'pkgdev')
+    script = staticmethod(partial(run, 'pkgdev'))
     base_args = ['pkgdev', 'showkw', '--config', 'n']
 
     def _create_repo(self, make_repo):

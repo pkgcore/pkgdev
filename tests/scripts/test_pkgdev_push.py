@@ -60,7 +60,7 @@ class TestPkgdevPushParseArgs:
 
 class TestPkgdevPush:
 
-    script = partial(run, 'pkgdev')
+    script = staticmethod(partial(run, 'pkgdev'))
 
     @pytest.fixture(autouse=True)
     def _setup(self, tmp_path, make_repo, make_git_repo):

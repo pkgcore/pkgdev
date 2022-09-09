@@ -135,7 +135,7 @@ class TestPkgdevManifestParseArgs:
 
 class TestPkgdevManifest:
 
-    script = partial(run, 'pkgdev')
+    script = staticmethod(partial(run, 'pkgdev'))
 
     @pytest.fixture(autouse=True)
     def _setup(self):

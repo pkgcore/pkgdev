@@ -42,7 +42,7 @@ def test_script_run(capsys):
 
 class TestPkgdev:
 
-    script = partial(run, project)
+    script = staticmethod(partial(run, project))
 
     def test_version(self, capsys):
         with patch('sys.argv', [project, '--version']):
