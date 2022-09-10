@@ -189,14 +189,19 @@ class MaskFile:
         return ''.join(self.header) + '\n\n'.join(map(str, self.masks))
 
 
-def get_comment(bugs):
+def get_comment(bugs, rites: int):
     """Spawn editor to get mask comment."""
     tmp = tempfile.NamedTemporaryFile(mode='w')
+    summary = []
+    if rites:
+        summary.append(f'Removal: {datetime.now(timezone.utc) + timedelta(days=rites):%Y-%m-%d}.')
     if bugs:
         # Bug(s) #A, #B, #C
         bug_list = ", ".join(f'#{b}' for b in bugs)
         s = pluralism(bugs)
-        tmp.write(f'\nBug{s} {bug_list}')
+        summary.append(f'Bug{s} {bug_list}.')
+    if summary := '  '.join(summary):
+        tmp.write(f'\n{summary}')
     tmp.write(textwrap.dedent("""
 
         # Please enter the mask message. Lines starting with '#' will be ignored.
@@ -268,13 +273,9 @@ def _mask(options, out, err):
         'author': author,
         'email': email,
         'date': today.strftime('%Y-%m-%d'),
-        'comment': get_comment(options.bugs),
+        'comment': get_comment(options.bugs, options.rites),
         'atoms': options.atoms,
     }
-
-    if options.rites:
-        removal_date = today + timedelta(days=options.rites)
-        mask_args['comment'].append(f'Removal: {removal_date:%Y-%m-%d}')
 
     m = Mask(**mask_args)
     mask_file.add(m)

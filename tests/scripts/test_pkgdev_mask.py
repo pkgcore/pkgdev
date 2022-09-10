@@ -259,7 +259,7 @@ class TestPkgdevMask:
                 assert self.masks_path.read_text() == textwrap.dedent(f"""\
                     # First Last <first.last@email.com> ({today})
                     # mask comment
-                    # Removal: {removal}
+                    # Removal: {removal}.
                     cat/pkg
                 """)
                 self.masks_path.write_text("")  # Reset the contents of package.mask
@@ -290,13 +290,11 @@ class TestPkgdevMask:
             assert err.strip() == "pkgdev mask: error: failed opening email composer"
 
     def test_mask_bugs(self):
-        removal_date = self.today + timedelta(days=30)
         today = self.today.strftime('%Y-%m-%d')
-        removal = removal_date.strftime('%Y-%m-%d')
         for bflag in ('-b', '--bug'):
             for (bug_nums, expected) in [
-                (['42'], 'Bug #42'),
-                (['42', '43'], 'Bugs #42, #43'),
+                (['42'], 'Bug #42.'),
+                (['42', '43'], 'Bugs #42, #43.'),
             ]:
                 args = []
                 for bug_num in bug_nums:
