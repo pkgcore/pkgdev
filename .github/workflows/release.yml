@@ -12,22 +12,20 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v2
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
       with:
-        python-version: 3.9
+        python-version: '3.10'
 
     - name: Install dependencies
       run: |
         # install deps required for building sdist/wheels
         python -m pip install --upgrade pip
-        pip install -r requirements/dist.txt
-        pip install -r requirements/test.txt
+        pip install -r requirements/dist.txt -r requirements/test.txt
 
     - name: Test with pytest
-      # forcibly enable pytest colors
       env:
-        PY_COLORS: 1
+        PY_COLORS: 1 # forcibly enable pytest colors
       run: python setup.py test
 
     - name: Build sdist
