@@ -67,8 +67,8 @@ def _restrict_targets(repo, targets):
         if os.path.exists(target):
             try:
                 restrictions.append(repo.path_restrict(target))
-            except ValueError as e:
-                manifest.error(e)
+            except ValueError as exc:
+                manifest.error(exc)
         else:
             try:
                 restrictions.append(parse_match(target))

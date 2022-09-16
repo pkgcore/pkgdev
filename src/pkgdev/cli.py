@@ -10,6 +10,8 @@ from snakeoil.cli import arghparse
 from snakeoil.contexts import patch
 from snakeoil.klass import jit_attr_none
 from snakeoil.mappings import OrderedSet
+from pkgcore.repository import errors as repo_errors
+from pkgcore.util.commandline import _mk_domain
 
 from . import const
 
@@ -113,6 +115,7 @@ class ArgumentParser(arghparse.ArgumentParser):
                 It's also possible to disable all types of settings loading by
                 specifying an argument of 'false' or 'no'.
             """)
+        _mk_domain(config_options)
         super().__init__(parents=[*parents, self.config_argparser], **kwargs)
 
     def parse_known_args(self, args=None, namespace=None):
@@ -130,6 +133,14 @@ class ArgumentParser(arghparse.ArgumentParser):
         elif temp_namespace.config_file is not False:
             namespace = config_parser.parse_config_options(
                 namespace, configs=(namespace.config_file, ))
+
+        try:
+            repo = temp_namespace.domain.find_repo(
+                os.getcwd(), config=temp_namespace.config, configure=False)
+            if repo is not None:
+                namespace = config_parser.parse_config_sections(namespace, repo.aliases)
+        except (repo_errors.InitializationError, IOError) as exc:
+            self.error(str(exc))
 
         # parse command line args to override config defaults
         return super().parse_known_args(args, namespace)
