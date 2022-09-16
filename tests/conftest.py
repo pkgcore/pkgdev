@@ -9,8 +9,7 @@ pytest_plugins = ['pkgcore']
 @pytest.fixture(scope="session")
 def tool():
     """Generate a tool utility for running pkgdev."""
-    tool = Tool(pkgdev.argparser)
-    return tool
+    return Tool(pkgdev.argparser)
 
 
 @pytest.fixture

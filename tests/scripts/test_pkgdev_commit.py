@@ -996,6 +996,28 @@ class TestPkgdevCommit:
         assert not err
         assert 'MissingLicense' in out
 
+    def test_config_repo_opts(self, capsys, repo, make_git_repo, tmp_path):
+        config_file = str(tmp_path / 'config')
+        with open(config_file, 'w') as f:
+            f.write(textwrap.dedent("""
+                [fake]
+                commit.scan=
+            """))
+
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild('cat/pkg-0')
+        git_repo.add_all('cat/pkg-0')
+        repo.create_ebuild('cat/pkg-1', license='')
+        git_repo.add_all('cat/pkg-1', commit=False)
+        with patch('sys.argv', ['pkgdev', 'commit', '--config', config_file] + self.scan_args), \
+                pytest.raises(SystemExit) as excinfo, \
+                chdir(git_repo.path):
+            self.script()
+        out, err = capsys.readouterr()
+        assert excinfo.value.code == 1
+        assert not err
+        assert 'MissingLicense' in out
+
     def test_failed_manifest(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild('cat/pkg-0')
