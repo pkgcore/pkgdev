@@ -2,6 +2,21 @@
 Release Notes
 =============
 
+pkgdev 0.2.2 (2022-09-20)
+-------------------------
+
+- config: fix loading with ``XDG_CONFIG_HOME`` is defined (Arthur Zamarin, #73)
+
+- enable Python 3.11 (Sam James, #81)
+
+- mask: improve parsing of empty header line (Arthur Zamarin, #87)
+
+- mask: improve parsing of empty header line (Arthur Zamarin, #87)
+
+- config: add support for per repo configuration (Arthur Zamarin, #92)
+
+- fix issues with tests for masking with VISUAL set (Arthur Zamarin, #93)
+
 pkgdev 0.2.1 (2022-05-21)
 -------------------------
 
