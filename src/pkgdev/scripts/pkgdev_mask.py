@@ -110,7 +110,7 @@ class Mask:
 
     def __str__(self):
         lines = [f'# {self.author} <{self.email}> ({self.date})']
-        lines.extend(f'# {x}' for x in self.comment)
+        lines.extend(f'# {x}' if x else '#' for x in self.comment)
         lines.extend(map(str, self.atoms))
         return '\n'.join(lines)
 
