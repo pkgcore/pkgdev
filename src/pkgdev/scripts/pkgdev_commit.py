@@ -129,9 +129,15 @@ commit_opts.add_argument(
         Add a Signed-off-by trailer by the committer at the end of the commit
         log message.
 
-        For commiting to the Gentoo repository, under GLEP-76, the commiter
+        For committing to the Gentoo repository, under GLEP-76, the committer
         shall certify agreement to the Certificate of Origin by adding
         Signed-off-by line containing the committer's legal name.
+    """)
+commit_opts.add_argument(
+    '-d', '--distdir', type=arghparse.create_dir, help='target download directory',
+    docs="""
+        Use a specified target directory for downloads instead of the
+        configured DISTDIR.
     """)
 
 msg_actions = commit_opts.add_mutually_exclusive_group()
@@ -761,7 +767,8 @@ def update_manifests(options, out, err, changes):
             # manifest all staged or committed packages
             failed = repo.operations.manifest(
                 options.domain, packages.OrRestriction(*pkgs),
-                observer=observer_mod.formatter_output(out))
+                observer=observer_mod.formatter_output(out),
+                distdir=options.distdir)
             if any(failed):
                 return 1
 
