@@ -1,3 +1,3 @@
-snakeoil~=0.9.12
-pkgcore~=0.12.14
-pkgcheck~=0.10.15
+snakeoil~=0.10.1
+pkgcore~=0.12.16
+pkgcheck~=0.10.16
