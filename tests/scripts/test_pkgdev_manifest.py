@@ -24,6 +24,38 @@ class TestPkgdevManifestParseArgs:
         matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
         assert matches == ['cat/pkg-0']
 
+    def test_repo_relative_pkg(self, repo, capsys, tool):
+        repo.create_ebuild('cat/pkg-0')
+        repo.create_ebuild('cat/newpkg-0')
+        with chdir(pjoin(repo.location, 'cat/pkg')):
+            options, _ = tool.parse_args(['manifest', '.'])
+        matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
+        assert matches == ['cat/pkg-0']
+
+    def test_repo_relative_category(self, repo, capsys, tool):
+        repo.create_ebuild('cat/pkg-0')
+        repo.create_ebuild('cat/newpkg-0')
+
+        with chdir(pjoin(repo.location, 'cat')):
+            options, _ = tool.parse_args(['manifest', 'pkg'])
+        matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
+        assert matches == ['cat/pkg-0']
+
+        with chdir(pjoin(repo.location, 'cat')):
+            options, _ = tool.parse_args(['manifest', '.'])
+        matches = [x.cpvstr for x in repo.itermatch(options.restriction)]
+        assert set(matches) == {'cat/pkg-0', 'cat/newpkg-0'}
+
+    def test_repo_relative_outside(self, tmp_path, repo, capsys, tool):
+        repo.create_ebuild('cat/pkg-0')
+        (ebuild := tmp_path / 'pkg.ebuild').touch()
+        with pytest.raises(SystemExit) as excinfo:
+            with chdir(repo.location):
+                tool.parse_args(['manifest', str(ebuild)])
+        assert excinfo.value.code == 2
+        out, err = capsys.readouterr()
+        assert err.strip() == f"pkgdev manifest: error: {repo.repo_id!r} repo doesn't contain: {str(ebuild)!r}"
+
     def test_dir_target(self, repo, capsys, tool):
         repo.create_ebuild('cat/pkg-0')
         with chdir(repo.location):

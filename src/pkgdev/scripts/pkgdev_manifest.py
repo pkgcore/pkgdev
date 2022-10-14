@@ -66,6 +66,8 @@ def _restrict_targets(repo, targets):
     for target in targets:
         if os.path.exists(target):
             try:
+                if target in repo:
+                    target = os.path.relpath(target, repo.location)
                 restrictions.append(repo.path_restrict(target))
             except ValueError as exc:
                 manifest.error(exc)
