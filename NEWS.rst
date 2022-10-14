@@ -2,6 +2,15 @@
 Release Notes
 =============
 
+pkgdev 0.2.3 (2022-10-14)
+-------------------------
+
+- mask: fix unrelated addition of trailing whitespace (Arthur Zamarin, #98)
+
+- commit: add ``--distdir`` for manifest operations (Arthur Zamarin, #99)
+
+- manifest: better handling of path target (Arthur Zamarin, #85)
+
 pkgdev 0.2.2 (2022-09-20)
 -------------------------
 
