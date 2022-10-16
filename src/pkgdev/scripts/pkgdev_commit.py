@@ -443,6 +443,7 @@ class PkgSummary(ChangeSummary):
                 watch_vars = {'HOMEPAGE', 'DESCRIPTION', 'LICENSE', 'SRC_URI'}
                 array_targets = {'PYTHON_COMPAT', 'LUA_COMPAT'}
                 string_targets = {'USE_RUBY'}
+                use_expand_mapping = {'PYTHON_COMPAT': 'python_targets', 'LUA_COMPAT': 'lua_targets', 'USE_RUBY': 'ruby_targets'}
                 targets = array_targets | string_targets
 
                 updated_vars = drop.keys() & add.keys()
@@ -450,9 +451,11 @@ class PkgSummary(ChangeSummary):
                     return f"update {', '.join(updated)}"
                 elif (target := targets & updated_vars) and len(target) == 1:
                     target = next(iter(target))
+                    py_re = lambda x: re.sub(r'^python(\d+)_(\d+)$', r'py\1.\2', x)
+                    use_expand = {py_re(use[len(target)+2:])
+                        for use, _ in self.repo.use_expand_desc[use_expand_mapping[target]]}
                     if target in array_targets:
                         array_re = re.compile(r'\[\d+\]="(?P<val>.+?)"')
-                        py_re = lambda x: re.sub(r'^python(\d+)_(\d+)$', r'py\1.\2', x)
                         old = {py_re(m.group('val')) for m in re.finditer(array_re, drop[target])}
                         new = {py_re(m.group('val')) for m in re.finditer(array_re, add[target])}
                     else:
@@ -462,8 +465,9 @@ class PkgSummary(ChangeSummary):
                     msg = []
                     if added := sorted(new - old):
                         msg.append(f"enable {', '.join(added)}")
-                    if dropped := sorted(old - new):
-                        msg.append(f"disable {', '.join(dropped)}")
+                    if dropped := old - new:
+                        if not msg or (dropped := dropped.intersection(use_expand)):
+                            msg.append(f"disable {', '.join(sorted(dropped))}")
                     msg = ' and '.join(msg)
                     if len(msg) <= 50:
                         return msg

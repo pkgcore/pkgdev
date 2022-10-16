@@ -479,6 +479,9 @@ class TestPkgdevCommit:
         assert commit() == 'cat/pkg: update DESCRIPTION, HOMEPAGE'
 
         # update string_targets (USE_RUBY)
+        os.mkdir(pjoin(repo.location, 'profiles', 'desc'))
+        with open(pjoin(repo.path, 'profiles', 'desc', 'ruby_targets.desc'), 'w') as file:
+            file.write('\n'.join(f'ruby{ver} - stub' for ver in range(27, 40)))
         repo.create_ebuild('cat/pkg-8', use_ruby='ruby27')
         git_repo.add_all('cat/pkg-8')
         repo.create_ebuild('cat/pkg-8', use_ruby='ruby27 ruby30')
@@ -489,12 +492,16 @@ class TestPkgdevCommit:
         assert commit() == 'cat/pkg: update USE_RUBY support'
 
         # update array_targets (PYTHON_COMPAT)
-        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_9 )')
+        with open(pjoin(repo.path, 'profiles', 'desc', 'python_targets.desc'), 'w') as file:
+            file.write('\n'.join(f'python3_{ver} - stub' for ver in (10, 11)))
+        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_8 python3_9 )')
         git_repo.add_all('cat/pkg-9')
-        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_{9..10} )')
+        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_{8..10} )')
         assert commit() == 'cat/pkg: enable py3.10'
-        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_10 )')
-        assert commit() == 'cat/pkg: disable py3.9'
+        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_{9..10} )')
+        assert commit() == 'cat/pkg: disable py3.8'
+        repo.create_ebuild('cat/pkg-9', data='PYTHON_COMPAT=( python3_{10..11} )')
+        assert commit() == 'cat/pkg: enable py3.11'
 
 
         # multiple ebuild modifications don't get a generated summary
@@ -508,12 +515,12 @@ class TestPkgdevCommit:
         assert commit() == 'cat/pkg: add versions'
 
         # create Manifest
-        with open(pjoin(git_repo.path, 'cat/pkg/Manifest'), 'w') as f:
-            f.write('DIST pkg-3.tar.gz 101 BLAKE2B deadbeef SHA512 deadbeef\n')
+        with open(pjoin(git_repo.path, 'cat/pkg/Manifest'), 'w') as file:
+            file.write('DIST pkg-3.tar.gz 101 BLAKE2B deadbeef SHA512 deadbeef\n')
         assert commit() == 'cat/pkg: update Manifest'
         # update Manifest
-        with open(pjoin(git_repo.path, 'cat/pkg/Manifest'), 'a+') as f:
-            f.write('DIST pkg-2.tar.gz 101 BLAKE2B deadbeef SHA512 deadbeef\n')
+        with open(pjoin(git_repo.path, 'cat/pkg/Manifest'), 'a+') as file:
+            file.write('DIST pkg-2.tar.gz 101 BLAKE2B deadbeef SHA512 deadbeef\n')
         assert commit() == 'cat/pkg: update Manifest'
         # remove Manifest
         os.remove(pjoin(git_repo.path, 'cat/pkg/Manifest'))
