@@ -84,6 +84,8 @@ class TestPkgdevCommitParseArgs:
                     ('--dry-run', '--dry-run'),
                     ('-v', '-v'),
                     ('--verbose', '-v'),
+                    ('-e', '--edit'),
+                    ('--edit', '--edit'),
                     ):
                 options, _ = tool.parse_args(['commit', opt])
                 assert expected in options.commit_args
@@ -94,7 +96,7 @@ class TestPkgdevCommitParseArgs:
         repo.create_ebuild('cat/pkg-0')
         git_repo.add_all('cat/pkg-0', commit=False)
         with chdir(repo.location):
-            for opt in ('--author="A U Thor <author@example.com>"', '-e'):
+            for opt in ('--author="A U Thor <author@example.com>"', '-p'):
                 options, _ = tool.parse_args(['commit', opt])
             assert options.commit_args == [opt]
 

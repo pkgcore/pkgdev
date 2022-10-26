@@ -50,6 +50,7 @@ case $state in
           '--signoff[add a Signed-off-by trailer]' \
           \*{--message,-m}'[specify commit message]:message' \
           {'(--message-template)-M','(-M)--message-template'}'[use commit message template from specified file]:template:_files' \
+          {'(--edit)-e','(-e)--edit'}'[force edit of commit]' \
           {'(--update)-u','(-u)--update'}'[stage all changed files]' \
           {'(--all)-a','(-a)--all'}'[stage all changed/new/removed files]' \
           && ret=0

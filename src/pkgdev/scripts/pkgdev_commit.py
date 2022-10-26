@@ -45,6 +45,8 @@ class ArgumentParser(cli.ArgumentParser):
             args.append('-v')
         if namespace.signoff:
             args.append('--signoff')
+        if namespace.edit:
+            args.append('--edit')
         namespace.commit_args = args
         return namespace, []
 
@@ -161,6 +163,14 @@ msg_actions.add_argument(
     """)
 msg_actions.add_argument('-F', '--file', help=argparse.SUPPRESS)
 msg_actions.add_argument('-t', '--template', help=argparse.SUPPRESS)
+msg_actions.add_argument(
+    '-e', '--edit', action='store_true',
+    help='force edit of commit',
+    docs="""
+        The message taken from command line with -m, and from automatically
+        generated one are usually used as the commit log message unmodified.
+        This option lets you further edit the message taken from these sources.
+    """)
 
 add_actions = commit_opts.add_mutually_exclusive_group()
 add_actions.add_argument(

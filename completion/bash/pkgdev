@@ -75,6 +75,7 @@ _pkgdev() {
                 --signoff
                 -m --message
                 -M --message-template
+                -e --edit
                 -u --update
                 -a --all
             "
