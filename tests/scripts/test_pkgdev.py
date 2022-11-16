@@ -51,13 +51,3 @@ class TestPkgdev:
             assert excinfo.value.code == 0
             out, err = capsys.readouterr()
             assert out.startswith(project)
-
-    def test_installed(self):
-        """Verify tests are running in environment where generated modules exist."""
-        try:
-            importlib.import_module(f'{project}._verinfo')
-        except ImportError:
-            pytest.fail(
-                'not running against installed or released package\n'
-                '(use `setup.py test` when running from git)'
-            )

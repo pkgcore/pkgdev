@@ -1,3 +1,0 @@
-snakeoil @ https://github.com/pkgcore/snakeoil/archive/master.tar.gz
-pkgcore @ https://github.com/pkgcore/pkgcore/archive/master.tar.gz
-pkgcheck @ https://github.com/pkgcore/pkgcheck/archive/master.tar.gz

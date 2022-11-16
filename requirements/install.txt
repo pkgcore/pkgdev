@@ -1,3 +1,0 @@
-snakeoil~=0.10.1
-pkgcore~=0.12.16
-pkgcheck~=0.10.16

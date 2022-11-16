@@ -4,6 +4,7 @@ on:
   push:
     branches: [deploy]
     tags: [v*]
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -15,26 +16,26 @@ jobs:
     - name: Set up Python 3.10
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
+        python-version: "3.10"
 
     - name: Install dependencies
       run: |
-        # install deps required for building sdist/wheels
         python -m pip install --upgrade pip
-        pip install -r requirements/dist.txt -r requirements/test.txt
+        pip install build ".[test,doc]"
 
     - name: Test with pytest
       env:
         PY_COLORS: 1 # forcibly enable pytest colors
-      run: python setup.py test
+      run: pytest
 
     - name: Build sdist
       run: |
         git clean -fxd
-        python setup.py sdist
+        make man
+        make sdist
 
     - name: Build wheel
-      run: python setup.py bdist_wheel
+      run: make wheel
 
     - name: Output dist file info
       run: |
@@ -52,8 +53,7 @@ jobs:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
       if: startsWith(github.ref, 'refs/tags/')
-      run: |
-        twine upload dist/*
+      run: twine upload dist/*
 
     - name: Create GitHub release
       uses: softprops/action-gh-release@v1
