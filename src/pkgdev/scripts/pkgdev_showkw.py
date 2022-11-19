@@ -153,7 +153,7 @@ def _validate_args(parser, namespace):
             '~': '\u001b[33m',
             '-': '\u001b[31m',
             '*': '\u001b[31m',
-            'o': '\u001b[30;1m',
+            'o': '\u001b[90;1m',
             'reset': '\u001b[0m',
         }
     else:
