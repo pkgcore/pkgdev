@@ -134,6 +134,7 @@ _pkgdev() {
             subcmd_options="
                 -A --ask
                 -n --dry-run
+                --pull
             "
 
             COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))

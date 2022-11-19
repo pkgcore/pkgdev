@@ -77,6 +77,7 @@ case $state in
           $base_options \
           {'(--ask)-A','(-A)--ask'}'[confirm pushing commits with QA errors]' \
           {'(--dry-run)-n','(-n)--dry-run'}'[pretend to push commits]' \
+          '--pull[run git pull --rebase before scanning]' \
           && ret=0
         ;;
       (showkw)

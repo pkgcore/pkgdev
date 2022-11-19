@@ -32,6 +32,9 @@ push_opts.add_argument(
 push_opts.add_argument(
     '-n', '--dry-run', action='store_true',
     help='pretend to push the commits')
+push_opts.add_argument(
+    '--pull', action='store_true',
+    help='run `git pull --rebase` before scanning')
 
 
 @push.bind_final_check
@@ -45,6 +48,9 @@ def _commit_validate(parser, namespace):
 
 @push.bind_main_func
 def _push(options, out, err):
+    if options.pull:
+        git.run('pull', '--rebase', cwd=options.repo.location)
+
     # scan commits for QA issues
     pipe = scan(options.scan_args)
     with reporters.FancyReporter(out) as reporter:
