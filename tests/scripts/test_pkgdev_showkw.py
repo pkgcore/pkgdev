@@ -1,10 +1,13 @@
+import textwrap
 from functools import partial
-from typing import NamedTuple, List
+from typing import List, NamedTuple
 from unittest.mock import patch
-import pytest
 
-from snakeoil.contexts import chdir
+import pytest
+from snakeoil.contexts import chdir, os_environ
+
 from pkgdev.scripts import run
+
 
 class Profile(NamedTuple):
     """Profile record used to create profiles in a repository."""
@@ -16,10 +19,11 @@ class Profile(NamedTuple):
     eapi: str = '5'
 
 class TestPkgdevShowkwParseArgs:
+    args = ('showkw', '--config', 'no')
 
     def test_missing_target(self, capsys, tool):
         with pytest.raises(SystemExit):
-            tool.parse_args(['showkw', '--config', 'no'])
+            tool.parse_args(self.args)
         captured = capsys.readouterr()
         assert captured.err.strip() == (
             'pkgdev showkw: error: missing target argument and not in a supported repo')
@@ -27,15 +31,37 @@ class TestPkgdevShowkwParseArgs:
     def test_unknown_arches(self, capsys, tool, make_repo):
         repo = make_repo(arches=['amd64'])
         with pytest.raises(SystemExit):
-            tool.parse_args(['showkw', '--config', 'no', '-a', 'unknown', '-r', repo.location])
+            tool.parse_args([*self.args, '-a', 'unknown', '-r', repo.location])
         captured = capsys.readouterr()
         assert captured.err.strip() == (
             "pkgdev showkw: error: unknown arch: 'unknown' (choices: amd64)")
 
+    def test_no_color(self, tool, make_repo, tmp_path):
+        repo = make_repo(arches=['amd64'])
+        repo.create_ebuild('foo/bar-0', keywords=('x86'))
+
+        (config_file := tmp_path / 'pkgcheck.conf').write_text(textwrap.dedent('''\
+            [DEFAULT]
+            showkw.color = true
+        '''))
+
+        def parse(*args):
+            options, _ = tool.parse_args(['showkw', '-r', repo.location, 'foo/bar',
+                                          '--config', str(config_file), *args])
+            return options
+
+        assert parse().color is True
+        with os_environ(NOCOLOR='1'):
+            # NOCOLOR overrides config file
+            assert parse().color is False
+            # cmd line option overrides NOCOLOR
+            assert parse('--color', 'n').color is False
+            assert parse('--color', 'y').color is True
+
 class TestPkgdevShowkw:
 
     script = staticmethod(partial(run, 'pkgdev'))
-    base_args = ['pkgdev', 'showkw', '--config', 'n']
+    base_args = ('pkgdev', 'showkw', '--config', 'n', '--color', 'n')
 
     def _create_repo(self, make_repo):
         repo = make_repo(arches=['amd64', 'ia64', 'mips', 'x86'])
@@ -51,7 +77,7 @@ class TestPkgdevShowkw:
         with patch('sys.argv', [*self.base_args, "--format", "presto", *args]), \
                 pytest.raises(SystemExit) as excinfo:
             self.script()
-        assert excinfo.value.code == None
+        assert excinfo.value.code is None
         out, err = capsys.readouterr()
         assert not err
         lines = out.split('\n')
@@ -67,7 +93,7 @@ class TestPkgdevShowkw:
         with patch('sys.argv', [*self.base_args, '-r', repo.location, 'foo/bar']), \
                 pytest.raises(SystemExit) as excinfo:
             self.script()
-        assert excinfo.value.code == None
+        assert excinfo.value.code is None
         out, err = capsys.readouterr()
         assert not err
         assert out.split('\n')[0] == "keywords for foo/bar:"
@@ -78,7 +104,7 @@ class TestPkgdevShowkw:
         with patch('sys.argv', [*self.base_args, '-r', repo.location, 'bar']), \
                 pytest.raises(SystemExit) as excinfo:
             self.script()
-        assert excinfo.value.code == None
+        assert excinfo.value.code is None
         out, err = capsys.readouterr()
         assert not err
         assert out.split('\n')[0] == "keywords for foo/bar:"
@@ -90,7 +116,7 @@ class TestPkgdevShowkw:
                 pytest.raises(SystemExit) as excinfo, \
                 chdir(repo.location):
             self.script()
-        assert excinfo.value.code == None
+        assert excinfo.value.code is None
         out, err = capsys.readouterr()
         assert not err
         assert out.split('\n')[0] == "keywords for foo/bar:"
@@ -102,7 +128,7 @@ class TestPkgdevShowkw:
                 pytest.raises(SystemExit) as excinfo, \
                 chdir(repo.location + '/foo/bar'):
             self.script()
-        assert excinfo.value.code == None
+        assert excinfo.value.code is None
         _, err = capsys.readouterr()
         assert not err
 
@@ -155,13 +181,11 @@ class TestPkgdevShowkw:
         assert dict(amd64='~', ia64='o', mips='-', x86='~', slot='0').items() <= res['1'].items()
         assert dict(amd64='+', ia64='*', mips='*', x86='-', slot='2', eapi='8').items() <= res['2'].items()
 
-    @pytest.mark.parametrize(('arg', 'expected'),
-        (
-            ('--stable', {'amd64', 'x86'}),
-            ('--unstable', {'amd64', 'ia64', 'mips', 'x86'}),
-            ('--only-unstable', {'ia64', 'mips'}),
-        )
-    )
+    @pytest.mark.parametrize(('arg', 'expected'), (
+        pytest.param('--stable', {'amd64', 'x86'}, id='stable'),
+        pytest.param('--unstable', {'amd64', 'ia64', 'mips', 'x86'}, id='unstable'),
+        pytest.param('--only-unstable', {'ia64', 'mips'}, id='only-unstable'),
+    ))
     def test_collapse(self, capsys, make_repo, arg, expected):
         repo = self._create_repo(make_repo)
         repo.create_ebuild('foo/bar-0', keywords=('amd64', '~ia64', '~mips', '~x86'))
@@ -170,7 +194,7 @@ class TestPkgdevShowkw:
                 pytest.raises(SystemExit) as excinfo:
             self.script()
         out, err = capsys.readouterr()
-        assert excinfo.value.code == None
+        assert excinfo.value.code is None
         assert not err
         arches = set(out.split('\n')[0].split())
         assert arches == expected

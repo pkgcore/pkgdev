@@ -142,5 +142,8 @@ class ArgumentParser(arghparse.ArgumentParser):
         except (repo_errors.InitializationError, IOError) as exc:
             self.error(str(exc))
 
+        if os.getenv('NOCOLOR'):
+            namespace.color = False
+
         # parse command line args to override config defaults
         return super().parse_known_args(args, namespace)
