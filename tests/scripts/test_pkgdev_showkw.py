@@ -50,7 +50,8 @@ class TestPkgdevShowkwParseArgs:
                                           '--config', str(config_file), *args])
             return options
 
-        assert parse().color is True
+        with os_environ('NOCOLOR'):
+            assert parse().color is True
         with os_environ(NOCOLOR='1'):
             # NOCOLOR overrides config file
             assert parse().color is False
