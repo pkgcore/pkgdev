@@ -2,6 +2,25 @@
 Release Notes
 =============
 
+pkgdev 0.2.4 (2022-11-26)
+-------------------------
+
+- commit: don't show disable for python targets that are disabled (Arthur
+  Zamarin)
+
+- commit: mention ``-e`` as nice option (Arthur Zamarin)
+  https://bugs.gentoo.org/846785
+
+- Use flit with custom wrapper as build backend (Arthur Zamarin, #104)
+
+- showkw: use color 90 instead of 30 (Arthur Zamarin)
+
+- cli: add support to disable colors using environment variable ``NOCOLOR``
+  (Arthur Zamarin)
+
+- push: add ``--pull`` option to auto pull and rebase latest changes from
+  remote before scanning and pushing (Arthur Zamarin, #105)
+
 pkgdev 0.2.3 (2022-10-14)
 -------------------------
 
