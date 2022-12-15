@@ -1,0 +1,123 @@
+{#
+Copyright (C) 2010-2022 Gentoo tatt project
+https://gitweb.gentoo.org/proj/tatt.git/
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+#}
+#!/bin/bash
+
+main() {
+    trap "echo 'signal captured, exiting the entire script...'; exit" SIGHUP SIGINT SIGTERM
+    echo -e "USE tests started on $(date)\n" >> "{{ report_file }}"
+
+    local test_ret=0
+
+    {% for atom, is_test, use_flags in jobs %}
+    {% if is_test %}
+    {{ use_flags }} tatt_test_pkg --test '{{ atom }}' || test_ret=1
+    {% else %}
+    {{ use_flags }} tatt_test_pkg '{{ atom }}' || test_ret=1
+    {% endif %}
+    {% endfor %}
+
+    exit ${test_ret}
+}
+
+cleanup() {
+    echo "Cleaning up"
+    {% for file in cleanup_files %}
+    rm -v -f '{{ file }}'
+    {% endfor %}
+    rm -v -f $0
+}
+
+tatt_pkg_error() {
+    local eout=${2}
+
+    echo "${eout}"
+
+    if [[ -n ${USE} ]]; then
+        echo -n "USE='${USE}'" >> "{{ report_file }}"
+    fi
+    if [[ -n ${FEATURES} ]]; then
+        echo -n " FEATURES='${FEATURES}'" >> "{{ report_file }}"
+    fi
+
+    if [[ ${eout} =~ REQUIRED_USE ]] ; then
+        echo " : REQUIRED_USE not satisfied (probably) for ${1:?}" >> "{{ report_file }}"
+    elif [[ ${eout} =~ USE\ changes ]] ; then
+        echo " : USE dependencies not satisfied (probably) for ${1:?}" >> "{{ report_file }}"
+    elif [[ ${eout} =~ keyword\ changes ]]; then
+        echo " : unkeyworded dependencies (probably) for ${1:?}" >> "{{ report_file }}"
+    elif [[ ${eout} =~ Error:\ circular\ dependencies: ]]; then
+        echo " : circular dependencies (probably) for ${1:?}" >> "{{ report_file }}"
+    elif [[ ${eout} =~ Blocked\ Packages ]]; then
+        echo " : blocked packages (probably) for ${1:?}" >> "{{ report_file }}"
+    else
+        echo " failed for ${1:?}" >> "{{ report_file }}"
+    fi
+
+    local CP=${1#=}
+    local BUILDDIR=/var/tmp/portage/${CP}
+    local BUILDLOG=${BUILDDIR}/temp/build.log
+    if [[ -s ${BUILDLOG} ]]; then
+        mkdir -p {{ log_dir }}
+        local LOGNAME=$(mktemp -p {{ log_dir }} "${CP/\//_}_use_XXXXX")
+        mv "${BUILDLOG}" "${LOGNAME}"
+        echo "    log has been saved as ${LOGNAME}" >> "{{ report_file }}"
+        TESTLOGS=($(find ${BUILDDIR}/work -iname '*test*log*'))
+{% raw %}
+        if [[ ${#TESTLOGS[@]} -gt 0 ]]; then
+            tar cf ${LOGNAME}.tar ${TESTLOGS[@]}
+            echo "    test-suite logs have been saved as ${LOGNAME}.tar" >> "{{ report_file }}"
+        fi
+    fi
+{% endraw %}
+}
+
+tatt_test_pkg() {
+    if [[ ${1:?} == "--test" ]]; then
+        shift
+
+        # Do a first pass to avoid circular dependencies
+        # --onlydeps should mean we're avoiding (too much) duplicate work
+        USE="${USE} minimal -doc" emerge --onlydeps -q1 --with-test-deps {{ emerge_opts }} "${1:?}"
+
+        if ! emerge --onlydeps -q1 --with-test-deps {{ emerge_opts }} "${1:?}"; then
+            echo "merging test dependencies of ${1} failed" >> "{{ report_file }}"
+            return 1
+        fi
+        TFEATURES="${FEATURES} test"
+    else
+        TFEATURES="${FEATURES}"
+    fi
+
+    # --usepkg-exclude needs the package name, so let's extract it
+    # from the atom we have
+    local name=$(portageq pquery "${1:?}" -n)
+
+    eout=$( FEATURES="${TFEATURES}" emerge -1 --getbinpkg=n --usepkg-exclude="${name}" {{ emerge_opts }} "${1:?}" 2>&1 1>/dev/tty )
+    if [[ $? == 0 ]] ; then
+        if [[ -n ${TFEATURES} ]]; then
+            echo -n "FEATURES='${TFEATURES}' " >> "{{ report_file }}"
+        fi
+        echo "USE='${USE}' succeeded for ${1:?}" >> "{{ report_file }}"
+    else
+        FEATURES="${TFEATURES}" tatt_pkg_error "${1:?}" "${eout}"
+        return 1
+    fi
+}
+
+if [[ ${1} == "--clean" ]]; then
+    cleanup
+else
+    main
+fi

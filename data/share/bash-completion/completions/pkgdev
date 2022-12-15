@@ -12,6 +12,7 @@ _pkgdev() {
         mask
         push
         showkw
+        tatt
     "
 
     local base_options="
@@ -191,6 +192,40 @@ _pkgdev() {
                 *)
                     COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
                     COMPREPLY+=($(_list_repo_atoms))
+                    ;;
+            esac
+            ;;
+        tatt)
+            subcmd_options="
+                --api-key
+                -j --job-name
+                -b --bug
+                -t --test
+                -u --use-combos
+                --ignore-prefixes
+                --use-default
+                --use-random
+                --use-expand-random
+                -p --package
+                -s --stablereq
+                -k --keywording
+                --template-file
+                --logs-dir
+                --emerge-opts
+            "
+
+            case "${prev}" in
+                -[jbup] | --api-key | --job-name | --bug | --use-combos | --package | --emerge-opts)
+                    COMPREPLY=()
+                    ;;
+                --template-file)
+                    COMPREPLY=($(compgen -f -- "${cur}"))
+                    ;;
+                --logs-dir)
+                    COMPREPLY=($(compgen -d -- "${cur}"))
+                    ;;
+                *)
+                    COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
                     ;;
             esac
             ;;

@@ -28,7 +28,7 @@ classifiers = [
 dynamic = ["version"]
 
 dependencies = [
-	"snakeoil~=0.10.3",
+	"snakeoil~=0.10.4",
 	"pkgcore~=0.12.16",
 	"pkgcheck~=0.10.16",
 ]
@@ -41,6 +41,10 @@ test = [
 doc = [
 	"sphinx",
 	"tomli; python_version < '3.11'"
+]
+tatt = [
+	"nattka",
+	"Jinja2",
 ]
 
 [project.urls]
