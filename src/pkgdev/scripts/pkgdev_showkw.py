@@ -12,53 +12,70 @@ from .. import cli
 from .._vendor.tabulate import tabulate, tabulate_formats
 
 
-showkw = cli.ArgumentParser(
-    prog='pkgdev showkw', description='show package keywords')
+showkw = cli.ArgumentParser(prog="pkgdev showkw", description="show package keywords")
 showkw.add_argument(
-    'targets', metavar='target', nargs='*',
+    "targets",
+    metavar="target",
+    nargs="*",
     action=commandline.StoreTarget,
-    help='extended atom matching of packages')
+    help="extended atom matching of packages",
+)
 
-output_opts = showkw.add_argument_group('output options')
+output_opts = showkw.add_argument_group("output options")
 output_opts.add_argument(
-    '-f', '--format', default='showkw', metavar='FORMAT',
+    "-f",
+    "--format",
+    default="showkw",
+    metavar="FORMAT",
     choices=tabulate_formats,
-    help='keywords table format',
+    help="keywords table format",
     docs=f"""
         Output table using specified tabular format (defaults to compressed,
         custom format).
 
         Available formats: {', '.join(tabulate_formats)}
-    """)
+    """,
+)
 output_opts.add_argument(
-    '-c', '--collapse', action='store_true',
-    help='show collapsed list of arches')
+    "-c", "--collapse", action="store_true", help="show collapsed list of arches"
+)
 
-arch_options = showkw.add_argument_group('arch options')
+arch_options = showkw.add_argument_group("arch options")
 arch_options.add_argument(
-    '-s', '--stable', action='store_true',
-    help='show stable arches')
+    "-s", "--stable", action="store_true", help="show stable arches"
+)
 arch_options.add_argument(
-    '-u', '--unstable', action='store_true',
-    help='show unstable arches')
+    "-u", "--unstable", action="store_true", help="show unstable arches"
+)
 arch_options.add_argument(
-    '-o', '--only-unstable', action='store_true',
-    help='show arches that only have unstable keywords')
+    "-o",
+    "--only-unstable",
+    action="store_true",
+    help="show arches that only have unstable keywords",
+)
 arch_options.add_argument(
-    '-p', '--prefix', action='store_true',
-    help='show prefix and non-native arches')
+    "-p", "--prefix", action="store_true", help="show prefix and non-native arches"
+)
 arch_options.add_argument(
-    '-a', '--arch', action='csv_negations',
-    help='select arches to display')
+    "-a", "--arch", action="csv_negations", help="select arches to display"
+)
 
 # TODO: allow multi-repo comma-separated input
-target_opts = showkw.add_argument_group('target options')
+target_opts = showkw.add_argument_group("target options")
 target_opts.add_argument(
-    '-r', '--repo', dest='selected_repo', metavar='REPO', priority=29,
+    "-r",
+    "--repo",
+    dest="selected_repo",
+    metavar="REPO",
+    priority=29,
     action=commandline.StoreRepoObject,
-    repo_type='all-raw', allow_external_repos=True,
-    help='repo to query (defaults to all ebuild repos)')
-@showkw.bind_delayed_default(30, 'repos')
+    repo_type="all-raw",
+    allow_external_repos=True,
+    help="repo to query (defaults to all ebuild repos)",
+)
+
+
+@showkw.bind_delayed_default(30, "repos")
 def _setup_repos(namespace, attr):
     target_repo = namespace.selected_repo
     all_ebuild_repos = namespace.domain.all_ebuild_repos_raw
@@ -74,19 +91,21 @@ def _setup_repos(namespace, attr):
         else:
             # determine if CWD is inside an unconfigured repo
             target_repo = namespace.domain.find_repo(
-                namespace.cwd, config=namespace.config)
+                namespace.cwd, config=namespace.config
+            )
 
     # fallback to using all, unfiltered ebuild repos if no target repo can be found
     namespace.repo = target_repo if target_repo is not None else all_ebuild_repos
 
 
-@showkw.bind_delayed_default(40, 'arches')
+@showkw.bind_delayed_default(40, "arches")
 def _setup_arches(namespace, attr):
-    default_repo = namespace.config.get_default('repo')
+    default_repo = namespace.config.get_default("repo")
 
     try:
-        known_arches = {arch for r in namespace.repo.trees
-                        for arch in r.config.known_arches}
+        known_arches = {
+            arch for r in namespace.repo.trees for arch in r.config.known_arches
+        }
     except AttributeError:
         try:
             # binary/vdb repos use known arches from the default repo
@@ -101,29 +120,34 @@ def _setup_arches(namespace, attr):
         disabled_arches, enabled_arches = namespace.arch
         disabled_arches = set(disabled_arches)
         enabled_arches = set(enabled_arches)
-        unknown_arches = disabled_arches.difference(known_arches) | enabled_arches.difference(known_arches)
+        unknown_arches = disabled_arches.difference(
+            known_arches
+        ) | enabled_arches.difference(known_arches)
         if unknown_arches:
-            unknown = ', '.join(map(repr, sorted(unknown_arches)))
-            known = ', '.join(sorted(known_arches))
-            es = pluralism(unknown_arches, plural='es')
-            showkw.error(f'unknown arch{es}: {unknown} (choices: {known})')
+            unknown = ", ".join(map(repr, sorted(unknown_arches)))
+            known = ", ".join(sorted(known_arches))
+            es = pluralism(unknown_arches, plural="es")
+            showkw.error(f"unknown arch{es}: {unknown} (choices: {known})")
         if enabled_arches:
             arches = arches.intersection(enabled_arches)
         if disabled_arches:
             arches = arches - disabled_arches
 
-    prefix_arches = set(x for x in arches if '-' in x)
+    prefix_arches = set(x for x in arches if "-" in x)
     native_arches = arches.difference(prefix_arches)
     arches = native_arches
     if namespace.prefix:
         arches = arches.union(prefix_arches)
     if namespace.stable:
         try:
-            stable_arches = {arch for r in namespace.repo.trees
-                             for arch in r.config.profiles.arches('stable')}
+            stable_arches = {
+                arch
+                for r in namespace.repo.trees
+                for arch in r.config.profiles.arches("stable")
+            }
         except AttributeError:
             # binary/vdb repos use stable arches from the default repo
-            stable_arches = default_repo.config.profiles.arches('stable')
+            stable_arches = default_repo.config.profiles.arches("stable")
         arches = arches.intersection(stable_arches)
 
     namespace.known_arches = known_arches
@@ -135,7 +159,7 @@ def _setup_arches(namespace, attr):
 def _colormap(colors, line):
     if colors is None:
         return line
-    return colors[line] + line + colors['reset']
+    return colors[line] + line + colors["reset"]
 
 
 @showkw.bind_final_check
@@ -143,18 +167,18 @@ def _validate_args(parser, namespace):
     namespace.pkg_dir = False
 
     # disable colors when not using the native output format
-    if namespace.format != 'showkw':
+    if namespace.format != "showkw":
         namespace.color = False
 
     if namespace.color:
         # default colors to use for keyword types
         _COLORS = {
-            '+': '\u001b[32m',
-            '~': '\u001b[33m',
-            '-': '\u001b[31m',
-            '*': '\u001b[31m',
-            'o': '\u001b[90;1m',
-            'reset': '\u001b[0m',
+            "+": "\u001b[32m",
+            "~": "\u001b[33m",
+            "-": "\u001b[31m",
+            "*": "\u001b[31m",
+            "o": "\u001b[90;1m",
+            "reset": "\u001b[0m",
         }
     else:
         _COLORS = None
@@ -173,12 +197,13 @@ def _validate_args(parser, namespace):
                 restriction = namespace.repo.path_restrict(namespace.cwd)
                 token = namespace.cwd
             except (AttributeError, ValueError):
-                parser.error('missing target argument and not in a supported repo')
+                parser.error("missing target argument and not in a supported repo")
 
             # determine if we're grabbing the keywords for a single pkg in cwd
             namespace.pkg_dir = any(
                 isinstance(x, restricts.PackageDep)
-                for x in reversed(restriction.restrictions))
+                for x in reversed(restriction.restrictions)
+            )
 
         namespace.targets = [(token, restriction)]
 
@@ -190,7 +215,7 @@ def _collapse_arches(options, pkgs):
     unstable_keywords = set()
     for pkg in pkgs:
         for x in pkg.keywords:
-            if x[0] == '~':
+            if x[0] == "~":
                 unstable_keywords.add(x[1:])
             elif x in options.arches:
                 stable_keywords.add(x)
@@ -200,9 +225,9 @@ def _collapse_arches(options, pkgs):
         keywords.update(unstable_keywords.difference(stable_keywords))
     if not keywords or options.stable:
         keywords.update(stable_keywords)
-    return (
-        sorted(keywords.intersection(options.native_arches)) +
-        sorted(keywords.intersection(options.prefix_arches)))
+    return sorted(keywords.intersection(options.native_arches)) + sorted(
+        keywords.intersection(options.prefix_arches)
+    )
 
 
 def _render_rows(options, pkgs, arches):
@@ -212,15 +237,15 @@ def _render_rows(options, pkgs, arches):
         row = [pkg.fullver]
         for arch in arches:
             if arch in keywords:
-                line = '+'
-            elif f'~{arch}' in keywords:
-                line = '~'
-            elif f'-{arch}' in keywords:
-                line = '-'
-            elif '-*' in keywords:
-                line = '*'
+                line = "+"
+            elif f"~{arch}" in keywords:
+                line = "~"
+            elif f"-{arch}" in keywords:
+                line = "-"
+            elif "-*" in keywords:
+                line = "*"
             else:
-                line = 'o'
+                line = "o"
             row.append(options.colormap(line))
         row.extend([pkg.eapi, pkg.fullslot, pkg.repo.repo_id])
         yield row
@@ -230,23 +255,28 @@ def _render_rows(options, pkgs, arches):
 def main(options, out, err):
     continued = False
     for token, restriction in options.targets:
-        for pkgs in pkgutils.groupby_pkg(options.repo.itermatch(restriction, sorter=sorted)):
+        for pkgs in pkgutils.groupby_pkg(
+            options.repo.itermatch(restriction, sorter=sorted)
+        ):
             if options.collapse:
-                out.write(' '.join(_collapse_arches(options, pkgs)))
+                out.write(" ".join(_collapse_arches(options, pkgs)))
             else:
                 arches = sorted(options.arches.intersection(options.native_arches))
                 if options.prefix:
                     arches += sorted(options.arches.intersection(options.prefix_arches))
-                headers = [''] + arches + ['eapi', 'slot', 'repo']
+                headers = [""] + arches + ["eapi", "slot", "repo"]
                 if continued:
                     out.write()
                 if not options.pkg_dir:
                     pkgs = list(pkgs)
-                    out.write(f'keywords for {pkgs[0].unversioned_atom}:')
+                    out.write(f"keywords for {pkgs[0].unversioned_atom}:")
                 data = _render_rows(options, pkgs, arches)
                 table = tabulate(
-                    data, headers=headers, tablefmt=options.format,
-                    disable_numparse=True)
+                    data,
+                    headers=headers,
+                    tablefmt=options.format,
+                    disable_numparse=True,
+                )
                 out.write(table)
             continued = True
 

@@ -118,7 +118,7 @@ TableFormat = namedtuple(
         "with_header_hide",
         "vertical_headers",
     ],
-    defaults=(False,)
+    defaults=(False,),
 )
 
 
@@ -405,7 +405,8 @@ _table_formats = {
         linebelow=None,
         headerrow=DataRow("", "", ""),
         datarow=DataRow("", "", ""),
-        padding=1, with_header_hide=None,
+        padding=1,
+        with_header_hide=None,
         vertical_headers=True,
     ),
     "mediawiki": TableFormat(
@@ -1607,8 +1608,10 @@ def tabulate(
         minwidths = [1] * len(cols)
     else:
         minwidths = [width_fn(h) + MIN_PADDING for h in headers]
-    cols = [_align_column(c, a, minw, has_invisible, enable_widechars, is_multiline)
-            for c, a, minw in zip(cols, aligns, minwidths)]
+    cols = [
+        _align_column(c, a, minw, has_invisible, enable_widechars, is_multiline)
+        for c, a, minw in zip(cols, aligns, minwidths)
+    ]
 
     if headers:
         # align headers and add headers
@@ -1616,19 +1619,23 @@ def tabulate(
         t_aligns = aligns or [stralign] * len(headers)
         minwidths = [
             max(minw, max(width_fn(cl) for cl in c))
-            for minw, c in zip(minwidths, t_cols)]
+            for minw, c in zip(minwidths, t_cols)
+        ]
         if fmt.vertical_headers:
             max_len = max(len(x) for x in headers)
             headers = [x.rjust(max_len) for x in headers]
             headers = [
-                [_align_header(h[i], a, minw, width_fn(h[i])) for h, a, minw
-                 in zip(headers, t_aligns, minwidths)]
+                [
+                    _align_header(h[i], a, minw, width_fn(h[i]))
+                    for h, a, minw in zip(headers, t_aligns, minwidths)
+                ]
                 for i in range(max_len)
             ]
         else:
             headers = [
                 _align_header(h, a, minw, width_fn(h), is_multiline, width_fn)
-                for h, a, minw in zip(headers, t_aligns, minwidths)]
+                for h, a, minw in zip(headers, t_aligns, minwidths)
+            ]
         rows = list(zip(*cols))
     else:
         minwidths = [max(width_fn(cl) for cl in c) for c in cols]
@@ -1745,7 +1752,7 @@ def _format_table(fmt, headers, rows, colwidths, colaligns, is_multiline):
         colwidths[0] += 1
         padded_widths = colwidths
     else:
-        padded_widths = [(w + 2*pad) for w in colwidths]
+        padded_widths = [(w + 2 * pad) for w in colwidths]
 
     if is_multiline:
         pad_row = lambda row, _: row  # noqa do it later, in _append_multiline_row

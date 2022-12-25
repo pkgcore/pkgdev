@@ -3,7 +3,7 @@ from pkgdev.cli import Tool
 from pkgdev.scripts import pkgdev
 from snakeoil.cli import arghparse
 
-pytest_plugins = ['pkgcore']
+pytest_plugins = ["pkgcore"]
 
 
 @pytest.fixture(scope="session")

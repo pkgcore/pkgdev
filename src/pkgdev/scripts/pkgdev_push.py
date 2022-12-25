@@ -15,41 +15,48 @@ class ArgumentParser(cli.ArgumentParser):
     def parse_known_args(self, args=None, namespace=None):
         namespace, args = super().parse_known_args(args, namespace)
         if namespace.dry_run:
-            args.append('--dry-run')
+            args.append("--dry-run")
         namespace.push_args = args
         return namespace, []
 
 
 push = ArgumentParser(
-    prog='pkgdev push', description='run QA checks on commits and push them',
-    parents=(cwd_repo_argparser, git_repo_argparser))
+    prog="pkgdev push",
+    description="run QA checks on commits and push them",
+    parents=(cwd_repo_argparser, git_repo_argparser),
+)
 # custom `pkgcheck scan` args used for tests
-push.add_argument('--pkgcheck-scan', help=argparse.SUPPRESS)
-push_opts = push.add_argument_group('push options')
+push.add_argument("--pkgcheck-scan", help=argparse.SUPPRESS)
+push_opts = push.add_argument_group("push options")
 push_opts.add_argument(
-    '-A', '--ask', nargs='?', const=True, action=arghparse.StoreBool,
-    help='confirm pushing commits with QA errors')
+    "-A",
+    "--ask",
+    nargs="?",
+    const=True,
+    action=arghparse.StoreBool,
+    help="confirm pushing commits with QA errors",
+)
 push_opts.add_argument(
-    '-n', '--dry-run', action='store_true',
-    help='pretend to push the commits')
+    "-n", "--dry-run", action="store_true", help="pretend to push the commits"
+)
 push_opts.add_argument(
-    '--pull', action='store_true',
-    help='run `git pull --rebase` before scanning')
+    "--pull", action="store_true", help="run `git pull --rebase` before scanning"
+)
 
 
 @push.bind_final_check
 def _commit_validate(parser, namespace):
     # determine `pkgcheck scan` args
-    namespace.scan_args = ['-v'] * namespace.verbosity
+    namespace.scan_args = ["-v"] * namespace.verbosity
     if namespace.pkgcheck_scan:
         namespace.scan_args.extend(shlex.split(namespace.pkgcheck_scan))
-    namespace.scan_args.extend(['--exit', 'GentooCI', '--commits'])
+    namespace.scan_args.extend(["--exit", "GentooCI", "--commits"])
 
 
 @push.bind_main_func
 def _push(options, out, err):
     if options.pull:
-        git.run('pull', '--rebase', cwd=options.repo.location)
+        git.run("pull", "--rebase", cwd=options.repo.location)
 
     # scan commits for QA issues
     pipe = scan(options.scan_args)
@@ -60,13 +67,13 @@ def _push(options, out, err):
     # fail on errors unless they're ignored
     if pipe.errors:
         with reporters.FancyReporter(out) as reporter:
-            out.write(out.bold, out.fg('red'), '\nFAILURES', out.reset)
+            out.write(out.bold, out.fg("red"), "\nFAILURES", out.reset)
             for result in sorted(pipe.errors):
                 reporter.report(result)
-        if not (options.ask and userquery('Push commits anyway?', out, err)):
+        if not (options.ask and userquery("Push commits anyway?", out, err)):
             return 1
 
     # push commits upstream
-    git.run('push', *options.push_args, cwd=options.repo.location)
+    git.run("push", *options.push_args, cwd=options.repo.location)
 
     return 0

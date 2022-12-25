@@ -9,6 +9,7 @@ def write_verinfo(cleanup_files):
     path.parent.mkdir(parents=True, exist_ok=True)
     print(f"generating version info: {path}")
     from snakeoil.version import get_git_version
+
     path.write_text(f"version_info={get_git_version(Path.cwd())!r}")
 
 
@@ -28,13 +29,17 @@ def prepare_pkgcore(callback):
 
 def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
     """Builds a wheel, places it in wheel_directory"""
-    callback = partial(buildapi.build_wheel, wheel_directory, config_settings, metadata_directory)
+    callback = partial(
+        buildapi.build_wheel, wheel_directory, config_settings, metadata_directory
+    )
     return prepare_pkgcore(callback)
 
 
 def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
     """Builds an "editable" wheel, places it in wheel_directory"""
-    callback = partial(buildapi.build_editable, wheel_directory, config_settings, metadata_directory)
+    callback = partial(
+        buildapi.build_editable, wheel_directory, config_settings, metadata_directory
+    )
     return prepare_pkgcore(callback)
 
 
