@@ -7,6 +7,7 @@ _pkgdev() {
     _init_completion || return
 
     local subcommands="
+        bugs
         commit
         manifest
         mask
@@ -223,6 +224,27 @@ _pkgdev() {
                     ;;
                 --logs-dir)
                     COMPREPLY=($(compgen -d -- "${cur}"))
+                    ;;
+                *)
+                    COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+                    ;;
+            esac
+            ;;
+        bugs)
+            subcmd_options="
+                --api-key
+                --auto-cc-arches
+                --dot
+                -s --stablereq
+                -k --keywording
+            "
+
+            case "${prev}" in
+                --api-key | --auto-cc-arches)
+                    COMPREPLY=()
+                    ;;
+                --dot)
+                    COMPREPLY=($(compgen -f -- "${cur}"))
                     ;;
                 *)
                     COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
