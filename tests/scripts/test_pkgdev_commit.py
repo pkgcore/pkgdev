@@ -448,7 +448,7 @@ class TestPkgdevCommit:
 
         # multiple additions
         repo.create_ebuild('cat/pkg-2')
-        repo.create_ebuild('cat/pkg-3')
+        repo.create_ebuild('cat/pkg-3', eapi=6)
         repo.create_ebuild('cat/pkg-4', eapi=6)
         assert commit() == 'cat/pkg: add 2, 3, 4'
 
@@ -464,9 +464,10 @@ class TestPkgdevCommit:
         )
         assert commit() == 'cat/pkg: add 5, drop 4'
 
-        # bump EAPI
+        # bump EAPI for multiple versions, same summary
         repo.create_ebuild('cat/pkg-6', eapi='6')
         git_repo.add_all('cat/pkg-6')
+        repo.create_ebuild('cat/pkg-3', eapi='7')
         repo.create_ebuild('cat/pkg-6', eapi='7')
         assert commit() == 'cat/pkg: update EAPI 6 -> 7'
 

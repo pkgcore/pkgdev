@@ -397,8 +397,8 @@ class PkgSummary(ChangeSummary):
     @change('M')
     def modify(self):
         """Generate summaries for modify actions."""
-        if len(self.changes) == 1:
-            atom = next(iter(self.changes))
+        summaries = set()
+        for atom in self.changes:
             pkgs = self.repo.match(atom)
             self.old_repo.add_pkgs(pkgs)
             try:
@@ -406,10 +406,10 @@ class PkgSummary(ChangeSummary):
                 new_pkg = pkgs[0]
             except IndexError:  # pragma: no cover
                 # broken ebuild should be caught during manifesting or scanning
-                return
+                continue
 
             if old_pkg.eapi in new_pkg.eapi.inherits[1:]:
-                return f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}'
+                summaries.add(f'update EAPI {old_pkg.eapi} -> {new_pkg.eapi}')
             elif new_pkg.keywords != old_pkg.keywords:
                 repo_stable = set(self.repo.config.arches_desc['stable'])
                 new_keywords = set(new_pkg.keywords)
@@ -434,8 +434,9 @@ class PkgSummary(ChangeSummary):
                     msg = f"{action} for {', '.join(sorted(removed))}"
 
                 if len(msg) <= 50:
-                    return msg
-                return action
+                    summaries.add(msg)
+                else:
+                    summaries.add(action)
             else:
                 # use sourced bash env diffs to determine summaries
                 old_env = old_pkg.environment.data.splitlines()
@@ -458,10 +459,10 @@ class PkgSummary(ChangeSummary):
 
                 updated_vars = drop.keys() & add.keys()
                 if updated := sorted(watch_vars & updated_vars):
-                    return f"update {', '.join(updated)}"
+                    summaries.add(f"update {', '.join(updated)}")
                 elif (target := targets & updated_vars) and len(target) == 1:
                     target = next(iter(target))
-                    py_re = lambda x: re.sub(r'^python(\d+)_(\d+)$', r'py\1.\2', x)
+                    py_re = partial(re.sub, r'^python(\d+)_(\d+)$', r'py\1.\2')
                     use_expand = {py_re(use[len(target)+2:])
                         for use, _ in self.repo.use_expand_desc[use_expand_mapping[target]]}
                     if target in array_targets:
@@ -480,9 +481,11 @@ class PkgSummary(ChangeSummary):
                             msg.append(f"disable {', '.join(sorted(dropped))}")
                     msg = ' and '.join(msg)
                     if len(msg) <= 50:
-                        return msg
+                        summaries.add(msg)
                     else:
-                        return f'update {target} support'
+                        summaries.add(f'update {target} support')
+        if len(summaries) == 1:
+            return next(iter(summaries))
 
 
 class GitChanges(UserDict):
