@@ -163,7 +163,7 @@ msg_actions.add_argument(
     """)
 msg_actions.add_argument('-F', '--file', help=argparse.SUPPRESS)
 msg_actions.add_argument('-t', '--template', help=argparse.SUPPRESS)
-msg_actions.add_argument(
+commit_opts.add_argument(
     '-e', '--edit', action='store_true',
     help='force edit of commit',
     docs="""
