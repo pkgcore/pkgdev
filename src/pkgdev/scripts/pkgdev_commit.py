@@ -167,9 +167,8 @@ commit_opts.add_argument(
     '-e', '--edit', action='store_true',
     help='force edit of commit',
     docs="""
-        The message taken from command line with -m, and from automatically
-        generated one are usually used as the commit log message unmodified.
-        This option lets you further edit the message taken from these sources.
+        This option will ask git to open the commit message in an editor before
+        commit. The git configuration is used to select the editor.
     """)
 
 add_actions = commit_opts.add_mutually_exclusive_group()
