@@ -16,9 +16,7 @@ from snakeoil.cli import arghparse
 
 from ..cli import ArgumentParser
 
-tatt = ArgumentParser(
-    prog="pkgdev tatt", description=__doc__, verbose=False, quiet=False
-)
+tatt = ArgumentParser(prog="pkgdev tatt", description=__doc__, verbose=False, quiet=False)
 tatt.add_argument(
     "--api-key",
     metavar="KEY",
@@ -204,9 +202,7 @@ def _validate_args(parser, namespace):
             )
         namespace.restrict = boolean.AndRestriction(
             boolean.OrRestriction(*commandline.convert_to_restrict(namespace.packages)),
-            packages.PackageRestriction(
-                "properties", values.ContainmentMatch("live", negate=True)
-            ),
+            packages.PackageRestriction("properties", values.ContainmentMatch("live", negate=True)),
             keywords_restrict,
         )
 
@@ -220,17 +216,13 @@ def _get_bugzilla_packages(namespace):
     namespace.keywording = bug.category == BugCategory.KEYWORDREQ
     repo = namespace.domain.repos["gentoo"].raw_repo
     return dict(
-        match_package_list(
-            repo, bug, only_new=True, filter_arch=[namespace.domain.arch]
-        )
+        match_package_list(repo, bug, only_new=True, filter_arch=[namespace.domain.arch])
     ).keys()
 
 
 def _get_cmd_packages(namespace):
     repos = namespace.domain.source_repos_raw
-    for pkgs in pkgutils.groupby_pkg(
-        repos.itermatch(namespace.restrict, sorter=sorted)
-    ):
+    for pkgs in pkgutils.groupby_pkg(repos.itermatch(namespace.restrict, sorter=sorted)):
         pkg = max(pkgs)
         yield pkg.repo.match(pkg.versioned_atom)[0]
 
@@ -258,9 +250,7 @@ def _groupby_use_expand(
 
 
 def _build_job(namespace, pkg, is_test):
-    use_expand_prefixes = tuple(
-        s.lower() + "_" for s in namespace.domain.profile.use_expand
-    )
+    use_expand_prefixes = tuple(s.lower() + "_" for s in namespace.domain.profile.use_expand)
     default_on_iuse = tuple(use[1:] for use in pkg.iuse if use.startswith("+"))
     immutable, enabled, _disabled = namespace.domain.get_package_use_unconfigured(pkg)
 
@@ -285,9 +275,7 @@ def _build_job(namespace, pkg, is_test):
             random.shuffle(prefer_true)
             prefer_true = prefer_true[: random.randint(0, len(prefer_true) - 1)]
         prefer_true.extend(
-            use
-            for use in enabled.union(default_on_iuse)
-            if use.startswith(ignore_prefixes)
+            use for use in enabled.union(default_on_iuse) if use.startswith(ignore_prefixes)
         )
 
     solutions = find_constraint_satisfaction(

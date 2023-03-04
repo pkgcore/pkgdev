@@ -1,4 +1,4 @@
 from .scripts import run
 
-if __name__ == '__main__':
-    run('pkgdev')
+if __name__ == "__main__":
+    run("pkgdev")

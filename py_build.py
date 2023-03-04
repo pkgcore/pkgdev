@@ -5,10 +5,11 @@ from flit_core import buildapi
 
 
 def write_verinfo(cleanup_files):
+    from snakeoil.version import get_git_version
+
     cleanup_files.append(path := Path.cwd() / "src/pkgdev/_verinfo.py")
     path.parent.mkdir(parents=True, exist_ok=True)
     print(f"generating version info: {path}")
-    from snakeoil.version import get_git_version
     path.write_text(f"version_info={get_git_version(Path.cwd())!r}")
 
 
@@ -34,7 +35,9 @@ def build_wheel(wheel_directory, config_settings=None, metadata_directory=None):
 
 def build_editable(wheel_directory, config_settings=None, metadata_directory=None):
     """Builds an "editable" wheel, places it in wheel_directory"""
-    callback = partial(buildapi.build_editable, wheel_directory, config_settings, metadata_directory)
+    callback = partial(
+        buildapi.build_editable, wheel_directory, config_settings, metadata_directory
+    )
     return prepare_pkgcore(callback)
 
 

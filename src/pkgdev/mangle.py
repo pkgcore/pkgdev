@@ -12,15 +12,15 @@ from snakeoil.cli.exceptions import UserException
 from snakeoil.mappings import OrderedSet
 
 copyright_regex = re.compile(
-    r'^# Copyright (?P<date>(?P<begin>\d{4}-)?(?P<end>\d{4})) (?P<holder>.+)$')
+    r"^# Copyright (?P<date>(?P<begin>\d{4}-)?(?P<end>\d{4})) (?P<holder>.+)$"
+)
 
 keywords_regex = re.compile(
-    r'^(?P<pre>[^#]*\bKEYWORDS=(?P<quote>[\'"]?))'
-    r'(?P<keywords>.*)'
-    r'(?P<post>(?P=quote).*)$')
+    r'^(?P<pre>[^#]*\bKEYWORDS=(?P<quote>[\'"]?))(?P<keywords>.*)(?P<post>(?P=quote).*)$'
+)
 
 
-def mangle(name):
+def mangle(name: str):
     """Decorator to register file mangling methods."""
 
     class decorator:
@@ -49,7 +49,7 @@ class Mangler:
         self.changes = OrderedSet(changes)
 
         # setup for parallelizing the mangling procedure across files
-        self._mp_ctx = multiprocessing.get_context('fork')
+        self._mp_ctx = multiprocessing.get_context("fork")
         self._mangled_paths_q = self._mp_ctx.SimpleQueue()
         self._current_year = str(datetime.today().year)
 
@@ -60,30 +60,31 @@ class Mangler:
 
         # construct composed mangling function
         self.composed_func = functools.reduce(
-            lambda f, g: lambda x: f(g(self, x)), self._mangle_funcs.values(), lambda x: x)
+            lambda f, g: lambda x: f(g(self, x)), self._mangle_funcs.values(), lambda x: x
+        )
 
-    @mangle('EOF')
+    @mangle("EOF")
     def _eof(self, change):
         """Drop EOF whitespace and forcibly add EOF newline."""
-        return change.update(change.data.rstrip() + '\n')
+        return change.update(change.data.rstrip() + "\n")
 
-    @mangle('keywords')
+    @mangle("keywords")
     def _keywords(self, change):
         """Fix keywords order."""
 
         def keywords_sort_key(kw):
-            return tuple(reversed(kw.lstrip('-~').partition('-')))
+            return tuple(reversed(kw.lstrip("-~").partition("-")))
 
         lines = change.data.splitlines()
         for i, line in enumerate(lines):
             if mo := keywords_regex.match(line):
-                kw = sorted(mo.group('keywords').split(), key=keywords_sort_key)
-                new_kw = ' '.join(kw)
-                if not mo.group('quote'):
+                kw = sorted(mo.group("keywords").split(), key=keywords_sort_key)
+                new_kw = " ".join(kw)
+                if not mo.group("quote"):
                     new_kw = f'"{new_kw}"'
                 lines[i] = f'{mo.group("pre")}{new_kw}{mo.group("post")}'
                 break
-        return change.update('\n'.join(lines) + '\n')
+        return change.update("\n".join(lines) + "\n")
 
     def _kill_pipe(self, *args, error=None):
         """Handle terminating the mangling process group."""
@@ -157,17 +158,17 @@ class GentooMangler(Mangler):
 
     _mangle_funcs = Mangler._mangle_funcs.copy()
 
-    @mangle('copyright')
+    @mangle("copyright")
     def _copyright(self, change):
         """Fix copyright headers and dates."""
         lines = change.data.splitlines()
         if mo := copyright_regex.match(lines[0]):
             groups = mo.groupdict()
-            if groups['begin'] is None and groups['date'] != self._current_year:
+            if groups["begin"] is None and groups["date"] != self._current_year:
                 # use old copyright date as the start of date range
                 date_range = f"{groups['date']}-{self._current_year}"
-                lines[0] = re.sub(groups['date'], date_range, lines[0])
+                lines[0] = re.sub(groups["date"], date_range, lines[0])
             else:
-                lines[0] = re.sub(mo.group('end'), self._current_year, lines[0])
-            lines[0] = re.sub('Gentoo Foundation', 'Gentoo Authors', lines[0])
-        return change.update('\n'.join(lines) + '\n')
+                lines[0] = re.sub(mo.group("end"), self._current_year, lines[0])
+            lines[0] = re.sub("Gentoo Foundation", "Gentoo Authors", lines[0])
+        return change.update("\n".join(lines) + "\n")

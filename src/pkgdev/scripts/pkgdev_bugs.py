@@ -26,8 +26,11 @@ from ..cli import ArgumentParser
 from .argparsers import _determine_cwd_repo, cwd_repo_argparser
 
 bugs = ArgumentParser(
-    prog="pkgdev bugs", description=__doc__, verbose=False, quiet=False,
-    parents=(cwd_repo_argparser, )
+    prog="pkgdev bugs",
+    description=__doc__,
+    verbose=False,
+    quiet=False,
+    parents=(cwd_repo_argparser,),
 )
 bugs.add_argument(
     "--api-key",
@@ -40,7 +43,9 @@ bugs.add_argument(
     """,
 )
 bugs.add_argument(
-    "targets", metavar="target", nargs="+",
+    "targets",
+    metavar="target",
+    nargs="+",
     action=commandline.StoreTarget,
     help="extended atom matching of packages",
 )
@@ -107,18 +112,19 @@ def _validate_args(parser, namespace):
     if namespace.keywording:
         parser.error("keywording is not implemented yet, sorry")
 
+
 def _get_suggested_keywords(repo, pkg: package):
     match_keywords = {
         x
         for pkgver in repo.match(pkg.unversioned_atom)
         for x in pkgver.keywords
-        if x[0] not in '-~'
+        if x[0] not in "-~"
     }
 
     # limit stablereq to whatever is ~arch right now
-    match_keywords.intersection_update(x.lstrip('~') for x in pkg.keywords if x[0] == '~')
+    match_keywords.intersection_update(x.lstrip("~") for x in pkg.keywords if x[0] == "~")
 
-    return frozenset({x for x in match_keywords if '-' not in x})
+    return frozenset({x for x in match_keywords if "-" not in x})
 
 
 class GraphNode:
@@ -171,15 +177,13 @@ class GraphNode:
             if dep.bugno is None:
                 dep.file_bug(api_key, auto_cc_arches, observer)
         maintainers = dict.fromkeys(
-            maintainer.email
-            for pkg, _ in self.pkgs
-            for maintainer in pkg.maintainers
+            maintainer.email for pkg, _ in self.pkgs for maintainer in pkg.maintainers
         )
         if not maintainers or "*" in auto_cc_arches or auto_cc_arches.intersection(maintainers):
             keywords = ["CC-ARCHES"]
         else:
             keywords = []
-        maintainers = tuple(maintainers) or ("maintainer-needed@gentoo.org", )
+        maintainers = tuple(maintainers) or ("maintainer-needed@gentoo.org",)
 
         request_data = dict(
             Bugzilla_api_key=api_key,
@@ -196,20 +200,21 @@ class GraphNode:
             depends_on=list({dep.bugno for dep in self.edges}),
         )
         request = urllib.Request(
-            url='https://bugs.gentoo.org/rest/bug',
-            data=json.dumps(request_data).encode('utf-8'),
-            method='POST',
+            url="https://bugs.gentoo.org/rest/bug",
+            data=json.dumps(request_data).encode("utf-8"),
+            method="POST",
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
         )
         with urllib.urlopen(request, timeout=30) as response:
-            reply = json.loads(response.read().decode('utf-8'))
-        self.bugno = int(reply['id'])
+            reply = json.loads(response.read().decode("utf-8"))
+        self.bugno = int(reply["id"])
         if observer is not None:
             observer(self)
         return self.bugno
+
 
 class DependencyGraph:
     def __init__(self, out: Formatter, err: Formatter, options):
@@ -228,16 +233,14 @@ class DependencyGraph:
             iuse=pkg.iuse,
             repo=pkg.repo,
             keywords=tuple(keywords),
-            data={
-                attr: str(getattr(pkg, attr.lower()))
-                for attr in pkg.eapi.dep_keys
-            },
+            data={attr: str(getattr(pkg, attr.lower())) for attr in pkg.eapi.dep_keys},
         )
 
     def find_best_match(self, restrict, pkgset: list[package]) -> package:
-        restrict = boolean.AndRestriction(restrict, packages.PackageRestriction(
-            "properties", values.ContainmentMatch("live", negate=True)
-        ))
+        restrict = boolean.AndRestriction(
+            restrict,
+            packages.PackageRestriction("properties", values.ContainmentMatch("live", negate=True)),
+        )
         # prefer using already selected packages in graph
         all_pkgs = (pkg for node in self.nodes for pkg, _ in node.pkgs)
         if intersect := tuple(filter(restrict.match, all_pkgs)):
@@ -256,7 +259,7 @@ class DependencyGraph:
             if isinstance(res, visibility.NonsolvableDeps):
                 for dep in res.deps:
                     dep = atom(dep).no_usedeps
-                    issues[dep.key][res.keyword.lstrip('~')].add(dep)
+                    issues[dep.key][res.keyword.lstrip("~")].add(dep)
 
         for pkgname, problems in issues.items():
             pkgset: list[package] = self.options.repo.match(atom(pkgname))
@@ -284,9 +287,11 @@ class DependencyGraph:
 
             keywords.update(_get_suggested_keywords(self.options.repo, pkg))
             assert keywords
-            self.nodes.add(new_node := GraphNode(((pkg, keywords), )))
+            self.nodes.add(new_node := GraphNode(((pkg, keywords),)))
             vertices[pkg] = new_node
-            self.out.write(f"Checking {pkg.versioned_atom} on {' '.join(sort_keywords(keywords))!r}")
+            self.out.write(
+                f"Checking {pkg.versioned_atom} on {' '.join(sort_keywords(keywords))!r}"
+            )
             self.out.flush()
 
             for dep, keywords in self._find_dependencies(pkg, keywords):
@@ -330,7 +335,7 @@ class DependencyGraph:
         node = stack[-1]
         for edge in node.edges:
             if edge in stack:
-                return tuple(stack[stack.index(edge):])
+                return tuple(stack[stack.index(edge) :])
             stack.append(edge)
             if cycle := DependencyGraph._find_cycles(nodes, stack):
                 return cycle
@@ -362,13 +367,15 @@ class DependencyGraph:
             for node, origs in reverse_edges.items():
                 if len(origs) != 1:
                     continue
-                existing_keywords = frozenset().union(*(
-                    pkgver.keywords
-                    for pkg in node.pkgs
-                    for pkgver in repo.match(pkg[0].unversioned_atom)
-                ))
+                existing_keywords = frozenset().union(
+                    *(
+                        pkgver.keywords
+                        for pkg in node.pkgs
+                        for pkgver in repo.match(pkg[0].unversioned_atom)
+                    )
+                )
                 if existing_keywords & frozenset().union(*(pkg[1] for pkg in node.pkgs)):
-                    continue # not fully new keywords
+                    continue  # not fully new keywords
                 orig = next(iter(origs))
                 print(f"Merging {node} into {orig}")
                 self.merge_nodes((orig, node))
@@ -380,7 +387,8 @@ class DependencyGraph:
             self.out.write(
                 f"https://bugs.gentoo.org/{node.bugno} ",
                 " | ".join(node.lines()),
-                " depends on bugs ", {dep.bugno for dep in node.edges}
+                " depends on bugs ",
+                {dep.bugno for dep in node.edges},
             )
             self.out.flush()
 
@@ -404,7 +412,9 @@ def main(options, out: Formatter, err: Formatter):
         d.output_dot(options.dot)
         out.write(out.fg("green"), f"Dot file written to {options.dot}", out.reset)
 
-    if not userquery(f'Continue and create {len(d.nodes)} stablereq bugs?', out, err, default_answer=False):
+    if not userquery(
+        f"Continue and create {len(d.nodes)} stablereq bugs?", out, err, default_answer=False
+    ):
         return 1
 
     if options.api_key is None:
