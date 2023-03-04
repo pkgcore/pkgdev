@@ -765,11 +765,9 @@ def determine_msg_args(options, changes):
         args.extend(["-t", options.template])
     else:
         if options.message_template:
-            message = options.message_template.read().splitlines()
+            message: list[str] = options.message_template.read().splitlines()
             try:
-                # TODO: replace with str.removeprefix when py3.8 support dropped
-                if message[0].startswith("*: "):
-                    message[0] = message[0][3:]
+                message[0] = message[0].removeprefix("*: ")
             except IndexError:
                 commit.error(f"empty message template: {options.message_template.name!r}")
         else:
