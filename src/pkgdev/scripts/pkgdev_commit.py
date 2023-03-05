@@ -48,6 +48,9 @@ class ArgumentParser(cli.ArgumentParser):
         if namespace.edit:
             args.append("--edit")
         namespace.commit_args = args
+        namespace.git_args_paths = list(
+            filter(os.path.exists, (s for s in args if not s.startswith("-")))
+        )
         return namespace, []
 
 
@@ -575,6 +578,7 @@ class GitChanges(UserDict):
             "--cached",
             "-z",
             "HEAD",
+            *self._options.git_args_paths,
             stdout=subprocess.PIPE,
         )
 
