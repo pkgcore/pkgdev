@@ -2,6 +2,28 @@
 Release Notes
 =============
 
+pkgdev 0.2.5 (2023-03-11)
+-------------------------
+
+**New Features:**
+
+- pkgdev tatt: new tool for package testing (Arthur Zamarin, #109)
+
+- pkgdev bugs: new tool for filing stable bugs (Arthur Zamarin, #113)
+
+  This tool is currently *very experimental* and breakage should be expected.
+  Use very carefully and monitor created bugs!
+
+- commit: use same summary when matching across multiple ebuilds (Arthur
+  Zamarin, #116)
+
+**Fixed bugs:**
+
+- commit: enable ``-e`` usage with ``-M`` or ``-m`` (Arthur Zamarin)
+
+- commit: generate commit title for commit related files only (Arthur Zamarin,
+  #122)
+
 pkgdev 0.2.4 (2022-11-26)
 -------------------------
 
