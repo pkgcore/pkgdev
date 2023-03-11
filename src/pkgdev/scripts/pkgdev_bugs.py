@@ -286,7 +286,9 @@ class DependencyGraph:
                 continue
 
             keywords.update(_get_suggested_keywords(self.options.repo, pkg))
-            assert keywords
+            assert (
+                keywords
+            ), f"no keywords for {pkg.versioned_atom}, currently unsupported by tool: https://github.com/pkgcore/pkgdev/issues/123"
             self.nodes.add(new_node := GraphNode(((pkg, keywords),)))
             vertices[pkg] = new_node
             self.out.write(
