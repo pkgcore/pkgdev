@@ -318,6 +318,7 @@ class DependencyGraph:
 
     def merge_nodes(self, nodes: tuple[GraphNode, ...]) -> GraphNode:
         self.nodes.difference_update(nodes)
+        is_start = bool(self.starting_nodes.intersection(nodes))
         self.starting_nodes.difference_update(nodes)
         new_node = GraphNode(list(chain.from_iterable(n.pkgs for n in nodes)))
 
@@ -330,6 +331,8 @@ class DependencyGraph:
                 node.edges.add(new_node)
 
         self.nodes.add(new_node)
+        if is_start:
+            self.starting_nodes.add(new_node)
         return new_node
 
     @staticmethod
@@ -345,17 +348,15 @@ class DependencyGraph:
         return ()
 
     def merge_cycles(self):
-        new_starts = set()
-        while self.starting_nodes:
-            starting_node = self.starting_nodes.pop()
+        start_nodes = set(self.starting_nodes)
+        while start_nodes:
+            starting_node = start_nodes.pop()
             assert starting_node in self.nodes
             while cycle := self._find_cycles(tuple(self.nodes), [starting_node]):
-                print("Found cycle:", " -> ".join(str(n) for n in cycle))
+                self.out.write("Found cycle: ", " -> ".join(str(n) for n in cycle))
                 new_node = self.merge_nodes(cycle)
                 if starting_node not in self.nodes:
                     starting_node = new_node
-            new_starts.add(starting_node)
-        self.starting_nodes.update(new_starts)
 
     def merge_new_keywords_children(self):
         repo = self.options.search_repo
@@ -379,7 +380,7 @@ class DependencyGraph:
                 if existing_keywords & frozenset().union(*(pkg[1] for pkg in node.pkgs)):
                     continue  # not fully new keywords
                 orig = next(iter(origs))
-                print(f"Merging {node} into {orig}")
+                self.out.write(f"Merging {node} into {orig}")
                 self.merge_nodes((orig, node))
                 found_someone = True
                 break
