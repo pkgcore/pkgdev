@@ -5,6 +5,7 @@ import urllib.request as urllib
 from collections import defaultdict
 from functools import partial
 from itertools import chain
+from urllib.parse import urlencode
 
 from pkgcheck import const as pkgcheck_const
 from pkgcheck.addons import ArchesAddon, init_addon
@@ -13,6 +14,7 @@ from pkgcheck.checks import visibility
 from pkgcheck.scripts import argparse_actions
 from pkgcore.ebuild.atom import atom
 from pkgcore.ebuild.ebuild_src import package
+from pkgcore.ebuild.errors import MalformedAtom
 from pkgcore.ebuild.misc import sort_keywords
 from pkgcore.repository import multiplex
 from pkgcore.restrictions import boolean, packages, values
@@ -125,6 +127,16 @@ def _get_suggested_keywords(repo, pkg: package):
     match_keywords.intersection_update(x.lstrip("~") for x in pkg.keywords if x[0] == "~")
 
     return frozenset({x for x in match_keywords if "-" not in x})
+
+
+def parse_atom(pkg: str):
+    try:
+        return atom(pkg)
+    except MalformedAtom as exc:
+        try:
+            return atom(f"={pkg}")
+        except MalformedAtom:
+            raise exc
 
 
 class GraphNode:
@@ -267,7 +279,7 @@ class DependencyGraph:
                 combined = boolean.AndRestriction(*set().union(*problems.values()))
                 match = self.find_best_match(combined, pkgset)
                 yield match, set(problems.keys())
-            except ValueError:
+            except (ValueError, IndexError):
                 results: dict[package, set[str]] = defaultdict(set)
                 for keyword, deps in problems.items():
                     match = self.find_best_match(deps, pkgset)
@@ -310,6 +322,8 @@ class DependencyGraph:
             dot.write("\trankdir=LR;\n")
             for node in self.nodes:
                 node_text = "\\n".join(node.lines())
+                if node.bugno is not None:
+                    node_text += f"\\nbug #{node.bugno}"
                 dot.write(f'\t{node.dot_edge}[label="{node_text}"];\n')
                 for other in node.edges:
                     dot.write(f"\t{node.dot_edge} -> {other.dot_edge};\n")
@@ -385,6 +399,46 @@ class DependencyGraph:
                 found_someone = True
                 break
 
+    def scan_existing_bugs(self, api_key: str):
+        params = urlencode(
+            {
+                "Bugzilla_api_key": api_key,
+                "include_fields": "id,cf_stabilisation_atoms",
+                "component": "Stabilization",
+                "resolution": "---",
+                "f1": "cf_stabilisation_atoms",
+                "o1": "anywords",
+                "v1": {pkg[0].unversioned_atom for node in self.nodes for pkg in node.pkgs},
+            },
+            doseq=True,
+        )
+        request = urllib.Request(
+            url="https://bugs.gentoo.org/rest/bug?" + params,
+            method="GET",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.urlopen(request, timeout=30) as response:
+            reply = json.loads(response.read().decode("utf-8"))
+        for bug in reply["bugs"]:
+            bug_atoms = (
+                parse_atom(line.split(" ", 1)[0]).unversioned_atom
+                for line in map(str.strip, bug["cf_stabilisation_atoms"].splitlines())
+                if line
+            )
+            bug_match = boolean.OrRestriction(*bug_atoms)
+            for node in self.nodes:
+                if node.bugno is None and all(bug_match.match(pkg[0]) for pkg in node.pkgs):
+                    node.bugno = bug["id"]
+                    self.out.write(
+                        self.out.fg("yellow"),
+                        f"Found https://bugs.gentoo.org/{node.bugno} for node {node}",
+                        self.out.reset,
+                    )
+                    break
+
     def file_bugs(self, api_key: str, auto_cc_arches: frozenset[str]):
         def observe(node: GraphNode):
             self.out.write(
@@ -410,6 +464,9 @@ def main(options, out: Formatter, err: Formatter):
 
     for node in d.nodes:
         node.cleanup_keywords(search_repo)
+
+    if userquery("Check for open bugs matching current graph?", out, err, default_answer=False):
+        d.scan_existing_bugs(options.api_key)
 
     if options.dot is not None:
         d.output_dot(options.dot)
