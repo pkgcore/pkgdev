@@ -1,4 +1,4 @@
-"""Automatic bugs filler"""
+"""Automatic bugs filer"""
 
 import json
 import urllib.request as urllib
