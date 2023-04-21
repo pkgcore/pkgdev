@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 
@@ -12,6 +13,7 @@ def run(*args, **kwargs):
     """Wrapper for running git via subprocess.run()."""
     kwargs.setdefault("check", True)
     kwargs.setdefault("text", True)
+    kwargs.setdefault("env", os.environ.copy())["PKGDEV"] = "1"
     cmd = ["git"] + list(args)
 
     # output git command that would be run to stderr
@@ -21,7 +23,7 @@ def run(*args, **kwargs):
 
     try:
         return subprocess.run(cmd, **kwargs)
-    except FileNotFoundError as e:
-        raise UserException(str(e))
-    except subprocess.CalledProcessError as e:
-        raise GitError(e.returncode)
+    except FileNotFoundError as exc:
+        raise UserException(str(exc))
+    except subprocess.CalledProcessError as exc:
+        raise GitError(exc.returncode)
