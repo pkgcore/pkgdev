@@ -1,6 +1,7 @@
 """Automatic bugs filer"""
 
 import json
+import sys
 import urllib.request as urllib
 from collections import defaultdict
 from functools import partial
@@ -19,7 +20,7 @@ from pkgcore.ebuild.misc import sort_keywords
 from pkgcore.repository import multiplex
 from pkgcore.restrictions import boolean, packages, values
 from pkgcore.test.misc import FakePkg
-from pkgcore.util import commandline
+from pkgcore.util import commandline, parserestrict
 from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
 from snakeoil.formatters import Formatter
@@ -47,7 +48,7 @@ bugs.add_argument(
 bugs.add_argument(
     "targets",
     metavar="target",
-    nargs="+",
+    nargs="*",
     action=commandline.StoreTarget,
     help="extended atom matching of packages",
 )
@@ -285,10 +286,8 @@ class DependencyGraph:
                         match = self.find_best_match(deps, pkgset)
                     except (ValueError, IndexError):
                         deps_str = " , ".join(map(str, deps))
-                        self.err.write(
-                            self.err.fg("red"),
+                        self.err.error(
                             f"unable to find match for restrictions: {deps_str}",
-                            self.err.reset,
                         )
                         raise
                     results[match].add(keyword)
@@ -461,6 +460,18 @@ class DependencyGraph:
             node.file_bug(api_key, auto_cc_arches, observe)
 
 
+def _load_from_stdin(out: Formatter, err: Formatter):
+    if not sys.stdin.isatty():
+        out.warn("No packages were specified, reading from stdin...")
+        for line in sys.stdin.readlines():
+            if line := line.split("#", 1)[0].strip():
+                yield line, parserestrict.parse_match(line)
+        # reassign stdin to allow interactivity (currently only works for unix)
+        sys.stdin = open("/dev/tty")
+    else:
+        raise arghparse.ArgumentError(None, "reading from stdin is only valid when piping data in")
+
+
 def _parse_targets(search_repo, targets):
     for _, target in targets:
         try:
@@ -472,6 +483,7 @@ def _parse_targets(search_repo, targets):
 @bugs.bind_main_func
 def main(options, out: Formatter, err: Formatter):
     search_repo = options.search_repo
+    options.targets = options.targets or list(_load_from_stdin(out, err))
     targets = list(_parse_targets(search_repo, options.targets))
     d = DependencyGraph(out, err, options)
     d.build_full_graph(targets)
