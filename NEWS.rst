@@ -2,6 +2,31 @@
 Release Notes
 =============
 
+pkgdev 0.2.6 (2023-04-22)
+-------------------------
+
+**New Features:**
+
+- pkgdev bugs: query for existing open bugs (Arthur Zamarin)
+
+- pkgdev bugs: support piping package list from stdin (Arthur Zamarin, #136)
+
+- git: declare ``PKGDEV=1`` environment variable for git commands (Arthur
+  Zamarin, #133)
+
+**Fixed bugs:**
+
+- pkgdev bugs: handle correctly merge on new keywords of starting point (Arthur
+  Zamarin)
+
+- pkgdev bugs: fix spelling of agent noun for 'file' (Arsen Arsenović, #135)
+
+- pkgdev bugs: better error message when package not found (Arthur Zamarin,
+  #134)
+
+- pkgdev bugs: fix restriction passing to ``find_best_match`` (Arthur Zamarin,
+  #131)
+
 pkgdev 0.2.5 (2023-03-11)
 -------------------------
 
