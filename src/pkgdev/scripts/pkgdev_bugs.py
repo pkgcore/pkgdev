@@ -250,7 +250,7 @@ class DependencyGraph:
 
     def find_best_match(self, restrict, pkgset: list[package]) -> package:
         restrict = boolean.AndRestriction(
-            restrict,
+            *restrict,
             packages.PackageRestriction("properties", values.ContainmentMatch("live", negate=True)),
         )
         # prefer using already selected packages in graph
@@ -276,13 +276,21 @@ class DependencyGraph:
         for pkgname, problems in issues.items():
             pkgset: list[package] = self.options.repo.match(atom(pkgname))
             try:
-                combined = boolean.AndRestriction(*set().union(*problems.values()))
-                match = self.find_best_match(combined, pkgset)
+                match = self.find_best_match(set().union(*problems.values()), pkgset)
                 yield match, set(problems.keys())
             except (ValueError, IndexError):
                 results: dict[package, set[str]] = defaultdict(set)
                 for keyword, deps in problems.items():
-                    match = self.find_best_match(deps, pkgset)
+                    try:
+                        match = self.find_best_match(deps, pkgset)
+                    except (ValueError, IndexError):
+                        deps_str = " , ".join(map(str, deps))
+                        self.err.write(
+                            self.err.fg("red"),
+                            f"unable to find match for restrictions: {deps_str}",
+                            self.err.reset,
+                        )
+                        raise
                     results[match].add(keyword)
                 yield from results.items()
 
