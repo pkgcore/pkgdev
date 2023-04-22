@@ -453,10 +453,18 @@ class DependencyGraph:
             node.file_bug(api_key, auto_cc_arches, observe)
 
 
+def _parse_targets(search_repo, targets):
+    for _, target in targets:
+        try:
+            yield max(search_repo.itermatch(target))
+        except ValueError:
+            raise ValueError(f"Restriction {target} has no match in repository")
+
+
 @bugs.bind_main_func
 def main(options, out: Formatter, err: Formatter):
     search_repo = options.search_repo
-    targets = [max(search_repo.itermatch(target)) for _, target in options.targets]
+    targets = list(_parse_targets(search_repo, options.targets))
     d = DependencyGraph(out, err, options)
     d.build_full_graph(targets)
     d.merge_cycles()
