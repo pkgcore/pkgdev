@@ -1,11 +1,13 @@
 """Automatic bugs filer"""
 
+import contextlib
 import json
 import sys
 import urllib.request as urllib
 from collections import defaultdict
 from functools import partial
 from itertools import chain
+from pathlib import Path
 from urllib.parse import urlencode
 
 from pkgcheck import const as pkgcheck_const
@@ -507,6 +509,10 @@ def main(options, out: Formatter, err: Formatter):
 
     for node in d.nodes:
         node.cleanup_keywords(search_repo)
+
+    if options.api_key is None:
+        with contextlib.suppress(Exception):
+            options.api_key = (Path.home() / ".bugz_token").read_text().strip() or None
 
     if userquery("Check for open bugs matching current graph?", out, err, default_answer=False):
         d.scan_existing_bugs(options.api_key)
