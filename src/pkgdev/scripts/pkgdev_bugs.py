@@ -67,6 +67,18 @@ bugs.add_argument(
         package is maintainer-needed, always add CC-ARCHES.
     """,
 )
+bugs.add_argument(
+    "--blocks",
+    metavar="BUG",
+    action=arghparse.CommaSeparatedValuesAppend,
+    default=[],
+    help="bugs which should be blocked by newly created bugs",
+    docs="""
+        Collection of bug ids which should be blocked by newly created bugs.
+        Only bugs created for passed targets would be blockers, excluding other
+        bugs which were created as dependencies.
+    """,
+)
 
 bugs.add_argument(
     "--cache",
@@ -183,7 +195,9 @@ class GraphNode:
                 keywords.clear()
                 keywords.add("*")
 
-    def file_bug(self, api_key: str, auto_cc_arches: frozenset[str], observer=None) -> int:
+    def file_bug(
+        self, api_key: str, auto_cc_arches: frozenset[str], block_bugs: list[int], observer=None
+    ) -> int:
         if self.bugno is not None:
             return self.bugno
         for dep in self.edges:
@@ -211,6 +225,7 @@ class GraphNode:
             assigned_to=maintainers[0],
             cc=maintainers[1:],
             depends_on=list({dep.bugno for dep in self.edges}),
+            blocks=block_bugs,
         )
         request = urllib.Request(
             url="https://bugs.gentoo.org/rest/bug",
@@ -446,7 +461,7 @@ class DependencyGraph:
                     )
                     break
 
-    def file_bugs(self, api_key: str, auto_cc_arches: frozenset[str]):
+    def file_bugs(self, api_key: str, auto_cc_arches: frozenset[str], block_bugs: list[int]):
         def observe(node: GraphNode):
             self.out.write(
                 f"https://bugs.gentoo.org/{node.bugno} ",
@@ -457,7 +472,7 @@ class DependencyGraph:
             self.out.flush()
 
         for node in self.starting_nodes:
-            node.file_bug(api_key, auto_cc_arches, observe)
+            node.file_bug(api_key, auto_cc_arches, block_bugs, observe)
 
 
 def _load_from_stdin(out: Formatter, err: Formatter):
@@ -510,4 +525,5 @@ def main(options, out: Formatter, err: Formatter):
         return 1
 
     disabled, enabled = options.auto_cc_arches
-    d.file_bugs(options.api_key, frozenset(enabled).difference(disabled))
+    blocks = list(frozenset(map(int, options.blocks)))
+    d.file_bugs(options.api_key, frozenset(enabled).difference(disabled), blocks)
