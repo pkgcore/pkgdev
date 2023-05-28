@@ -204,7 +204,7 @@ class GraphNode:
             return self.bugno
         for dep in self.edges:
             if dep.bugno is None:
-                dep.file_bug(api_key, auto_cc_arches, observer)
+                dep.file_bug(api_key, auto_cc_arches, (), observer)
         maintainers = dict.fromkeys(
             maintainer.email for pkg, _ in self.pkgs for maintainer in pkg.maintainers
         )
