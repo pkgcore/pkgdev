@@ -68,7 +68,7 @@ class TestBugFiling:
         session = BugsSession()
         pkg = max(repo.itermatch(atom("=cat/u-0")))
         with patch("pkgdev.scripts.pkgdev_bugs.urllib.urlopen", session):
-            bugs.GraphNode(((pkg, {"*"}),)).file_bug("API", frozenset())
+            bugs.GraphNode(((pkg, {"*"}),)).file_bug("API", frozenset(), ())
         assert len(session.calls) == 1
         call = session.calls[0]
         assert call["Bugzilla_api_key"] == "API"
@@ -83,7 +83,7 @@ class TestBugFiling:
         session = BugsSession()
         pkg = max(repo.itermatch(atom("=cat/z-0")))
         with patch("pkgdev.scripts.pkgdev_bugs.urllib.urlopen", session):
-            bugs.GraphNode(((pkg, {"*"}),)).file_bug("API", frozenset())
+            bugs.GraphNode(((pkg, {"*"}),)).file_bug("API", frozenset(), ())
         assert len(session.calls) == 1
         call = session.calls[0]
         assert call["assigned_to"] == "maintainer-needed@gentoo.org"
@@ -99,7 +99,7 @@ class TestBugFiling:
         node = bugs.GraphNode(((pkgX, {"*"}), (pkgY, {"*"}), (pkgZ, {"*"})))
         node.edges.add(dep)
         with patch("pkgdev.scripts.pkgdev_bugs.urllib.urlopen", session):
-            node.file_bug("API", frozenset())
+            node.file_bug("API", frozenset(), ())
         assert len(session.calls) == 1
         call = session.calls[0]
         assert call["summary"] == "cat/x-0, cat/y-0, cat/z-0: stablereq"
