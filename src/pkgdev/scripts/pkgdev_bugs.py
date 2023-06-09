@@ -214,13 +214,17 @@ class GraphNode:
             keywords = []
         maintainers = tuple(maintainers) or ("maintainer-needed@gentoo.org",)
 
+        summary = f"{', '.join(pkg.versioned_atom.cpvstr for pkg, _ in self.pkgs)}: stablereq"
+        if len(summary) > 60:
+            summary = f"{self.pkgs[0][0].versioned_atom.cpvstr} and friends: stablereq"
+
         request_data = dict(
             Bugzilla_api_key=api_key,
             product="Gentoo Linux",
             component="Stabilization",
             severity="enhancement",
             version="unspecified",
-            summary=f"{', '.join(pkg.versioned_atom.cpvstr for pkg, _ in self.pkgs)}: stablereq",
+            summary=summary,
             description="Please stabilize",
             keywords=keywords,
             cf_stabilisation_atoms="\n".join(self.lines()),
