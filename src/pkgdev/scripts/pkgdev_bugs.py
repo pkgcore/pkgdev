@@ -215,7 +215,7 @@ class GraphNode:
         maintainers = tuple(maintainers) or ("maintainer-needed@gentoo.org",)
 
         summary = f"{', '.join(pkg.versioned_atom.cpvstr for pkg, _ in self.pkgs)}: stablereq"
-        if len(summary) > 60:
+        if len(summary) > 90 and len(self.pkgs) > 1:
             summary = f"{self.pkgs[0][0].versioned_atom.cpvstr} and friends: stablereq"
 
         request_data = dict(
@@ -473,7 +473,7 @@ class DependencyGraph:
                 f"https://bugs.gentoo.org/{node.bugno} ",
                 " | ".join(node.lines()),
                 " depends on bugs ",
-                {dep.bugno for dep in node.edges},
+                {dep.bugno for dep in node.edges} or "{}",
             )
             self.out.flush()
 
