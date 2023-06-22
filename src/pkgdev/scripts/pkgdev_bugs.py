@@ -525,8 +525,13 @@ def main(options, out: Formatter, err: Formatter):
         d.output_dot(options.dot)
         out.write(out.fg("green"), f"Dot file written to {options.dot}", out.reset)
 
+    bugs_count = len(tuple(node for node in d.nodes if node.bugno is None))
+    if bugs_count == 0:
+        out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
+        return 1
+
     if not userquery(
-        f"Continue and create {len(d.nodes)} stablereq bugs?", out, err, default_answer=False
+        f"Continue and create {bugs_count} stablereq bugs?", out, err, default_answer=False
     ):
         return 1
 
