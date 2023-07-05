@@ -58,6 +58,15 @@ class TestPkgdevCommitParseArgs:
             options, _ = tool.parse_args(["commit", "-u", "--signoff"])
             assert "--signoff" in options.commit_args
             assert "--gpg-sign" not in options.commit_args
+        # enable using specific argument
+        with chdir(repo.location):
+            options, _ = tool.parse_args(["commit", "-u", "--gpg-sign"])
+            assert "--signoff" not in options.commit_args
+            assert "--gpg-sign" in options.commit_args
+
+            options, _ = tool.parse_args(["commit", "-u", "--signoff", "--gpg-sign"])
+            assert "--signoff" in options.commit_args
+            assert "--gpg-sign" in options.commit_args
         # signed commits enabled by layout.conf setting
         with open(pjoin(git_repo.path, "metadata/layout.conf"), "a+") as f:
             f.write("sign-commits = true\n")
@@ -69,6 +78,15 @@ class TestPkgdevCommitParseArgs:
             options, _ = tool.parse_args(["commit", "-u", "--signoff"])
             assert "--signoff" in options.commit_args
             assert "--gpg-sign" in options.commit_args
+        # disable using specific argument
+        with chdir(repo.location):
+            options, _ = tool.parse_args(["commit", "-u", "--no-gpg-sign"])
+            assert "--signoff" not in options.commit_args
+            assert "--gpg-sign" not in options.commit_args
+
+            options, _ = tool.parse_args(["commit", "-u", "--signoff", "--no-gpg-sign"])
+            assert "--signoff" in options.commit_args
+            assert "--gpg-sign" not in options.commit_args
 
     def test_git_commit_args(self, repo, make_git_repo, tool):
         git_repo = make_git_repo(repo.location)

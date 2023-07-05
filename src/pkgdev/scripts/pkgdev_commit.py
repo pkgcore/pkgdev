@@ -162,6 +162,16 @@ commit_opts.add_argument(
     """,
 )
 commit_opts.add_argument(
+    "--gpg-sign",
+    action=argparse.BooleanOptionalAction,
+    help="GPG-sign commit",
+    docs="""
+        Pass ``--gpg-sign`` or ``--no-gpg-sign`` to the ``git commit`` command.
+        This option enables to override the default behavior or the behavior
+        defined by ``sign-commits = true`` in ``metadata/layout.conf`` file.
+    """,
+)
+commit_opts.add_argument(
     "-d",
     "--distdir",
     type=arghparse.create_dir,
@@ -832,7 +842,9 @@ def _commit_validate(parser, namespace):
         namespace.scan_args.extend(shlex.split(namespace.pkgcheck_scan))
     namespace.scan_args.extend(["--exit", "GentooCI", "--staged"])
 
-    if namespace.repo.config.sign_commits:
+    if namespace.gpg_sign is False:
+        namespace.commit_args.append("--no-gpg-sign")
+    elif namespace.gpg_sign is True or namespace.repo.config.sign_commits:
         namespace.commit_args.append("--gpg-sign")
 
 
