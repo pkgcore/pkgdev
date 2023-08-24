@@ -124,3 +124,26 @@ class TestPkgdevPush:
         ), pytest.raises(SystemExit) as excinfo, chdir(self.child_git_repo.path):
             self.script()
         assert excinfo.value.code == 0
+
+    def test_warnings(self, capsys):
+        pkgdir = os.path.dirname(self.child_repo.create_ebuild("cat/pkg-1"))
+        os.makedirs((filesdir := pjoin(pkgdir, "files")), exist_ok=True)
+        with open(pjoin(filesdir, "foo"), "w") as f:
+            f.write("")
+        self.child_git_repo.add_all("cat/pkg-1")
+
+        # scans with warnings ask for confirmation before pushing with "--ask"
+        with patch("sys.argv", self.args + ["--ask"]), patch(
+            "sys.stdin", StringIO("n\n")
+        ), pytest.raises(SystemExit) as excinfo, chdir(self.child_git_repo.path):
+            self.script()
+        assert excinfo.value.code == 1
+        out, err = capsys.readouterr()
+        assert "EmptyFile" in out
+
+        # but without "--ask" it still pushes
+        with patch("sys.argv", self.args), pytest.raises(SystemExit) as excinfo, chdir(
+            self.child_git_repo.path
+        ):
+            self.script()
+        assert excinfo.value.code == 0

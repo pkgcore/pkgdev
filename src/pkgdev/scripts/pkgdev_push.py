@@ -2,6 +2,7 @@ import argparse
 import shlex
 
 from pkgcheck import reporters, scan
+from pkgcheck.results import Warning as PkgcheckWarning
 from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
 
@@ -58,9 +59,12 @@ def _push(options, out, err):
 
     # scan commits for QA issues
     pipe = scan(options.scan_args)
+    has_warnings = False
     with reporters.FancyReporter(out) as reporter:
         for result in pipe:
             reporter.report(result)
+            if result.level == PkgcheckWarning.level:
+                has_warnings = True
 
     # fail on errors unless they're ignored
     if pipe.errors:
@@ -68,7 +72,10 @@ def _push(options, out, err):
             out.write(out.bold, out.fg("red"), "\nFAILURES", out.reset)
             for result in sorted(pipe.errors):
                 reporter.report(result)
-        if not (options.ask and userquery("Push commits anyway?", out, err)):
+        if not (options.ask and userquery("Push commits anyway?", out, err, default_answer=False)):
+            return 1
+    elif has_warnings and options.ask:
+        if not userquery("warnings detected, push commits anyway?", out, err, default_answer=False):
             return 1
 
     # push commits upstream
