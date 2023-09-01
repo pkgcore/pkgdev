@@ -28,8 +28,8 @@ dynamic = ["version"]
 
 dependencies = [
 	"snakeoil~=0.10.5",
-	"pkgcore~=0.12.25",
-	"pkgcheck~=0.10.23",
+	"pkgcore~=0.12.23",
+	"pkgcheck~=0.10.25",
 ]
 
 [project.optional-dependencies]
