@@ -52,6 +52,7 @@ bugs.add_argument(
     metavar="target",
     nargs="*",
     action=commandline.StoreTarget,
+    use_sets="sets",
     help="extended atom matching of packages",
 )
 bugs.add_argument(
@@ -285,6 +286,16 @@ class DependencyGraph:
                 return match
         return matches[0]
 
+    def extend_targets_stable_groups(self, groups):
+        stabilization_groups = self.options.repo.stabilization_groups
+        search_repo = self.options.search_repo
+        for group in groups:
+            for pkg in stabilization_groups[group]:
+                try:
+                    yield None, self.find_best_match([pkg], search_repo.match(pkg)).versioned_atom
+                except (ValueError, IndexError):
+                    self.err.write(f"Unable to find match for {pkg.unversioned_atom}")
+
     def _find_dependencies(self, pkg: package, keywords: set[str]):
         check = visibility.VisibilityCheck(self.options, profile_addon=self.profile_addon)
 
@@ -325,7 +336,11 @@ class DependencyGraph:
                 vertices[pkg].pkgs[0][1].update(keywords)
                 continue
 
+            pkg_has_stable = any(x[0] not in "-~" for x in pkg.keywords)
             keywords.update(_get_suggested_keywords(self.options.repo, pkg))
+            if pkg_has_stable and not keywords:  # package already done
+                self.out.write(f"Nothing to stable for {pkg.unversioned_atom}")
+                continue
             assert (
                 keywords
             ), f"no keywords for {pkg.versioned_atom}, currently unsupported by tool: https://github.com/pkgcore/pkgdev/issues/123"
@@ -342,7 +357,9 @@ class DependencyGraph:
 
         for src, dst in edges:
             vertices[src].edges.add(vertices[dst])
-        self.starting_nodes = {vertices[starting_node] for starting_node in targets}
+        self.starting_nodes = {
+            vertices[starting_node] for starting_node in targets if starting_node in vertices
+        }
 
     def output_dot(self, dot_file):
         with open(dot_file, "w") as dot:
@@ -415,8 +432,8 @@ class DependencyGraph:
                 existing_keywords = frozenset().union(
                     *(
                         pkgver.keywords
-                        for pkg in node.pkgs
-                        for pkgver in repo.match(pkg[0].unversioned_atom)
+                        for pkg, _ in node.pkgs
+                        for pkgver in repo.match(pkg.unversioned_atom)
                     )
                 )
                 if existing_keywords & frozenset().union(*(pkg[1] for pkg in node.pkgs)):
@@ -426,6 +443,16 @@ class DependencyGraph:
                 self.merge_nodes((orig, node))
                 found_someone = True
                 break
+
+    def merge_stabilization_groups(self):
+        for group, pkgs in self.options.repo.stabilization_groups.items():
+            restrict = packages.OrRestriction(*pkgs)
+            mergable = tuple(
+                node for node in self.nodes if any(restrict.match(pkg) for pkg, _ in node.pkgs)
+            )
+            if mergable:
+                self.out.write(f"Merging @{group} group nodes: {mergable}")
+                self.merge_nodes(mergable)
 
     def scan_existing_bugs(self, api_key: str):
         params = urlencode(
@@ -504,12 +531,16 @@ def _parse_targets(search_repo, targets):
 @bugs.bind_main_func
 def main(options, out: Formatter, err: Formatter):
     search_repo = options.search_repo
-    options.targets = options.targets or list(_load_from_stdin(out, err))
-    targets = list(_parse_targets(search_repo, options.targets))
+    options.targets = options.targets or []
     d = DependencyGraph(out, err, options)
+    options.targets.extend(d.extend_targets_stable_groups(options.sets or ()))
+    if not options.targets:
+        options.targets = list(_load_from_stdin(out, err))
+    targets = list(_parse_targets(search_repo, options.targets))
     d.build_full_graph(targets)
     d.merge_cycles()
     d.merge_new_keywords_children()
+    d.merge_stabilization_groups()
 
     for node in d.nodes:
         node.cleanup_keywords(search_repo)
@@ -517,6 +548,10 @@ def main(options, out: Formatter, err: Formatter):
     if options.api_key is None:
         with contextlib.suppress(Exception):
             options.api_key = (Path.home() / ".bugz_token").read_text().strip() or None
+
+    if not d.nodes:
+        out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
+        return 1
 
     if userquery("Check for open bugs matching current graph?", out, err, default_answer=False):
         d.scan_existing_bugs(options.api_key)
