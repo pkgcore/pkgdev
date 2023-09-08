@@ -42,7 +42,9 @@ bugs.add_argument(
     metavar="KEY",
     help="Bugzilla API key",
     docs="""
-        The Bugzilla API key to use for authentication.
+        The Bugzilla API key to use for authentication. WARNING: using this
+        option will expose your API key to other users of the same system.
+        Consider instead saving your API key in a file named ~/.bugz_token.
     """,
 )
 bugs.add_argument(
