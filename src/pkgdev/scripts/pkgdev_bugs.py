@@ -42,9 +42,7 @@ bugs.add_argument(
     metavar="KEY",
     help="Bugzilla API key",
     docs="""
-        The Bugzilla API key to use for authentication. Used mainly to overcome
-        rate limiting done by bugzilla server. This tool doesn't perform any
-        bug editing, just fetching info for the bug.
+        The Bugzilla API key to use for authentication.
     """,
 )
 bugs.add_argument(
