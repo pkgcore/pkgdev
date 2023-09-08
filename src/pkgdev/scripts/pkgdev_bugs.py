@@ -546,8 +546,9 @@ def main(options, out: Formatter, err: Formatter):
         node.cleanup_keywords(search_repo)
 
     if options.api_key is None:
-        with contextlib.suppress(Exception):
-            options.api_key = (Path.home() / ".bugz_token").read_text().strip() or None
+        bugz_token_file = Path.home() / ".bugz_token"
+        if bugz_token_file.is_file:
+            options.api_key = bugz_token_file.read_text().strip()
 
     if not d.nodes:
         out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
