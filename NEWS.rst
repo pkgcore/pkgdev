@@ -2,6 +2,37 @@
 Release Notes
 =============
 
+pkgdev 0.2.8 (2023-09-09)
+-------------------------
+
+**New Features:**
+
+- pkgdev bugs: add support for passing a root blocker bug, upon which all top
+  level bugs will block (Arthur Zamarin, #139)
+
+- pkgdev bugs: fallback to ``~/.bugz_token`` for api-key  (Arthur Zamarin, #138)
+
+- pkgdev bugs: improve ``--api-key`` description and include appropriate
+  warning (Florian Schmaus, #159)
+
+- pkgdev bugs: add support for stabilization groups (Arthur Zamarin, #154)
+
+- pkgdev commit: add support for enabling or disabling gpg signing (Arthur
+  Zamarin, #147)
+
+- pkgdev push: ``--ask`` stops for confirmation on warnings too (Arthur Zamarin,
+  #152)
+
+**Fixed bugs:**
+
+- pkgdev bugs: truncate too long bug summaries (Arthur Zamarin, #141)
+
+- pkgdev bugs: show correct number of bugs which would be opened (Arthur
+  Zamarin, #142)
+
+- pkgdev bugs: do not swallow exceptions when reading ``~/.bugz_token``
+  (Florian Schmaus, #158)
+
 pkgdev 0.2.7 (2023-04-22)
 -------------------------
 
