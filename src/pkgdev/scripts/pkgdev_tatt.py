@@ -173,7 +173,11 @@ template_opts.add_argument(
     """,
 )
 
-accept_keywords = Path("/etc/portage/package.accept_keywords")
+portage_config = Path("/etc/portage")
+portage_accept_keywords = portage_config / "package.accept_keywords"
+portage_package_use = portage_config / "package.use"
+portage_package_env = portage_config / "package.env"
+portage_env = portage_config / "env"
 
 
 @tatt.bind_final_check
@@ -232,8 +236,9 @@ def _groupby_use_expand(
     use_expand_prefixes: tuple[str, ...],
     domain_enabled: frozenset[str],
     iuse: frozenset[str],
-) -> dict[str, set[str]]:
-    use_expand_dict = defaultdict(set)
+):
+    use_expand_dict: dict[str, set[str]] = defaultdict(set)
+    use_flags: set[str] = set()
     for var, state in assignment.items():
         if var not in iuse:
             continue
@@ -245,8 +250,8 @@ def _groupby_use_expand(
                     use_expand_dict[use_expand[:-1]].add(var.removeprefix(use_expand))
                 break
         else:
-            use_expand_dict["USE"].add(("" if state else "-") + var)
-    return use_expand_dict
+            use_flags.add(("" if state else "-") + var)
+    return use_flags, use_expand_dict
 
 
 def _build_job(namespace, pkg, is_test):
@@ -286,11 +291,9 @@ def _build_job(namespace, pkg, is_test):
         frozenset(prefer_true),
     )
     for solution in solutions:
-        yield " ".join(
-            f'{var.upper()}="{" ".join(vals)}"'
-            for var, vals in _groupby_use_expand(
-                solution, use_expand_prefixes, enabled, iuse
-            ).items()
+        use_flags, use_expand = _groupby_use_expand(solution, use_expand_prefixes, enabled, iuse)
+        yield " ".join(use_flags) + " " + " ".join(
+            f'{var.upper()}: {" ".join(vals)}' for var, vals in use_expand.items()
         )
 
 
@@ -303,16 +306,37 @@ def _build_jobs(namespace, pkgs):
             yield pkg.versioned_atom, False, flags
 
 
+def _create_config_dir(directory: Path):
+    if not directory.exists():
+        directory.mkdir(parents=True)
+    elif not directory.is_dir():
+        raise NotADirectoryError(f"{directory} is not a directory")
+
+
 def _create_config_files(pkgs, job_name, is_keywording):
-    if not accept_keywords.exists():
-        accept_keywords.mkdir(parents=True)
-    elif not accept_keywords.is_dir():
-        raise NotADirectoryError(f"{accept_keywords} is not a directory")
-    with (res := accept_keywords / f"pkgdev_tatt_{job_name}.keywords").open("w") as f:
+    _create_config_dir(portage_accept_keywords)
+    with (res := portage_accept_keywords / f"pkgdev_tatt_{job_name}.keywords").open("w") as f:
         f.write(f"# Job created by pkgdev tatt for {job_name!r}\n")
         for pkg in pkgs:
             f.write(f'{pkg.versioned_atom} {"**" if is_keywording else ""}\n')
-    return str(res)
+    yield str(res)
+
+    _create_config_dir(portage_env)
+    with (res := portage_env / f"pkgdev_tatt_{job_name}_no_test").open("w") as f:
+        f.write(f"# Job created by pkgdev tatt for {job_name!r}\n")
+        f.write('FEATURES="qa-unresolved-soname-deps multilib-strict"\n')
+    yield str(res)
+    with (res := portage_env / f"pkgdev_tatt_{job_name}_test").open("w") as f:
+        f.write(f"# Job created by pkgdev tatt for {job_name!r}\n")
+        f.write('FEATURES="qa-unresolved-soname-deps multilib-strict test"\n')
+    yield str(res)
+
+    _create_config_dir(portage_package_use)
+    (res := portage_package_use / f"pkgdev_tatt_{job_name}").mkdir(exist_ok=True)
+    yield str(res)
+    _create_config_dir(portage_package_env)
+    (res := portage_package_env / f"pkgdev_tatt_{job_name}").mkdir(exist_ok=True)
+    yield str(res)
 
 
 @tatt.bind_main_func
@@ -329,9 +353,9 @@ def main(options, out, err):
     cleanup_files = []
 
     try:
-        config_file = _create_config_files(pkgs, job_name, options.keywording)
-        out.write("created config ", out.fg("green"), config_file, out.reset)
-        cleanup_files.append(config_file)
+        for config_file in _create_config_files(pkgs, job_name, options.keywording):
+            out.write("created config ", out.fg("green"), config_file, out.reset)
+            cleanup_files.append(config_file)
     except Exception as exc:
         err.error(f"failed to create config files: {exc}")
 
@@ -346,6 +370,7 @@ def main(options, out, err):
     script = Template(template, trim_blocks=True, lstrip_blocks=True).render(
         jobs=list(_build_jobs(options, pkgs)),
         report_file=job_name + ".report",
+        job_name=job_name,
         log_dir=options.logs_dir,
         emerge_opts=options.emerge_opts,
         cleanup_files=cleanup_files,
