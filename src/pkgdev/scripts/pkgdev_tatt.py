@@ -150,6 +150,11 @@ template_opts.add_argument(
                 Options to be passed to emerge invocations. Taken from
                 ``--emerge-opts``.
 
+            ``extra_env_files``
+                A list of extra /etc/portage/env/ file names, to be added to
+                ``package.env`` entry when testing the package. Taken from
+                ``--extra-env-file``.
+
             ``log_dir``
                 irectory to save build logs for failing tasks. Taken from
                 ``--logs-dir``.
@@ -172,12 +177,30 @@ template_opts.add_argument(
         to ``emerge`` invocations.
     """,
 )
+template_opts.add_argument(
+    "--extra-env-file",
+    default=[],
+    metavar="ENV_FILE",
+    action=arghparse.CommaSeparatedValuesAppend,
+    help="Extra /etc/portage/env/ file names, to be used while testing packages. Can be passed multiple times.",
+    docs="""
+        Comma separated filenames under /etc/portage/env/, which will all be
+        included in the package.env entry when testing the package.
+    """,
+)
 
 portage_config = Path("/etc/portage")
 portage_accept_keywords = portage_config / "package.accept_keywords"
 portage_package_use = portage_config / "package.use"
 portage_package_env = portage_config / "package.env"
 portage_env = portage_config / "env"
+
+
+@tatt.bind_final_check
+def _tatt_validate(parser, namespace):
+    for filename in namespace.extra_env_file:
+        if not (env_file := portage_env / filename).exists():
+            parser.error(f"extra env file '{env_file}' doesn't exist")
 
 
 @tatt.bind_final_check
@@ -254,7 +277,7 @@ def _groupby_use_expand(
     return use_flags, use_expand_dict
 
 
-def _build_job(namespace, pkg, is_test):
+def _build_job(namespace, pkg, is_test: bool):
     use_expand_prefixes = tuple(s.lower() + "_" for s in namespace.domain.profile.use_expand)
     default_on_iuse = tuple(use[1:] for use in pkg.iuse if use.startswith("+"))
     immutable, enabled, _disabled = namespace.domain.get_package_use_unconfigured(pkg)
@@ -373,6 +396,7 @@ def main(options, out, err):
         job_name=job_name,
         log_dir=options.logs_dir,
         emerge_opts=options.emerge_opts,
+        extra_env_files=options.extra_env_file,
         cleanup_files=cleanup_files,
     )
     with open(script_name := job_name + ".sh", "w") as output:

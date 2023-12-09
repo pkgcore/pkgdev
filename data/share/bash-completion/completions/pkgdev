@@ -214,6 +214,7 @@ _pkgdev() {
                 --template-file
                 --logs-dir
                 --emerge-opts
+                --extra-env-file
             "
 
             case "${prev}" in
@@ -225,6 +226,16 @@ _pkgdev() {
                     ;;
                 --logs-dir)
                     COMPREPLY=($(compgen -d -- "${cur}"))
+                    ;;
+                --extra-env-file)
+                    if [[ -d /etc/portage/env/ ]]; then
+                        pushd /etc/portage/env/ >& /dev/null
+                        local SETS=( * )
+                        COMPREPLY=($(compgen -W "${SETS[*]}" -- "${cur}" ))
+                        popd >& /dev/null
+                    else
+                        COMPREPLY=()
+                    fi
                     ;;
                 *)
                     COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))

@@ -102,6 +102,9 @@ tatt_test_pkg() {
         printf "%s pkgdev_tatt_{{ job_name }}_no_test\n" "${1:?}" > "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
         local TFEATURES="${FEATURES}"
     fi
+    {% for env in extra_env_files %}
+    printf "%s {{env}}\n" "${1}" >> "/etc/portage/package.env/pkgdev_tatt_{{ job_name }}/${CP}"
+    {% endfor %}
 
     printf "%s %s\n" "${1:?}" "${TUSE}" > "/etc/portage/package.use/pkgdev_tatt_{{ job_name }}/${CP}"
 
