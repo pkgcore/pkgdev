@@ -279,6 +279,7 @@ class DependencyGraph:
 
         self.nodes: set[GraphNode] = set()
         self.starting_nodes: set[GraphNode] = set()
+        self.targets: tuple[package] = ()
 
     def mk_fake_pkg(self, pkg: package, keywords: set[str]):
         return FakePkg(
@@ -295,6 +296,9 @@ class DependencyGraph:
             *restrict,
             packages.PackageRestriction("properties", values.ContainmentMatch("live", negate=True)),
         )
+        # prefer using user selected targets
+        if intersect := tuple(filter(restrict.match, self.targets)):
+            return max(intersect)
         # prefer using already selected packages in graph
         all_pkgs = (pkg for node in self.nodes for pkg, _ in node.pkgs)
         if intersect := tuple(filter(restrict.match, all_pkgs)):
@@ -345,6 +349,7 @@ class DependencyGraph:
                 yield from results.items()
 
     def build_full_graph(self, targets: list[package]):
+        self.targets = tuple(targets)
         check_nodes = [(pkg, set()) for pkg in targets]
 
         vertices: dict[package, GraphNode] = {}
