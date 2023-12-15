@@ -5,6 +5,7 @@ import json
 import sys
 import urllib.request as urllib
 from collections import defaultdict
+from datetime import datetime
 from functools import partial
 from itertools import chain
 from pathlib import Path
@@ -13,6 +14,7 @@ from urllib.parse import urlencode
 from pkgcheck import const as pkgcheck_const
 from pkgcheck.addons import ArchesAddon, init_addon
 from pkgcheck.addons.profiles import ProfileAddon
+from pkgcheck.addons.git import GitAddon, GitModifiedRepo
 from pkgcheck.checks import visibility
 from pkgcheck.scripts import argparse_actions
 from pkgcore.ebuild.atom import atom
@@ -113,6 +115,7 @@ bugs_state.add_argument(
 )
 
 ArchesAddon.mangle_argparser(bugs)
+GitAddon.mangle_argparser(bugs)
 ProfileAddon.mangle_argparser(bugs)
 
 
@@ -199,13 +202,18 @@ class GraphNode:
                 keywords.add("*")
 
     def file_bug(
-        self, api_key: str, auto_cc_arches: frozenset[str], block_bugs: list[int], observer=None
+        self,
+        api_key: str,
+        auto_cc_arches: frozenset[str],
+        block_bugs: list[int],
+        modified_repo: multiplex.tree,
+        observer=None,
     ) -> int:
         if self.bugno is not None:
             return self.bugno
         for dep in self.edges:
             if dep.bugno is None:
-                dep.file_bug(api_key, auto_cc_arches, (), observer)
+                dep.file_bug(api_key, auto_cc_arches, (), modified_repo, observer)
         maintainers = dict.fromkeys(
             maintainer.email for pkg, _ in self.pkgs for maintainer in pkg.maintainers
         )
@@ -219,6 +227,17 @@ class GraphNode:
         if len(summary) > 90 and len(self.pkgs) > 1:
             summary = f"{self.pkgs[0][0].versioned_atom.cpvstr} and friends: stablereq"
 
+        description = ["Please stabilize", ""]
+        if modified_repo is not None:
+            for pkg, _ in self.pkgs:
+                with contextlib.suppress(StopIteration):
+                    match = next(modified_repo.itermatch(pkg.versioned_atom))
+                    added = datetime.fromtimestamp(match.time)
+                    days_old = (datetime.today() - added).days
+                    description.append(
+                        f" {pkg.versioned_atom.cpvstr}: no change for {days_old} days, since {added:%Y-%m-%d}"
+                    )
+
         request_data = dict(
             Bugzilla_api_key=api_key,
             product="Gentoo Linux",
@@ -226,7 +245,7 @@ class GraphNode:
             severity="enhancement",
             version="unspecified",
             summary=summary,
-            description="Please stabilize",
+            description="\n".join(description).strip(),
             keywords=keywords,
             cf_stabilisation_atoms="\n".join(self.lines()),
             assigned_to=maintainers[0],
@@ -505,8 +524,9 @@ class DependencyGraph:
             )
             self.out.flush()
 
+        modified_repo = init_addon(GitAddon, self.options).cached_repo(GitModifiedRepo)
         for node in self.starting_nodes:
-            node.file_bug(api_key, auto_cc_arches, block_bugs, observe)
+            node.file_bug(api_key, auto_cc_arches, block_bugs, modified_repo, observe)
 
 
 def _load_from_stdin(out: Formatter, err: Formatter):
