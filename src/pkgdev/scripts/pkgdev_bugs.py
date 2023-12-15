@@ -458,7 +458,7 @@ class DependencyGraph:
         params = urlencode(
             {
                 "Bugzilla_api_key": api_key,
-                "include_fields": "id,cf_stabilisation_atoms",
+                "include_fields": "id,cf_stabilisation_atoms,summary",
                 "component": "Stabilization",
                 "resolution": "---",
                 "f1": "cf_stabilisation_atoms",
@@ -492,6 +492,7 @@ class DependencyGraph:
                         f"Found https://bugs.gentoo.org/{node.bugno} for node {node}",
                         self.out.reset,
                     )
+                    self.out.write(" -> bug summary: ", bug["summary"])
                     break
 
     def file_bugs(self, api_key: str, auto_cc_arches: frozenset[str], block_bugs: list[int]):
