@@ -564,9 +564,9 @@ def main(options, out: Formatter, err: Formatter):
         options.targets = list(_load_from_stdin(out, err))
     targets = list(_parse_targets(search_repo, options.targets))
     d.build_full_graph(targets)
+    d.merge_stabilization_groups()
     d.merge_cycles()
     d.merge_new_keywords_children()
-    d.merge_stabilization_groups()
 
     for node in d.nodes:
         node.cleanup_keywords(search_repo)
