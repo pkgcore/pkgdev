@@ -437,6 +437,7 @@ class DependencyGraph:
             assert starting_node in self.nodes
             while cycle := self._find_cycles(tuple(self.nodes), [starting_node]):
                 self.out.write("Found cycle: ", " -> ".join(str(n) for n in cycle))
+                start_nodes.difference_update(cycle)
                 new_node = self.merge_nodes(cycle)
                 if starting_node not in self.nodes:
                     starting_node = new_node
