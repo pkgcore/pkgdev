@@ -1,5 +1,7 @@
 import os
 import subprocess
+from configparser import ConfigParser
+from pathlib import Path
 
 from pkgcore.repository import errors as repo_errors
 from snakeoil.cli.arghparse import ArgumentParser
@@ -41,3 +43,40 @@ def _determine_git_repo(parser, namespace):
         pass
 
     namespace.git_repo = path
+
+
+class BugzillaApiKey:
+    @classmethod
+    def mangle_argparser(cls, parser):
+        parser.add_argument(
+            "--api-key",
+            metavar="KEY",
+            help="Bugzilla API key",
+            docs="""
+                The Bugzilla API key to use for authentication. WARNING: using this
+                option will expose your API key to other users of the same system.
+                Consider instead saving your API key in a file named ``~/.bugzrc``
+                in an INI format like so::
+
+                        [default]
+                        key = <your API key>
+
+                ANother supported option is to save your API key in a file named
+                ``~/.bugz_token``.
+            """,
+        )
+
+        parser.bind_delayed_default(1000, "api_key")(cls._default_api_key)
+
+    @staticmethod
+    def _default_api_key(namespace, attr):
+        """Use all known arches by default."""
+        if (bugz_rc_file := Path.home() / ".bugzrc").is_file():
+            try:
+                config = ConfigParser(default_section="default")
+                config.read(bugz_rc_file)
+                setattr(namespace, attr, config.get("default", "key"))
+            except Exception as e:
+                raise ValueError(f"failed parsing {bugz_rc_file}: {e}")
+        elif (bugz_token_file := Path.home() / ".bugz_token").is_file():
+            setattr(namespace, attr, bugz_token_file.read_text().strip())

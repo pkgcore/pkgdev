@@ -30,7 +30,7 @@ from snakeoil.cli.input import userquery
 from snakeoil.formatters import Formatter
 
 from ..cli import ArgumentParser
-from .argparsers import _determine_cwd_repo, cwd_repo_argparser
+from .argparsers import _determine_cwd_repo, cwd_repo_argparser, BugzillaApiKey
 
 bugs = ArgumentParser(
     prog="pkgdev bugs",
@@ -39,16 +39,7 @@ bugs = ArgumentParser(
     quiet=False,
     parents=(cwd_repo_argparser,),
 )
-bugs.add_argument(
-    "--api-key",
-    metavar="KEY",
-    help="Bugzilla API key",
-    docs="""
-        The Bugzilla API key to use for authentication. WARNING: using this
-        option will expose your API key to other users of the same system.
-        Consider instead saving your API key in a file named ~/.bugz_token.
-    """,
-)
+BugzillaApiKey.mangle_argparser(bugs)
 bugs.add_argument(
     "targets",
     metavar="target",
@@ -571,11 +562,6 @@ def main(options, out: Formatter, err: Formatter):
 
     for node in d.nodes:
         node.cleanup_keywords(search_repo)
-
-    if options.api_key is None:
-        bugz_token_file = Path.home() / ".bugz_token"
-        if bugz_token_file.is_file:
-            options.api_key = bugz_token_file.read_text().strip()
 
     if not d.nodes:
         out.write(out.fg("red"), "Nothing to do, exiting", out.reset)

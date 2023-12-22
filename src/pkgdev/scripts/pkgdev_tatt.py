@@ -15,18 +15,10 @@ from pkgcore.util import packages as pkgutils
 from snakeoil.cli import arghparse
 
 from ..cli import ArgumentParser
+from .argparsers import BugzillaApiKey
 
 tatt = ArgumentParser(prog="pkgdev tatt", description=__doc__, verbose=False, quiet=False)
-tatt.add_argument(
-    "--api-key",
-    metavar="KEY",
-    help="Bugzilla API key",
-    docs="""
-        The Bugzilla API key to use for authentication. Used mainly to overcome
-        rate limiting done by bugzilla server. This tool doesn't perform any
-        bug editing, just fetching info for the bug.
-    """,
-)
+BugzillaApiKey.mangle_argparser(tatt)
 tatt.add_argument(
     "-j",
     "--job-name",
