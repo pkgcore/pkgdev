@@ -247,6 +247,8 @@ _pkgdev() {
                 --api-key
                 --auto-cc-arches
                 --find-by-maintainer
+                --filter-stablereqs
+                --stabletime
                 --blocks
                 --dot
                 -s --stablereq
@@ -254,7 +256,7 @@ _pkgdev() {
             "
 
             case "${prev}" in
-                --api-key | --auto-cc-arches | --blocks | --find-by-maintainer)
+                --api-key | --auto-cc-arches | --blocks | --find-by-maintainer | --stabletime)
                     COMPREPLY=()
                     ;;
                 --dot)

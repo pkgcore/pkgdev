@@ -14,7 +14,7 @@ from pkgcheck import const as pkgcheck_const
 from pkgcheck.addons import ArchesAddon, init_addon
 from pkgcheck.addons.profiles import ProfileAddon
 from pkgcheck.addons.git import GitAddon, GitModifiedRepo
-from pkgcheck.checks import visibility
+from pkgcheck.checks import visibility, stablereq
 from pkgcheck.scripts import argparse_actions
 from pkgcore.ebuild.atom import atom
 from pkgcore.ebuild.ebuild_src import package
@@ -78,6 +78,16 @@ bugs.add_argument(
     """,
 )
 bugs.add_argument(
+    "--filter-stablereqs",
+    action="store_true",
+    help="filter targets for packages with active StableRequest result",
+    docs="""
+        Filter targets passed to pkgdev (command line, stabilization groups,
+        maintainer search, stdin) for packages with active ``StableRequest``
+        result.
+    """,
+)
+bugs.add_argument(
     "--blocks",
     metavar="BUG",
     action=arghparse.CommaSeparatedValuesAppend,
@@ -119,9 +129,11 @@ bugs_state.add_argument(
     help="File rekeywording bugs",
 )
 
+bugs.plugin = bugs
 ArchesAddon.mangle_argparser(bugs)
 GitAddon.mangle_argparser(bugs)
 ProfileAddon.mangle_argparser(bugs)
+stablereq.StableRequestCheck.mangle_argparser(bugs)
 
 
 @bugs.bind_delayed_default(1500, "target_repo")
@@ -129,7 +141,8 @@ def _validate_args(namespace, attr):
     _determine_cwd_repo(bugs, namespace)
     setattr(namespace, attr, namespace.repo)
     setattr(namespace, "verbosity", 1)
-    setattr(namespace, "search_repo", multiplex.tree(*namespace.repo.trees))
+    setattr(namespace, "search_repo", search_repo := multiplex.tree(*namespace.repo.trees))
+    setattr(namespace, "gentoo_repo", search_repo)
     setattr(namespace, "query_caching_freq", "package")
 
 
@@ -286,6 +299,9 @@ class DependencyGraph:
         self.starting_nodes: set[GraphNode] = set()
         self.targets: tuple[package] = ()
 
+        git_addon = init_addon(GitAddon, options)
+        self.stablereq_check = stablereq.StableRequestCheck(self.options, git_addon=git_addon)
+
     def mk_fake_pkg(self, pkg: package, keywords: set[str]):
         return FakePkg(
             cpv=pkg.cpvstr,
@@ -372,7 +388,15 @@ class DependencyGraph:
         search_repo = self.options.search_repo
         for _, target in targets:
             try:
-                result.append(self.find_best_match([target], search_repo.match(target), False))
+                pkgset = search_repo.match(target)
+                if self.options.filter_stablereqs:
+                    for res in self.stablereq_check.feed(sorted(pkgset)):
+                        if isinstance(res, stablereq.StableRequest):
+                            target = atom(f"={res.category}/{res.package}-{res.version}")
+                            break
+                    else:  # no stablereq
+                        continue
+                result.append(self.find_best_match([target], pkgset, False))
             except ValueError:
                 raise ValueError(f"Restriction {target} has no match in repository")
         self.targets = tuple(result)
