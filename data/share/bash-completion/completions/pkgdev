@@ -246,6 +246,7 @@ _pkgdev() {
             subcmd_options="
                 --api-key
                 --auto-cc-arches
+                --find-by-maintainer
                 --blocks
                 --dot
                 -s --stablereq
@@ -253,7 +254,7 @@ _pkgdev() {
             "
 
             case "${prev}" in
-                --api-key | --auto-cc-arches | --blocks)
+                --api-key | --auto-cc-arches | --blocks | --find-by-maintainer)
                     COMPREPLY=()
                     ;;
                 --dot)

@@ -20,6 +20,7 @@ from pkgcore.ebuild.atom import atom
 from pkgcore.ebuild.ebuild_src import package
 from pkgcore.ebuild.errors import MalformedAtom
 from pkgcore.ebuild.misc import sort_keywords
+from pkgcore.ebuild.repo_objs import LocalMetadataXml
 from pkgcore.repository import multiplex
 from pkgcore.restrictions import boolean, packages, values
 from pkgcore.test.misc import FakePkg
@@ -27,6 +28,7 @@ from pkgcore.util import commandline, parserestrict
 from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
 from snakeoil.formatters import Formatter
+from snakeoil.osutils import pjoin
 
 from ..cli import ArgumentParser
 from .argparsers import _determine_cwd_repo, cwd_repo_argparser, BugzillaApiKey
@@ -60,6 +62,19 @@ bugs.add_argument(
         Comma separated list of email addresses, for which automatically add
         CC-ARCHES if one of the maintainers matches the email address. If the
         package is maintainer-needed, always add CC-ARCHES.
+    """,
+)
+bugs.add_argument(
+    "--find-by-maintainer",
+    action=arghparse.CommaSeparatedNegationsAppend,
+    default=([], []),
+    help="collect all packages maintained by the listed email addresses",
+    docs="""
+        Comma separated list of email addresses, for which pkgdev will collect
+        all packages maintained by.
+
+        Note that this flag requires to go over all packages in the repository
+        to find matches, which can be slow (between 1 to 3 seconds).
     """,
 )
 bugs.add_argument(
@@ -309,6 +324,20 @@ class DependencyGraph:
                 except (ValueError, IndexError):
                     self.err.write(f"Unable to find match for {pkg.unversioned_atom}")
 
+    def extend_maintainers(self):
+        disabled, enabled = self.options.find_by_maintainer
+        emails = frozenset(enabled).difference(disabled)
+        if not emails:
+            return
+        search_repo = self.options.search_repo
+        self.out.write("Searching for packages maintained by: ", ", ".join(emails))
+        self.out.flush()
+        for cat, pkgs in search_repo.packages.items():
+            for pkg in pkgs:
+                xml = LocalMetadataXml(pjoin(search_repo.location[0], cat, pkg, "metadata.xml"))
+                if emails.intersection(m.email for m in xml.maintainers):
+                    yield None, parserestrict.parse_match(f"{cat}/{pkg}")
+
     def _find_dependencies(self, pkg: package, keywords: set[str]):
         check = visibility.VisibilityCheck(self.options, profile_addon=self.profile_addon)
 
@@ -551,6 +580,7 @@ def main(options, out: Formatter, err: Formatter):
     search_repo = options.search_repo
     options.targets = options.targets or []
     d = DependencyGraph(out, err, options)
+    options.targets.extend(d.extend_maintainers())
     options.targets.extend(d.extend_targets_stable_groups(options.sets or ()))
     if not options.targets:
         options.targets = list(_load_from_stdin(out, err))
