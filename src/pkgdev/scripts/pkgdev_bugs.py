@@ -8,7 +8,6 @@ from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from itertools import chain
-from pathlib import Path
 from urllib.parse import urlencode
 
 from pkgcheck import const as pkgcheck_const
@@ -282,7 +281,7 @@ class DependencyGraph:
             data={attr: str(getattr(pkg, attr.lower())) for attr in pkg.eapi.dep_keys},
         )
 
-    def find_best_match(self, restrict, pkgset: list[package]) -> package:
+    def find_best_match(self, restrict, pkgset: list[package], prefer_semi_stable=True) -> package:
         restrict = boolean.AndRestriction(
             *restrict,
             packages.PackageRestriction("properties", values.ContainmentMatch("live", negate=True)),
@@ -295,18 +294,18 @@ class DependencyGraph:
         if intersect := tuple(filter(restrict.match, all_pkgs)):
             return max(intersect)
         matches = sorted(filter(restrict.match, pkgset), reverse=True)
-        for match in matches:
-            if not all(keyword.startswith("~") for keyword in match.keywords):
-                return match
+        if prefer_semi_stable:
+            for match in matches:
+                if not all(keyword.startswith("~") for keyword in match.keywords):
+                    return match
         return matches[0]
 
     def extend_targets_stable_groups(self, groups):
         stabilization_groups = self.options.repo.stabilization_groups
-        search_repo = self.options.search_repo
         for group in groups:
             for pkg in stabilization_groups[group]:
                 try:
-                    yield None, self.find_best_match([pkg], search_repo.match(pkg)).versioned_atom
+                    yield None, pkg
                 except (ValueError, IndexError):
                     self.err.write(f"Unable to find match for {pkg.unversioned_atom}")
 
@@ -339,9 +338,18 @@ class DependencyGraph:
                     results[match].add(keyword)
                 yield from results.items()
 
-    def build_full_graph(self, targets: list[package]):
-        self.targets = tuple(targets)
-        check_nodes = [(pkg, set()) for pkg in targets]
+    def load_targets(self, targets: list[tuple[str, str]]):
+        result = []
+        search_repo = self.options.search_repo
+        for _, target in targets:
+            try:
+                result.append(self.find_best_match([target], search_repo.match(target), False))
+            except ValueError:
+                raise ValueError(f"Restriction {target} has no match in repository")
+        self.targets = tuple(result)
+
+    def build_full_graph(self):
+        check_nodes = [(pkg, set()) for pkg in self.targets]
 
         vertices: dict[package, GraphNode] = {}
         edges = []
@@ -373,7 +381,7 @@ class DependencyGraph:
         for src, dst in edges:
             vertices[src].edges.add(vertices[dst])
         self.starting_nodes = {
-            vertices[starting_node] for starting_node in targets if starting_node in vertices
+            vertices[starting_node] for starting_node in self.targets if starting_node in vertices
         }
 
     def output_dot(self, dot_file):
@@ -538,14 +546,6 @@ def _load_from_stdin(out: Formatter, err: Formatter):
         raise arghparse.ArgumentError(None, "reading from stdin is only valid when piping data in")
 
 
-def _parse_targets(search_repo, targets):
-    for _, target in targets:
-        try:
-            yield max(search_repo.itermatch(target))
-        except ValueError:
-            raise ValueError(f"Restriction {target} has no match in repository")
-
-
 @bugs.bind_main_func
 def main(options, out: Formatter, err: Formatter):
     search_repo = options.search_repo
@@ -554,8 +554,8 @@ def main(options, out: Formatter, err: Formatter):
     options.targets.extend(d.extend_targets_stable_groups(options.sets or ()))
     if not options.targets:
         options.targets = list(_load_from_stdin(out, err))
-    targets = list(_parse_targets(search_repo, options.targets))
-    d.build_full_graph(targets)
+    d.load_targets(options.targets)
+    d.build_full_graph()
     d.merge_stabilization_groups()
     d.merge_cycles()
     d.merge_new_keywords_children()
