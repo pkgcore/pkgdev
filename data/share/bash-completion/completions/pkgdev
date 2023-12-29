@@ -247,6 +247,7 @@ _pkgdev() {
                 --api-key
                 --auto-cc-arches
                 --find-by-maintainer
+                --projects
                 --filter-stablereqs
                 --stabletime
                 --blocks

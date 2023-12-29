@@ -20,13 +20,14 @@ from pkgcore.ebuild.atom import atom
 from pkgcore.ebuild.ebuild_src import package
 from pkgcore.ebuild.errors import MalformedAtom
 from pkgcore.ebuild.misc import sort_keywords
-from pkgcore.ebuild.repo_objs import LocalMetadataXml
+from pkgcore.ebuild.repo_objs import LocalMetadataXml, ProjectsXml
 from pkgcore.repository import multiplex
 from pkgcore.restrictions import boolean, packages, values
 from pkgcore.test.misc import FakePkg
 from pkgcore.util import commandline, parserestrict
 from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
+from snakeoil.data_source import bytes_data_source
 from snakeoil.formatters import Formatter
 from snakeoil.osutils import pjoin
 
@@ -75,6 +76,18 @@ bugs.add_argument(
 
         Note that this flag requires to go over all packages in the repository
         to find matches, which can be slow (between 1 to 3 seconds).
+    """,
+)
+bugs.add_argument(
+    "--projects",
+    action="store_true",
+    help="include packages maintained by projects",
+    docs="""
+        Include packages maintained by projects, whose members include the
+        emails of maintainers passed to ``--find-by-maintainer``.
+
+        Note that this flag requires to fetch the ``projects.xml`` file from
+        ``https://api.gentoo.org``.
     """,
 )
 bugs.add_argument(
@@ -340,8 +353,23 @@ class DependencyGraph:
                 except (ValueError, IndexError):
                     self.err.write(f"Unable to find match for {pkg.unversioned_atom}")
 
+    def _extend_projects(self, disabled, enabled):
+        members = defaultdict(set)
+        self.out.write("Fetching projects.xml")
+        self.out.flush()
+        with urllib.urlopen("https://api.gentoo.org/metastructure/projects.xml", timeout=30) as f:
+            for email, project in ProjectsXml(bytes_data_source(f.read())).projects.items():
+                for member in project.members:
+                    members[member.email].add(email)
+
+        disabled = frozenset(disabled).union(*(members[email] for email in disabled))
+        enabled = frozenset(enabled).union(*(members[email] for email in enabled))
+        return disabled, enabled
+
     def extend_maintainers(self):
         disabled, enabled = self.options.find_by_maintainer
+        if self.options.projects:
+            disabled, enabled = self._extend_projects(disabled, enabled)
         emails = frozenset(enabled).difference(disabled)
         if not emails:
             return
