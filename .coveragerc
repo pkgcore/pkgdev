@@ -19,3 +19,5 @@ exclude_lines =
 
 	# ignore unexecutable code
 	if __name__ == .__main__.:
+omit =
+	**/pkgdev/scripts/pkgdev_bugs.py
