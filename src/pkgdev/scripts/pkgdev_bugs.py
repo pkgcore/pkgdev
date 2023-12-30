@@ -406,10 +406,10 @@ class DependencyGraph:
                         match = self.find_best_match(deps, pkgset)
                     except (ValueError, IndexError):
                         deps_str = " , ".join(map(str, deps))
-                        self.err.error(
+                        bugs.error(
                             f"unable to find match for restrictions: {deps_str}",
+                            status=3,
                         )
-                        raise
                     results[match].add(keyword)
                 yield from results.items()
 
@@ -427,8 +427,8 @@ class DependencyGraph:
                     else:  # no stablereq
                         continue
                 result.append(self.find_best_match([target], pkgset, False))
-            except ValueError:
-                raise ValueError(f"Restriction {target} has no match in repository")
+            except (ValueError, IndexError):
+                bugs.error(f"Restriction {target} has no match in repository", status=3)
         self.targets = tuple(result)
 
     def build_full_graph(self):
@@ -617,7 +617,7 @@ class DependencyGraph:
             node.file_bug(api_key, auto_cc_arches, block_bugs, modified_repo, observe)
 
 
-def _load_from_stdin(out: Formatter, err: Formatter):
+def _load_from_stdin(out: Formatter):
     if not sys.stdin.isatty():
         out.warn("No packages were specified, reading from stdin...")
         for line in sys.stdin.readlines():
@@ -626,7 +626,7 @@ def _load_from_stdin(out: Formatter, err: Formatter):
         # reassign stdin to allow interactivity (currently only works for unix)
         sys.stdin = open("/dev/tty")
     else:
-        raise arghparse.ArgumentError(None, "reading from stdin is only valid when piping data in")
+        bugs.error("reading from stdin is only valid when piping data in")
 
 
 @bugs.bind_main_func
@@ -637,7 +637,7 @@ def main(options, out: Formatter, err: Formatter):
     options.targets.extend(d.extend_maintainers())
     options.targets.extend(d.extend_targets_stable_groups(options.sets or ()))
     if not options.targets:
-        options.targets = list(_load_from_stdin(out, err))
+        options.targets = list(_load_from_stdin(out))
     d.load_targets(options.targets)
     d.build_full_graph()
     d.merge_stabilization_groups()
