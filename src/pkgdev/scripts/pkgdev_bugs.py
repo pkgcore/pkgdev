@@ -58,6 +58,7 @@ bugs.add_argument(
     "--auto-cc-arches",
     action=arghparse.CommaSeparatedNegationsAppend,
     default=([], []),
+    metavar="EMAIL",
     help="automatically add CC-ARCHES for the listed email addresses",
     docs="""
         Comma separated list of email addresses, for which automatically add
@@ -69,6 +70,7 @@ bugs.add_argument(
     "--find-by-maintainer",
     action=arghparse.CommaSeparatedNegationsAppend,
     default=([], []),
+    metavar="EMAIL",
     help="collect all packages maintained by the listed email addresses",
     docs="""
         Comma separated list of email addresses, for which pkgdev will collect

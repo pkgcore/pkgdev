@@ -50,7 +50,7 @@ class BugzillaApiKey:
     def mangle_argparser(cls, parser):
         parser.add_argument(
             "--api-key",
-            metavar="KEY",
+            metavar="TOKEN",
             help="Bugzilla API key",
             docs="""
                 The Bugzilla API key to use for authentication. WARNING: using this
@@ -61,7 +61,7 @@ class BugzillaApiKey:
                         [default]
                         key = <your API key>
 
-                ANother supported option is to save your API key in a file named
+                Another supported option is to save your API key in a file named
                 ``~/.bugz_token``.
             """,
         )

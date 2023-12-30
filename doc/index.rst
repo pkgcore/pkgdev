@@ -8,6 +8,7 @@ Contents:
     :maxdepth: 4
 
     man/pkgdev
+    man/pkgdev/bugs
     man/pkgdev/commit
     man/pkgdev/manifest
     man/pkgdev/mask
