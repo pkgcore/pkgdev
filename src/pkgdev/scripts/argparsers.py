@@ -1,6 +1,7 @@
 import os
 import subprocess
 from configparser import ConfigParser
+from contextlib import suppress
 from pathlib import Path
 
 from pkgcore.repository import errors as repo_errors
@@ -75,8 +76,13 @@ class BugzillaApiKey:
             try:
                 config = ConfigParser(default_section="default")
                 config.read(bugz_rc_file)
-                setattr(namespace, attr, config.get("default", "key"))
             except Exception as e:
                 raise ValueError(f"failed parsing {bugz_rc_file}: {e}")
-        elif (bugz_token_file := Path.home() / ".bugz_token").is_file():
+
+            for category in ("default", "gentoo", "Gentoo"):
+                with suppress(Exception):
+                    setattr(namespace, attr, config.get(category, "key"))
+                    return
+
+        if (bugz_token_file := Path.home() / ".bugz_token").is_file():
             setattr(namespace, attr, bugz_token_file.read_text().strip())
