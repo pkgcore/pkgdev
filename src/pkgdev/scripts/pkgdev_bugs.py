@@ -2,7 +2,11 @@
 
 import contextlib
 import json
+import os
+import shlex
+import subprocess
 import sys
+import tempfile
 import urllib.request as urllib
 from collections import defaultdict
 from datetime import datetime
@@ -13,7 +17,7 @@ from urllib.parse import urlencode
 from pkgcheck import const as pkgcheck_const
 from pkgcheck.addons import ArchesAddon, init_addon
 from pkgcheck.addons.profiles import ProfileAddon
-from pkgcheck.addons.git import GitAddon, GitModifiedRepo
+from pkgcheck.addons.git import GitAddon, GitAddedRepo, GitModifiedRepo
 from pkgcheck.checks import visibility, stablereq
 from pkgcheck.scripts import argparse_actions
 from pkgcore.ebuild.atom import atom
@@ -34,6 +38,11 @@ from snakeoil.osutils import pjoin
 from ..cli import ArgumentParser
 from .argparsers import _determine_cwd_repo, cwd_repo_argparser, BugzillaApiKey
 
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
 bugs = ArgumentParser(
     prog="pkgdev bugs",
     description=__doc__,
@@ -53,6 +62,17 @@ bugs.add_argument(
 bugs.add_argument(
     "--dot",
     help="path file where to save the graph in dot format",
+)
+bugs.add_argument(
+    "--edit-graph",
+    action="store_true",
+    help="open editor to modify the graph before filing bugs",
+    docs="""
+        When this argument is passed, pkgdev will open the graph in the editor
+        (either ``$VISUAL`` or ``$EDITOR``) before filing bugs. The graph is
+        represented in TOML format. After saving and exiting the editor, the
+        tool would use the graph from the file to file bugs.
+    """,
 )
 bugs.add_argument(
     "--auto-cc-arches",
@@ -192,12 +212,14 @@ def parse_atom(pkg: str):
 
 
 class GraphNode:
-    __slots__ = ("pkgs", "edges", "bugno")
+    __slots__ = ("pkgs", "edges", "bugno", "summary", "cc_arches")
 
     def __init__(self, pkgs: tuple[tuple[package, set[str]], ...], bugno=None):
         self.pkgs = pkgs
         self.edges: set[GraphNode] = set()
         self.bugno = bugno
+        self.summary = ""
+        self.cc_arches = None
 
     def __eq__(self, __o: object):
         return self is __o
@@ -217,6 +239,8 @@ class GraphNode:
 
     @property
     def dot_edge(self):
+        if self.bugno is not None:
+            return f"bug_{self.bugno}"
         return f'"{self.pkgs[0][0].versioned_atom}"'
 
     def cleanup_keywords(self, repo):
@@ -234,6 +258,29 @@ class GraphNode:
                 keywords.clear()
                 keywords.add("*")
 
+    @property
+    def bug_summary(self):
+        if self.summary:
+            return self.summary
+        summary = f"{', '.join(pkg.versioned_atom.cpvstr for pkg, _ in self.pkgs)}: stablereq"
+        if len(summary) > 90 and len(self.pkgs) > 1:
+            return f"{self.pkgs[0][0].versioned_atom.cpvstr} and friends: stablereq"
+        return summary
+
+    @property
+    def node_maintainers(self):
+        return dict.fromkeys(
+            maintainer.email for pkg, _ in self.pkgs for maintainer in pkg.maintainers
+        )
+
+    def should_cc_arches(self, auto_cc_arches: frozenset[str]):
+        if self.cc_arches is not None:
+            return self.cc_arches
+        maintainers = self.node_maintainers
+        return bool(
+            not maintainers or "*" in auto_cc_arches or auto_cc_arches.intersection(maintainers)
+        )
+
     def file_bug(
         self,
         api_key: str,
@@ -247,28 +294,22 @@ class GraphNode:
         for dep in self.edges:
             if dep.bugno is None:
                 dep.file_bug(api_key, auto_cc_arches, (), modified_repo, observer)
-        maintainers = dict.fromkeys(
-            maintainer.email for pkg, _ in self.pkgs for maintainer in pkg.maintainers
-        )
-        if not maintainers or "*" in auto_cc_arches or auto_cc_arches.intersection(maintainers):
+        maintainers = self.node_maintainers
+        if self.should_cc_arches(auto_cc_arches):
             keywords = ["CC-ARCHES"]
         else:
             keywords = []
         maintainers = tuple(maintainers) or ("maintainer-needed@gentoo.org",)
-
-        summary = f"{', '.join(pkg.versioned_atom.cpvstr for pkg, _ in self.pkgs)}: stablereq"
-        if len(summary) > 90 and len(self.pkgs) > 1:
-            summary = f"{self.pkgs[0][0].versioned_atom.cpvstr} and friends: stablereq"
 
         description = ["Please stabilize", ""]
         if modified_repo is not None:
             for pkg, _ in self.pkgs:
                 with contextlib.suppress(StopIteration):
                     match = next(modified_repo.itermatch(pkg.versioned_atom))
-                    added = datetime.fromtimestamp(match.time)
-                    days_old = (datetime.today() - added).days
+                    modified = datetime.fromtimestamp(match.time)
+                    days_old = (datetime.today() - modified).days
                     description.append(
-                        f" {pkg.versioned_atom.cpvstr}: no change for {days_old} days, since {added:%Y-%m-%d}"
+                        f" {pkg.versioned_atom.cpvstr}: no change for {days_old} days, since {modified:%Y-%m-%d}"
                     )
 
         request_data = dict(
@@ -277,7 +318,7 @@ class GraphNode:
             component="Stabilization",
             severity="enhancement",
             version="unspecified",
-            summary=summary,
+            summary=self.bug_summary,
             description="\n".join(description).strip(),
             keywords=keywords,
             cf_stabilisation_atoms="\n".join(self.lines()),
@@ -308,6 +349,8 @@ class DependencyGraph:
         self.out = out
         self.err = err
         self.options = options
+        disabled, enabled = options.auto_cc_arches
+        self.auto_cc_arches = frozenset(enabled).difference(disabled)
         self.profile_addon: ProfileAddon = init_addon(ProfileAddon, options)
 
         self.nodes: set[GraphNode] = set()
@@ -315,6 +358,8 @@ class DependencyGraph:
         self.targets: tuple[package] = ()
 
         git_addon = init_addon(GitAddon, options)
+        self.added_repo = git_addon.cached_repo(GitAddedRepo)
+        self.modified_repo = git_addon.cached_repo(GitModifiedRepo)
         self.stablereq_check = stablereq.StableRequestCheck(self.options, git_addon=git_addon)
 
     def mk_fake_pkg(self, pkg: package, keywords: set[str]):
@@ -467,7 +512,7 @@ class DependencyGraph:
             vertices[starting_node] for starting_node in self.targets if starting_node in vertices
         }
 
-    def output_dot(self, dot_file):
+    def output_dot(self, dot_file: str):
         with open(dot_file, "w") as dot:
             dot.write("digraph {\n")
             dot.write("\trankdir=LR;\n")
@@ -480,6 +525,67 @@ class DependencyGraph:
                     dot.write(f"\t{node.dot_edge} -> {other.dot_edge};\n")
             dot.write("}\n")
             dot.close()
+
+    def output_graph_toml(self):
+        self.auto_cc_arches
+        bugs = dict(enumerate(self.nodes, start=1))
+        reverse_bugs = {node: bugno for bugno, node in bugs.items()}
+
+        toml = tempfile.NamedTemporaryFile(mode="w", suffix=".toml")
+        for bugno, node in bugs.items():
+            if node.bugno is not None:
+                continue  # already filed
+            toml.write(f"[bug-{bugno}]\n")
+            toml.write(f'summary = "{node.bug_summary}"\n')
+            toml.write(f"cc_arches = {str(node.should_cc_arches(self.auto_cc_arches)).lower()}\n")
+            if node_depends := ", ".join(
+                (f'"bug-{reverse_bugs[dep]}"' if dep.bugno is None else str(dep.bugno))
+                for dep in node.edges
+            ):
+                toml.write(f"depends = [{node_depends}]\n")
+            if node_blocks := ", ".join(
+                f'"bug-{i}"' for i, src in bugs.items() if node in src.edges
+            ):
+                toml.write(f"blocks = [{node_blocks}]\n")
+            for pkg, arches in node.pkgs:
+                match = next(self.modified_repo.itermatch(pkg.versioned_atom))
+                modified = datetime.fromtimestamp(match.time)
+                match = next(self.added_repo.itermatch(pkg.versioned_atom))
+                added = datetime.fromtimestamp(match.time)
+                toml.write(
+                    f"# added on {added:%Y-%m-%d} (age {(datetime.today() - added).days} days), last modified on {modified:%Y-%m-%d} (age {(datetime.today() - modified).days} days)\n"
+                )
+                keywords = ", ".join(f'"{x}"' for x in sort_keywords(arches))
+                toml.write(f'"{pkg.versioned_atom}" = [{keywords}]\n')
+            toml.write("\n\n")
+        toml.flush()
+        return toml
+
+    def load_graph_toml(self, toml_file: str):
+        repo = self.options.search_repo
+        with open(toml_file, "rb") as f:
+            data = tomllib.load(f)
+
+        new_bugs: dict[int | str, GraphNode] = {}
+        for node_name, data_node in data.items():
+            pkgs = tuple(
+                (next(repo.itermatch(atom(pkg))), set(keywords))
+                for pkg, keywords in data_node.items()
+                if pkg.startswith("=")
+            )
+            new_bugs[node_name] = GraphNode(pkgs)
+        for node_name, data_node in data.items():
+            new_bugs[node_name].summary = data_node.get("summary", "")
+            new_bugs[node_name].cc_arches = data_node.get("cc_arches", None)
+            for dep in data_node.get("depends", ()):
+                if isinstance(dep, int):
+                    new_bugs[node_name].edges.add(new_bugs.setdefault(dep, GraphNode((), dep)))
+                elif new_bugs.get(dep) is not None:
+                    new_bugs[node_name].edges.add(new_bugs[dep])
+                else:
+                    bugs.error(f"[{node_name}]['depends']: unknown dependency {dep!r}")
+        self.nodes = set(new_bugs.values())
+        self.starting_nodes = {node for node in self.nodes if not node.edges}
 
     def merge_nodes(self, nodes: tuple[GraphNode, ...]) -> GraphNode:
         self.nodes.difference_update(nodes)
@@ -612,9 +718,8 @@ class DependencyGraph:
             )
             self.out.flush()
 
-        modified_repo = init_addon(GitAddon, self.options).cached_repo(GitModifiedRepo)
         for node in self.starting_nodes:
-            node.file_bug(api_key, auto_cc_arches, block_bugs, modified_repo, observe)
+            node.file_bug(api_key, auto_cc_arches, block_bugs, self.modified_repo, observe)
 
 
 def _load_from_stdin(out: Formatter):
@@ -644,9 +749,6 @@ def main(options, out: Formatter, err: Formatter):
     d.merge_cycles()
     d.merge_new_keywords_children()
 
-    for node in d.nodes:
-        node.cleanup_keywords(search_repo)
-
     if not d.nodes:
         out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
         return 1
@@ -654,9 +756,33 @@ def main(options, out: Formatter, err: Formatter):
     if userquery("Check for open bugs matching current graph?", out, err, default_answer=False):
         d.scan_existing_bugs(options.api_key)
 
+    if options.edit_graph:
+        toml = d.output_graph_toml()
+
+    for node in d.nodes:
+        node.cleanup_keywords(search_repo)
+
     if options.dot is not None:
         d.output_dot(options.dot)
         out.write(out.fg("green"), f"Dot file written to {options.dot}", out.reset)
+        out.flush()
+
+    if options.edit_graph:
+        editor = shlex.split(os.environ.get("VISUAL", os.environ.get("EDITOR", "nano")))
+        try:
+            subprocess.run(editor + [toml.name], check=True)
+        except subprocess.CalledProcessError:
+            bugs.error("failed writing mask comment")
+        except FileNotFoundError:
+            bugs.error(f"nonexistent editor: {editor[0]!r}")
+        d.load_graph_toml(toml.name)
+        for node in d.nodes:
+            node.cleanup_keywords(search_repo)
+
+        if options.dot is not None:
+            d.output_dot(options.dot)
+            out.write(out.fg("green"), f"Dot file written to {options.dot}", out.reset)
+            out.flush()
 
     bugs_count = len(tuple(node for node in d.nodes if node.bugno is None))
     if bugs_count == 0:
