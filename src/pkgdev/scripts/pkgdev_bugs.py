@@ -477,12 +477,12 @@ class DependencyGraph:
         self.targets = tuple(result)
 
     def build_full_graph(self):
-        check_nodes = [(pkg, set()) for pkg in self.targets]
+        check_nodes = [(pkg, set(), "") for pkg in self.targets]
 
         vertices: dict[package, GraphNode] = {}
         edges = []
         while len(check_nodes):
-            pkg, keywords = check_nodes.pop(0)
+            pkg, keywords, reason = check_nodes.pop(0)
             if pkg in vertices:
                 vertices[pkg].pkgs[0][1].update(keywords)
                 continue
@@ -497,14 +497,16 @@ class DependencyGraph:
             ), f"no keywords for {pkg.versioned_atom}, currently unsupported by tool: https://github.com/pkgcore/pkgdev/issues/123"
             self.nodes.add(new_node := GraphNode(((pkg, keywords),)))
             vertices[pkg] = new_node
+            if reason:
+                reason = f" [added for {reason}]"
             self.out.write(
-                f"Checking {pkg.versioned_atom} on {' '.join(sort_keywords(keywords))!r}"
+                f"Checking {pkg.versioned_atom} on {' '.join(sort_keywords(keywords))!r}{reason}"
             )
             self.out.flush()
 
             for dep, keywords in self._find_dependencies(pkg, keywords):
                 edges.append((pkg, dep))
-                check_nodes.append((dep, keywords))
+                check_nodes.append((dep, keywords, str(pkg.versioned_atom)))
 
         for src, dst in edges:
             vertices[src].edges.add(vertices[dst])
