@@ -86,9 +86,10 @@ class TestPkgdevShowkw:
         return repo
 
     def _run_and_parse(self, capsys, *args):
-        with patch("sys.argv", [*self.base_args, "--format", "presto", *args]), pytest.raises(
-            SystemExit
-        ) as excinfo:
+        with (
+            patch("sys.argv", [*self.base_args, "--format", "presto", *args]),
+            pytest.raises(SystemExit) as excinfo,
+        ):
             self.script()
         assert excinfo.value.code is None
         out, err = capsys.readouterr()
@@ -103,9 +104,10 @@ class TestPkgdevShowkw:
     def test_match(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
         repo.create_ebuild("foo/bar-0")
-        with patch("sys.argv", [*self.base_args, "-r", repo.location, "foo/bar"]), pytest.raises(
-            SystemExit
-        ) as excinfo:
+        with (
+            patch("sys.argv", [*self.base_args, "-r", repo.location, "foo/bar"]),
+            pytest.raises(SystemExit) as excinfo,
+        ):
             self.script()
         assert excinfo.value.code is None
         out, err = capsys.readouterr()
@@ -115,9 +117,10 @@ class TestPkgdevShowkw:
     def test_match_short_name(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
         repo.create_ebuild("foo/bar-0")
-        with patch("sys.argv", [*self.base_args, "-r", repo.location, "bar"]), pytest.raises(
-            SystemExit
-        ) as excinfo:
+        with (
+            patch("sys.argv", [*self.base_args, "-r", repo.location, "bar"]),
+            pytest.raises(SystemExit) as excinfo,
+        ):
             self.script()
         assert excinfo.value.code is None
         out, err = capsys.readouterr()
@@ -127,9 +130,11 @@ class TestPkgdevShowkw:
     def test_match_cwd_repo(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
         repo.create_ebuild("foo/bar-0")
-        with patch("sys.argv", [*self.base_args, "foo/bar"]), pytest.raises(
-            SystemExit
-        ) as excinfo, chdir(repo.location):
+        with (
+            patch("sys.argv", [*self.base_args, "foo/bar"]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(repo.location),
+        ):
             self.script()
         assert excinfo.value.code is None
         out, err = capsys.readouterr()
@@ -139,8 +144,10 @@ class TestPkgdevShowkw:
     def test_match_cwd_pkg(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
         repo.create_ebuild("foo/bar-0")
-        with patch("sys.argv", self.base_args), pytest.raises(SystemExit) as excinfo, chdir(
-            repo.location + "/foo/bar"
+        with (
+            patch("sys.argv", self.base_args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(repo.location + "/foo/bar"),
         ):
             self.script()
         assert excinfo.value.code is None
@@ -149,9 +156,10 @@ class TestPkgdevShowkw:
 
     def test_no_matches(self, capsys, make_repo):
         repo = self._create_repo(make_repo)
-        with patch("sys.argv", [*self.base_args, "-r", repo.location, "foo/bar"]), pytest.raises(
-            SystemExit
-        ) as excinfo:
+        with (
+            patch("sys.argv", [*self.base_args, "-r", repo.location, "foo/bar"]),
+            pytest.raises(SystemExit) as excinfo,
+        ):
             self.script()
         assert excinfo.value.code == 1
         out, err = capsys.readouterr()
@@ -212,9 +220,10 @@ class TestPkgdevShowkw:
         repo = self._create_repo(make_repo)
         repo.create_ebuild("foo/bar-0", keywords=("amd64", "~ia64", "~mips", "~x86"))
         repo.create_ebuild("foo/bar-1", keywords=("~amd64", "~ia64", "~mips", "x86"))
-        with patch(
-            "sys.argv", [*self.base_args, "-r", repo.location, "foo/bar", "--collapse", arg]
-        ), pytest.raises(SystemExit) as excinfo:
+        with (
+            patch("sys.argv", [*self.base_args, "-r", repo.location, "foo/bar", "--collapse", arg]),
+            pytest.raises(SystemExit) as excinfo,
+        ):
             self.script()
         out, err = capsys.readouterr()
         assert excinfo.value.code is None

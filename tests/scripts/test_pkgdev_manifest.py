@@ -178,8 +178,10 @@ class TestPkgdevManifest:
 
     def test_good_manifest(self, capsys, repo):
         repo.create_ebuild("cat/pkg-0")
-        with patch("sys.argv", self.args), pytest.raises(SystemExit) as excinfo, chdir(
-            repo.location
+        with (
+            patch("sys.argv", self.args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(repo.location),
         ):
             self.script()
         assert excinfo.value.code == 0
@@ -189,8 +191,10 @@ class TestPkgdevManifest:
     def test_bad_manifest(self, capsys, repo):
         repo.create_ebuild("cat/pkg-0")
         repo.create_ebuild("cat/pkg-1", eapi="-1")
-        with patch("sys.argv", self.args), pytest.raises(SystemExit) as excinfo, chdir(
-            repo.location
+        with (
+            patch("sys.argv", self.args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(repo.location),
         ):
             self.script()
         assert excinfo.value.code == 1

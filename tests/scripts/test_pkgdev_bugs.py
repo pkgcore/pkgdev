@@ -51,8 +51,7 @@ class BugsSession:
     def __enter__(self):
         return self
 
-    def __exit__(self, *_args):
-        ...
+    def __exit__(self, *_args): ...
 
     def read(self):
         return json.dumps({"id": next(self.counter)}).encode("utf-8")

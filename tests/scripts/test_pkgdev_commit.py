@@ -194,8 +194,10 @@ class TestPkgdevCommit:
 
     def test_empty_repo(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location, commit=True)
-        with patch("sys.argv", self.args), pytest.raises(SystemExit) as excinfo, chdir(
-            git_repo.path
+        with (
+            patch("sys.argv", self.args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
         ):
             self.script()
         assert excinfo.value.code == 2
@@ -212,9 +214,11 @@ class TestPkgdevCommit:
         with open(path, "w") as f:
             f.write("commit1")
 
-        with patch("sys.argv", self.args + ["-u", "-F", path]), pytest.raises(
-            SystemExit
-        ) as excinfo, chdir(git_repo.path):
+        with (
+            patch("sys.argv", self.args + ["-u", "-F", path]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
             self.script()
         assert excinfo.value.code == 0
         commit_msg = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
@@ -222,9 +226,12 @@ class TestPkgdevCommit:
 
         repo.create_ebuild("cat/pkg-1")
         git_repo.add_all("cat/pkg-1", commit=False)
-        with os_environ(GIT_EDITOR="sed -i '1s/1/2/'"), patch(
-            "sys.argv", self.args + ["-u", "-t", path]
-        ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+        with (
+            os_environ(GIT_EDITOR="sed -i '1s/1/2/'"),
+            patch("sys.argv", self.args + ["-u", "-t", path]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
             self.script()
         assert excinfo.value.code == 0
         commit_msg = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
@@ -251,9 +258,11 @@ class TestPkgdevCommit:
         for i, opt in enumerate(["-M", "--message-template"], 1):
             repo.create_ebuild(f"cat/pkg-{i}")
             git_repo.add_all(f"cat/pkg-{i}", commit=False)
-            with patch("sys.argv", self.args + ["-u", opt, path]), pytest.raises(
-                SystemExit
-            ) as excinfo, chdir(git_repo.path):
+            with (
+                patch("sys.argv", self.args + ["-u", opt, path]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
                 self.script()
             assert excinfo.value.code == 0
             commit_msg = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
@@ -274,9 +283,11 @@ class TestPkgdevCommit:
         for i, opt in enumerate(["-M", "--message-template"], 3):
             repo.create_ebuild(f"cat/pkg-{i}")
             git_repo.add_all(f"cat/pkg-{i}", commit=False)
-            with patch("sys.argv", self.args + ["-u", opt, path]), pytest.raises(
-                SystemExit
-            ) as excinfo, chdir(git_repo.path):
+            with (
+                patch("sys.argv", self.args + ["-u", opt, path]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
                 self.script()
             assert excinfo.value.code == 0
             commit_msg = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
@@ -289,9 +300,11 @@ class TestPkgdevCommit:
         for i, opt in enumerate(["-M", "--message-template"], 5):
             repo.create_ebuild(f"cat/pkg-{i}")
             git_repo.add_all(f"cat/pkg-{i}", commit=False)
-            with patch("sys.argv", self.args + ["-u", opt, path]), pytest.raises(
-                SystemExit
-            ) as excinfo, chdir(git_repo.path):
+            with (
+                patch("sys.argv", self.args + ["-u", opt, path]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
                 self.script()
             assert excinfo.value.code == 2
             out, err = capsys.readouterr()
@@ -305,9 +318,11 @@ class TestPkgdevCommit:
         with open(ebuild_path, "a+") as f:
             f.write("# comment\n")
 
-        with patch("sys.argv", self.args + ["-u", "-m", "msg"]), pytest.raises(
-            SystemExit
-        ) as excinfo, chdir(git_repo.path):
+        with (
+            patch("sys.argv", self.args + ["-u", "-m", "msg"]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
             self.script()
         assert excinfo.value.code == 0
         out, err = capsys.readouterr()
@@ -323,9 +338,11 @@ class TestPkgdevCommit:
         with open(ebuild_path, "a+") as f:
             f.write("# comment\n")
 
-        with patch("sys.argv", self.args + ["-u", "-m", "prefix: msg"]), pytest.raises(
-            SystemExit
-        ) as excinfo, chdir(git_repo.path):
+        with (
+            patch("sys.argv", self.args + ["-u", "-m", "prefix: msg"]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
             self.script()
         assert excinfo.value.code == 0
         out, err = capsys.readouterr()
@@ -341,9 +358,12 @@ class TestPkgdevCommit:
         with open(ebuild_path, "a+") as f:
             f.write("# comment\n")
 
-        with os_environ(GIT_EDITOR="sed -i '1s/$/commit/'"), patch(
-            "sys.argv", self.args + ["-u"]
-        ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+        with (
+            os_environ(GIT_EDITOR="sed -i '1s/$/commit/'"),
+            patch("sys.argv", self.args + ["-u"]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
             self.script()
         assert excinfo.value.code == 0
         out, err = capsys.readouterr()
@@ -358,9 +378,11 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
 
         def commit():
-            with patch("sys.argv", self.args + ["-a", "-m", "msg"]), pytest.raises(
-                SystemExit
-            ) as excinfo, chdir(git_repo.path):
+            with (
+                patch("sys.argv", self.args + ["-a", "-m", "msg"]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
                 self.script()
             assert excinfo.value.code == 0
             out, err = capsys.readouterr()
@@ -441,9 +463,12 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
 
         def commit():
-            with os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"), patch(
-                "sys.argv", self.args + ["-a"]
-            ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+            with (
+                os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
+                patch("sys.argv", self.args + ["-a"]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
                 self.script()
             assert excinfo.value.code == 0
             out, err = capsys.readouterr()
@@ -592,9 +617,12 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
 
         def commit():
-            with os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"), patch(
-                "sys.argv", self.args + ["-a"]
-            ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+            with (
+                os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
+                patch("sys.argv", self.args + ["-a"]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
                 self.script()
             assert excinfo.value.code == 0
             out, err = capsys.readouterr()
@@ -670,9 +698,12 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
 
         def commit():
-            with os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"), patch(
-                "sys.argv", self.args + ["-a"]
-            ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+            with (
+                os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
+                patch("sys.argv", self.args + ["-a"]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
                 self.script()
             assert excinfo.value.code == 0
             out, err = capsys.readouterr()
@@ -859,9 +890,12 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
 
         def commit(args):
-            with os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"), patch(
-                "sys.argv", self.args + args
-            ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+            with (
+                os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
+                patch("sys.argv", self.args + args),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
                 self.script()
             assert excinfo.value.code == 0
             out, err = capsys.readouterr()
@@ -886,8 +920,10 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
 
         def commit(args):
-            with patch("sys.argv", self.args + args), pytest.raises(SystemExit) as excinfo, chdir(
-                git_repo.path
+            with (
+                patch("sys.argv", self.args + args),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
             ):
                 self.script()
             assert excinfo.value.code == 0
@@ -928,8 +964,10 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
 
         def commit(args):
-            with patch("sys.argv", self.args + args), pytest.raises(SystemExit) as excinfo, chdir(
-                git_repo.path
+            with (
+                patch("sys.argv", self.args + args),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
             ):
                 self.script()
             assert excinfo.value.code == 0
@@ -1006,8 +1044,10 @@ class TestPkgdevCommit:
         for i, opt in enumerate(["-s", "--scan"], 1):
             repo.create_ebuild(f"cat/pkg-{i}")
             git_repo.add_all(f"cat/pkg-{i}", commit=False)
-            with patch("sys.argv", self.args + [opt]), pytest.raises(SystemExit) as excinfo, chdir(
-                git_repo.path
+            with (
+                patch("sys.argv", self.args + [opt]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
             ):
                 self.script()
             assert excinfo.value.code == 0
@@ -1024,8 +1064,10 @@ class TestPkgdevCommit:
         # verify staged changes via `pkgcheck scan` before creating commit
         repo.create_ebuild("cat/pkg-1", license="")
         git_repo.add_all("cat/pkg-1", commit=False)
-        with patch("sys.argv", self.args + ["--scan"]), pytest.raises(SystemExit) as excinfo, chdir(
-            git_repo.path
+        with (
+            patch("sys.argv", self.args + ["--scan"]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
         ):
             self.script()
         assert excinfo.value.code == 1
@@ -1043,9 +1085,12 @@ class TestPkgdevCommit:
         )
 
         # ignore failures to create the commit
-        with patch("sys.argv", self.args + ["--scan", "--ask"]), patch(
-            "sys.stdin", StringIO("y\n")
-        ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+        with (
+            patch("sys.argv", self.args + ["--scan", "--ask"]),
+            patch("sys.stdin", StringIO("y\n")),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
             self.script()
         assert excinfo.value.code == 0
 
@@ -1066,9 +1111,11 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
         repo.create_ebuild("cat/pkg-1", license="")
         git_repo.add_all("cat/pkg-1", commit=False)
-        with patch(
-            "sys.argv", ["pkgdev", "commit", "--config", config_file] + self.scan_args
-        ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+        with (
+            patch("sys.argv", ["pkgdev", "commit", "--config", config_file] + self.scan_args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
             self.script()
         out, err = capsys.readouterr()
         assert excinfo.value.code == 1
@@ -1092,9 +1139,11 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
         repo.create_ebuild("cat/pkg-1", license="")
         git_repo.add_all("cat/pkg-1", commit=False)
-        with patch(
-            "sys.argv", ["pkgdev", "commit", "--config", config_file] + self.scan_args
-        ), pytest.raises(SystemExit) as excinfo, chdir(git_repo.path):
+        with (
+            patch("sys.argv", ["pkgdev", "commit", "--config", config_file] + self.scan_args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
             self.script()
         out, err = capsys.readouterr()
         assert excinfo.value.code == 1
@@ -1107,8 +1156,10 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
         repo.create_ebuild("cat/pkg-1", eapi="-1")
         git_repo.add_all("cat/pkg-1", commit=False)
-        with patch("sys.argv", self.args), pytest.raises(SystemExit) as excinfo, chdir(
-            git_repo.path
+        with (
+            patch("sys.argv", self.args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
         ):
             self.script()
         assert excinfo.value.code == 1

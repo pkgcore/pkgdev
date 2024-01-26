@@ -90,8 +90,10 @@ class TestPkgdevPush:
         self.child_repo.create_ebuild("cat/pkg-1")
         self.child_git_repo.add_all("cat/pkg-1")
 
-        with patch("sys.argv", self.args), pytest.raises(SystemExit) as excinfo, chdir(
-            self.child_git_repo.path
+        with (
+            patch("sys.argv", self.args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(self.child_git_repo.path),
         ):
             self.script()
         assert excinfo.value.code == 0
@@ -101,8 +103,10 @@ class TestPkgdevPush:
         self.child_git_repo.add_all("cat/pkg-1")
 
         # failed scans don't push commits
-        with patch("sys.argv", self.args), pytest.raises(SystemExit) as excinfo, chdir(
-            self.child_git_repo.path
+        with (
+            patch("sys.argv", self.args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(self.child_git_repo.path),
         ):
             self.script()
         assert excinfo.value.code == 1
@@ -119,9 +123,12 @@ class TestPkgdevPush:
         )
 
         # but failures can be ignored to push anyway
-        with patch("sys.argv", self.args + ["--ask"]), patch(
-            "sys.stdin", StringIO("y\n")
-        ), pytest.raises(SystemExit) as excinfo, chdir(self.child_git_repo.path):
+        with (
+            patch("sys.argv", self.args + ["--ask"]),
+            patch("sys.stdin", StringIO("y\n")),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(self.child_git_repo.path),
+        ):
             self.script()
         assert excinfo.value.code == 0
 
@@ -133,17 +140,22 @@ class TestPkgdevPush:
         self.child_git_repo.add_all("cat/pkg-1")
 
         # scans with warnings ask for confirmation before pushing with "--ask"
-        with patch("sys.argv", self.args + ["--ask"]), patch(
-            "sys.stdin", StringIO("n\n")
-        ), pytest.raises(SystemExit) as excinfo, chdir(self.child_git_repo.path):
+        with (
+            patch("sys.argv", self.args + ["--ask"]),
+            patch("sys.stdin", StringIO("n\n")),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(self.child_git_repo.path),
+        ):
             self.script()
         assert excinfo.value.code == 1
         out, err = capsys.readouterr()
         assert "EmptyFile" in out
 
         # but without "--ask" it still pushes
-        with patch("sys.argv", self.args), pytest.raises(SystemExit) as excinfo, chdir(
-            self.child_git_repo.path
+        with (
+            patch("sys.argv", self.args),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(self.child_git_repo.path),
         ):
             self.script()
         assert excinfo.value.code == 0
