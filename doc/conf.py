@@ -324,3 +324,10 @@ epub_exclude_files = ["search.html"]
 
 # If false, no index is generated.
 # epub_use_index = True
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+}
+intersphinx_mapping.update(
+    (x, (f"https://pkgcore.github.io/{x}", None)) for x in "pkgcheck pkgcore snakeoil".split()
+)
