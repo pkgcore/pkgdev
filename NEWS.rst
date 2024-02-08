@@ -2,6 +2,50 @@
 Release Notes
 =============
 
+pkgdev 0.2.9 (2024-02-08)
+-------------------------
+
+- ci: add testing on Python 3.12 and Python 3.13 (Sam James, #126)
+
+**New Features:**
+
+- tatt: pass specific test configuration for the specific package, while not
+  affecting the dependencies (Arthur Zamarin, #165)
+
+- tatt: add support for custom ``env`` files (Arthur Zamarin, #165)
+
+- bugs: print bug summary where existing bug is found (Arthur Zamarin, #163)
+
+- bugs: mention age of packages in the bug description (Arthur Zamarin, #140)
+
+- bugs: support ``~/.bugzrc`` for api-key extraction (Arthur Zamarin, #162)
+
+- bugs: add ``--find-by-maintainer`` option, for finding all packages
+  maintained by a given maintainer (Arthur Zamarin, #157, #168)
+
+- bugs: add support for filtering targets by ``StableRequest`` results from
+  ``pkgcheck scan`` (Arthur Zamarin, #157, #168)
+
+- bugs: allow extending maintainer search by project membership (Arthur Zamarin,
+  #157, #168)
+
+- bugs: support editing the resulting graph before filing bugs (Arthur Zamarin,
+  #169)
+
+- bugs: indicate why dependencies are being added to the graph (Arthur Zamarin,
+  #170)
+
+**Fixed bugs:**
+
+- bugs: prefer using user selected targets over latest dependency (Arthur
+  Zamarin, #161)
+
+- bugs: merge stable groups as first step (Arthur Zamarin)
+
+- bugs: handle merging of top level nodes (Arthur Zamarin, #125, #167)
+
+- docs: Add ``intersphinx_mapping`` (Brian Harring, #171)
+
 pkgdev 0.2.8 (2023-09-09)
 -------------------------
 
