@@ -550,13 +550,23 @@ class DependencyGraph:
             ):
                 toml.write(f"blocks = [{node_blocks}]\n")
             for pkg, arches in node.pkgs:
-                match = next(self.modified_repo.itermatch(pkg.versioned_atom))
-                modified = datetime.fromtimestamp(match.time)
-                match = next(self.added_repo.itermatch(pkg.versioned_atom))
-                added = datetime.fromtimestamp(match.time)
-                toml.write(
-                    f"# added on {added:%Y-%m-%d} (age {(datetime.today() - added).days} days), last modified on {modified:%Y-%m-%d} (age {(datetime.today() - modified).days} days)\n"
-                )
+                try:
+                    match = next(self.modified_repo.itermatch(pkg.versioned_atom))
+                    modified = datetime.fromtimestamp(match.time)
+                    age = (datetime.today() - modified).days
+                    modified_text = f"{modified:%Y-%m-%d} (age {age} days)"
+                except StopIteration:
+                    modified_text = "<unknown>"
+
+                try:
+                    match = next(self.added_repo.itermatch(pkg.versioned_atom))
+                    added = datetime.fromtimestamp(match.time)
+                    age = (datetime.today() - added).days
+                    added_text = f"{added:%Y-%m-%d} (age {age} days)"
+                except StopIteration:
+                    added_text = "<unknown>"
+
+                toml.write(f"# added on {added_text}, last modified on {modified_text}\n")
                 keywords = ", ".join(f'"{x}"' for x in sort_keywords(arches))
                 toml.write(f'"{pkg.versioned_atom}" = [{keywords}]\n')
             toml.write("\n\n")
