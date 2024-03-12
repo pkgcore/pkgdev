@@ -234,9 +234,9 @@ def _get_bugzilla_packages(namespace):
     bug = next(iter(nattka_bugzilla.find_bugs(bugs=[namespace.bug]).values()))
     namespace.keywording = bug.category == BugCategory.KEYWORDREQ
     repo = namespace.domain.repos["gentoo"].raw_repo
-    return dict(
-        match_package_list(repo, bug, only_new=True, filter_arch=[namespace.domain.arch])
-    ).keys()
+    src_repo = namespace.domain.source_repos_raw
+    for pkg, _ in match_package_list(repo, bug, only_new=True, filter_arch=[namespace.domain.arch]):
+        yield src_repo.match(pkg.versioned_atom)[0]
 
 
 def _get_cmd_packages(namespace):
