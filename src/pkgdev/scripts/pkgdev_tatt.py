@@ -314,11 +314,11 @@ def _build_job(namespace, pkg, is_test: bool):
 
 def _build_jobs(namespace, pkgs):
     for pkg in pkgs:
-        if namespace.test and "test" in pkg.defined_phases:
-            yield pkg.versioned_atom, True, next(iter(_build_job(namespace, pkg, True)))
-
         for flags in islice(_build_job(namespace, pkg, False), namespace.use_combos):
             yield pkg.versioned_atom, False, flags
+
+        if namespace.test and "test" in pkg.defined_phases:
+            yield pkg.versioned_atom, True, next(iter(_build_job(namespace, pkg, True)))
 
 
 def _create_config_dir(directory: Path):
