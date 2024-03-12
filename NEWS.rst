@@ -2,6 +2,21 @@
 Release Notes
 =============
 
+pkgdev 0.2.10 (2024-03-12)
+-------------------------
+
+**Fixed bugs:**
+
+- bugs: don't crash when package isn't found in git history (Arthur Zamarin)
+
+- tatt: fix ``required_use`` for packages from bug's package list (Arthur
+  Zamarin)
+
+- tatt: test run should be after the use combinations (Arthur Zamarin, #174)
+
+- bash-completion: fix missing args for "bugs" and mistake for "mask" (Arthur
+  Zamarin)
+
 pkgdev 0.2.9 (2024-02-08)
 -------------------------
 
