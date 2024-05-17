@@ -121,10 +121,12 @@ _pkgdev() {
                 -r --rites
                 -b --bug
                 --email
+                --api-key
+                --file-bug
             "
 
             case "${prev}" in
-                -[rb] | --rites | --bugs)
+                -[rb] | --rites | --bugs | --api-key)
                     COMPREPLY=()
                     ;;
                 *)

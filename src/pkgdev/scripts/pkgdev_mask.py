@@ -1,9 +1,11 @@
+import json
 import os
 import re
 import shlex
 import subprocess
 import tempfile
 import textwrap
+import urllib.request as urllib
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -20,13 +22,14 @@ from snakeoil.osutils import pjoin
 from snakeoil.strings import pluralism
 
 from .. import git
-from .argparsers import cwd_repo_argparser, git_repo_argparser
+from .argparsers import cwd_repo_argparser, git_repo_argparser, BugzillaApiKey
 
 mask = arghparse.ArgumentParser(
     prog="pkgdev mask",
     description="mask packages",
     parents=(cwd_repo_argparser, git_repo_argparser),
 )
+BugzillaApiKey.mangle_argparser(mask)
 mask.add_argument(
     "targets",
     metavar="TARGET",
@@ -81,11 +84,26 @@ mask_opts.add_argument(
         ``x11-misc/xdg-utils`` package.
     """,
 )
+mask_opts.add_argument(
+    "--file-bug",
+    action="store_true",
+    help="file a last-rite bug",
+    docs="""
+        Files a last-rite bug for the masked package, which blocks listed
+        reference bugs. ``PMASKED`` keyword is added all all referenced bugs.
+    """,
+)
 
 
 @mask.bind_final_check
 def _mask_validate(parser, namespace):
-    atoms = []
+    atoms = set()
+    maintainers = set()
+
+    if not namespace.rites and namespace.file_bug:
+        mask.error("bug filing requires last rites")
+    if namespace.file_bug and not namespace.api_key:
+        mask.error("bug filing requires a Bugzilla API key")
 
     if namespace.email and not namespace.rites:
         mask.error("last rites required for email support")
@@ -96,23 +114,30 @@ def _mask_validate(parser, namespace):
                 restrict = namespace.repo.path_restrict(x)
                 pkg = next(namespace.repo.itermatch(restrict))
                 atom = pkg.versioned_atom
+                maintainers.update(maintainer.email for maintainer in pkg.maintainers)
             else:
                 try:
                     atom = atom_cls(x)
                 except MalformedAtom:
                     mask.error(f"invalid atom: {x!r}")
-                if not namespace.repo.match(atom):
+                if pkgs := namespace.repo.match(atom):
+                    maintainers.update(
+                        maintainer.email for pkg in pkgs for maintainer in pkg.maintainers
+                    )
+                else:
                     mask.error(f"no repo matches: {x!r}")
-            atoms.append(atom)
+            atoms.add(atom)
     else:
         restrict = namespace.repo.path_restrict(os.getcwd())
         # repo, category, and package level restricts
         if len(restrict) != 3:
             mask.error("not in a package directory")
         pkg = next(namespace.repo.itermatch(restrict))
-        atoms.append(pkg.unversioned_atom)
+        atoms.add(pkg.unversioned_atom)
+        maintainers.update(maintainer.email for maintainer in pkg.maintainers)
 
     namespace.atoms = sorted(atoms)
+    namespace.maintainers = sorted(maintainers) or ["maintainer-needed@gentoo.org"]
 
 
 @dataclass(frozen=True)
@@ -208,38 +233,24 @@ class MaskFile:
         return "".join(self.header) + "\n\n".join(map(str, self.masks))
 
 
-def get_comment(bugs, rites: int):
+def get_comment():
     """Spawn editor to get mask comment."""
     tmp = tempfile.NamedTemporaryFile(mode="w")
-    summary = []
-    if rites:
-        summary.append(f"Removal on {datetime.now(timezone.utc) + timedelta(days=rites):%Y-%m-%d}.")
-    if bugs:
-        # Bug(s) #A, #B, #C
-        bug_list = ", ".join(f"#{b}" for b in bugs)
-        s = pluralism(bugs)
-        summary.append(f"Bug{s} {bug_list}.")
-    if summary := "  ".join(summary):
-        tmp.write(f"\n{summary}")
     tmp.write(
         textwrap.dedent(
             """
 
                 # Please enter the mask message. Lines starting with '#' will be ignored.
                 #
-                # - Best last rites (removal) practices -
+                # If last-rite was requested, it would be added automatically.
                 #
-                # Include the following info:
-                # a) reason for masking
-                # b) bug # for the removal (and yes you should have one)
-                # c) date of removal (either the date or "in x days")
+                # For rules on writing mask messages, see GLEP-84:
+                #   https://glep.gentoo.org/glep-0084.html
                 #
                 # Example:
                 #
-                # Masked for removal in 30 days.  Doesn't work
-                # with new libfoo. Upstream dead, gtk-1, smells
+                # Doesn't work with new libfoo. Upstream dead, gtk-1, smells
                 # funny.
-                # Bug #987654
             """
         )
     )
@@ -262,8 +273,69 @@ def get_comment(bugs, rites: int):
     comment = "\n".join(comment).strip().splitlines()
     if not comment:
         mask.error("empty mask comment")
-
     return comment
+
+
+def message_removal_notice(bugs: list[int], rites: int):
+    summary = []
+    if rites:
+        summary.append(f"Removal on {datetime.now(timezone.utc) + timedelta(days=rites):%Y-%m-%d}.")
+    if bugs:
+        # Bug(s) #A, #B, #C
+        bug_list = ", ".join(f"#{b}" for b in bugs)
+        s = pluralism(bugs)
+        summary.append(f"Bug{s} {bug_list}.")
+    return "  ".join(summary)
+
+
+def file_last_rites_bug(options, message: str) -> int:
+    summary = f"{', '.join(map(str, options.atoms))}: removal"
+    if len(summary) > 90 and len(options.atoms) > 1:
+        summary = f"{options.atoms[0]} and friends: removal"
+    request_data = dict(
+        Bugzilla_api_key=options.api_key,
+        product="Gentoo Linux",
+        component="Current packages",
+        version="unspecified",
+        summary=summary,
+        description="\n".join([*message, "", "package list:", *map(str, options.atoms)]).strip(),
+        keywords=["PMASKED"],
+        assigned_to=options.maintainers[0],
+        cc=options.maintainers[1:] + ["treecleaner@gentoo.org"],
+        deadline=(datetime.now(timezone.utc) + timedelta(days=options.rites)).strftime("%Y-%m-%d"),
+        blocks=list(options.bugs),
+    )
+    request = urllib.Request(
+        url="https://bugs.gentoo.org/rest/bug",
+        data=json.dumps(request_data).encode("utf-8"),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.urlopen(request, timeout=30) as response:
+        reply = json.loads(response.read().decode("utf-8"))
+    return int(reply["id"])
+
+
+def update_bugs_pmasked(api_key: str, bugs: list[int]):
+    request_data = dict(
+        Bugzilla_api_key=api_key,
+        ids=bugs,
+        keywords=dict(add=["PMASKED"]),
+    )
+    request = urllib.Request(
+        url=f"https://bugs.gentoo.org/rest/bug/{bugs[0]}",
+        data=json.dumps(request_data).encode("utf-8"),
+        method="PUT",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.urlopen(request, timeout=30) as response:
+        return response.status == 200
 
 
 def send_last_rites_email(m: Mask, subject_prefix: str):
@@ -298,16 +370,25 @@ def _mask(options, out, err):
     p = git.run("config", "user.email", stdout=subprocess.PIPE)
     email = p.stdout.strip()
 
-    # initial args for Mask obj
-    mask_args = {
-        "author": author,
-        "email": email,
-        "date": today.strftime("%Y-%m-%d"),
-        "comment": get_comment(options.bugs, options.rites),
-        "atoms": options.atoms,
-    }
+    message = get_comment()
+    if options.file_bug:
+        if bug_no := file_last_rites_bug(options, message):
+            out.write(out.fg("green"), f"filed bug https://bugs.gentoo.org/{bug_no}", out.reset)
+            out.flush()
+            if not update_bugs_pmasked(options.api_key, options.bugs):
+                err.write(err.fg("red"), "failed to update referenced bugs", err.reset)
+                err.flush()
+            options.bugs.insert(0, bug_no)
+    if removal := message_removal_notice(options.bugs, options.rites):
+        message.append(removal)
 
-    m = Mask(**mask_args)
+    m = Mask(
+        author=author,
+        email=email,
+        date=today.strftime("%Y-%m-%d"),
+        comment=message,
+        atoms=options.atoms,
+    )
     mask_file.add(m)
     mask_file.write()
 
