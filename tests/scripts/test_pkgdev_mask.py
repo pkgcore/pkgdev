@@ -294,7 +294,7 @@ class TestPkgdevMask:
                     f"""\
                         # First Last <first.last@email.com> ({today})
                         # mask comment
-                        # Removal: {removal}.
+                        # Removal on {removal}.
                         cat/pkg
                     """
                 )

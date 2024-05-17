@@ -213,7 +213,7 @@ def get_comment(bugs, rites: int):
     tmp = tempfile.NamedTemporaryFile(mode="w")
     summary = []
     if rites:
-        summary.append(f"Removal: {datetime.now(timezone.utc) + timedelta(days=rites):%Y-%m-%d}.")
+        summary.append(f"Removal on {datetime.now(timezone.utc) + timedelta(days=rites):%Y-%m-%d}.")
     if bugs:
         # Bug(s) #A, #B, #C
         bug_list = ", ".join(f"#{b}" for b in bugs)
