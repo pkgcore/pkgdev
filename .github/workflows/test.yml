@@ -21,7 +21,7 @@ jobs:
             experimental: true
           - os: macos-latest
             python-version: '3.11'
-            experimental: false
+            experimental: true
       fail-fast: false
 
     steps:
