@@ -61,9 +61,10 @@ mask_opts.add_argument(
 mask_opts.add_argument(
     "-b",
     "--bug",
+    "--bugs",
     dest="bugs",
-    action="append",
-    type=arghparse.positive_int,
+    action=arghparse.CommaSeparatedValuesAppend,
+    default=[],
     help="reference bug in the mask comment",
     docs="""
         Add a reference to a bug in the mask comment. May be specified multiple
@@ -99,6 +100,8 @@ mask_opts.add_argument(
 def _mask_validate(parser, namespace):
     atoms = set()
     maintainers = set()
+
+    namespace.bugs = list(map(int, dict.fromkeys(namespace.bugs)))
 
     if not namespace.rites and namespace.file_bug:
         mask.error("bug filing requires last rites")
