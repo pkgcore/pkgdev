@@ -101,7 +101,12 @@ def _mask_validate(parser, namespace):
     atoms = set()
     maintainers = set()
 
-    namespace.bugs = list(map(int, dict.fromkeys(namespace.bugs)))
+    try:
+        namespace.bugs = list(map(int, dict.fromkeys(namespace.bugs)))
+    except ValueError:
+        parser.error("argument -b/--bug: invalid integer value")
+    if min(namespace.bugs, default=1) < 1:
+        parser.error("argument -b/--bug: must be >= 1")
 
     if not namespace.rites and namespace.file_bug:
         mask.error("bug filing requires last rites")

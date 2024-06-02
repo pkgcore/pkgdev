@@ -337,6 +337,7 @@ class TestPkgdevMask:
             for bug_nums, expected in [
                 (["42"], "Bug #42."),
                 (["42", "43"], "Bugs #42, #43."),
+                (["42,43", "43"], "Bugs #42, #43."),
             ]:
                 args = []
                 for bug_num in bug_nums:
@@ -361,7 +362,7 @@ class TestPkgdevMask:
 
     def test_mask_bug_bad(self, capsys, tool):
         for arg, expected in [("-1", "must be >= 1"), ("foo", "invalid integer value")]:
-            with pytest.raises(SystemExit):
+            with pytest.raises(SystemExit), chdir(pjoin(self.repo.path)):
                 tool.parse_args(["mask", "--bug", arg])
             out, err = capsys.readouterr()
             assert err.strip() == f"pkgdev mask: error: argument -b/--bug: {expected}"
