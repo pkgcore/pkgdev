@@ -328,6 +328,8 @@ def file_last_rites_bug(options, message: str) -> int:
 
 
 def update_bugs_pmasked(api_key: str, bugs: list[int]):
+    if not bugs:
+        return True
     request_data = dict(
         Bugzilla_api_key=api_key,
         ids=bugs,
