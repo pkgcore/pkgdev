@@ -74,13 +74,11 @@ tatt_pkg_error() {
         cp "${BUILDLOG}" "${LOGNAME}"
         echo "    log has been saved as ${LOGNAME}" >> "{{ report_file }}"
         TESTLOGS=($(find ${BUILDDIR}/work -iname '*test*log*'))
-{% raw %}
-        if [[ ${#TESTLOGS[@]} -gt 0 ]]; then
+        if [[ {{ "${#TESTLOGS[@]}" }} -gt 0 ]]; then
             tar cf ${LOGNAME}.tar ${TESTLOGS[@]}
             echo "    test-suite logs have been saved as ${LOGNAME}.tar" >> "{{ report_file }}"
         fi
     fi
-{% endraw %}
 }
 
 tatt_test_pkg() {
