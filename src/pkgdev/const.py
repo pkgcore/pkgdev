@@ -40,3 +40,8 @@ DATA_PATH = _GET_CONST("DATA_PATH", "%(REPO_PATH)s/data")
 USER_CONF_FILE = os.path.join(getattr(_module, "USER_CONFIG_PATH"), "pkgdev.conf")
 SYSTEM_CONF_FILE = "/etc/pkgdev/pkgdev.conf"
 BUNDLED_CONF_FILE = os.path.join(DATA_PATH, "pkgdev.conf")
+
+BZ_FIXED = "fixed"
+BZ_REMOVED = "pkgremoved"
+BZ_OBSOLETE = "obsolete"
+BZ_RESOLUTIONS = {BZ_FIXED, BZ_REMOVED, BZ_OBSOLETE}

@@ -26,7 +26,7 @@ from snakeoil.klass import jit_attr
 from snakeoil.mappings import OrderedFrozenSet, OrderedSet
 from snakeoil.osutils import pjoin
 
-from .. import cli, git
+from .. import cli, git, const
 from ..mangle import GentooMangler, Mangler
 from .argparsers import cwd_repo_argparser, git_repo_argparser
 
@@ -57,13 +57,17 @@ class ArgumentParser(cli.ArgumentParser):
 class BugTag(argparse.Action):
     """Register bug-related tag to inject into the commit message footer."""
 
-    def __call__(self, parser, namespace, value, option_string=None):
+    def parse_url(self, value):
         try:
             url = f"https://bugs.gentoo.org/{int(value)}"
         except ValueError:
             url = value
             if not url.startswith(("https://", "http://")):
                 raise argparse.ArgumentError(self, f"invalid URL: {url}")
+        return url
+
+    def __call__(self, parser, namespace, value, option_string=None):
+        url = self.parse_url(value)
         namespace.footer.add((self.dest.capitalize(), url))
 
 
@@ -80,6 +84,29 @@ class CommitTag(argparse.Action):
         namespace.footer.add((name.capitalize(), val))
 
 
+class BugzillaAwareBugTag(BugTag):
+    """Register bug-related tag and resolution to inject into the commit message footer."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        try:
+            bug, res = values.rsplit(":", 1)
+            if res.startswith("//"):
+                raise ValueError("URL-like value without resolution")
+            res = res.lower() if res else const.BZ_FIXED
+            if not (bug and res in const.BZ_RESOLUTIONS):
+                raise argparse.ArgumentError(self, f"invalid commit tag: {values}")
+        except ValueError:
+            super().__call__(parser, namespace, values, option_string)
+            return
+
+        url = self.parse_url(bug)
+        is_bgo = url.split("//", 1)[1].startswith("bugs.gentoo.org")
+        if is_bgo and res != const.BZ_FIXED:
+            url = f"{url} ({res})"
+
+        namespace.footer.add((self.dest.capitalize(), url))
+
+
 commit = ArgumentParser(
     prog="pkgdev commit",
     description="create git commit",
@@ -92,7 +119,16 @@ commit_opts.add_argument(
     "-b", "--bug", action=BugTag, help="add Bug tag for a given Gentoo or upstream bug"
 )
 commit_opts.add_argument(
-    "-c", "--closes", action=BugTag, help="add Closes tag for a given Gentoo bug or upstream PR URL"
+    "-c",
+    "--closes",
+    action=BugzillaAwareBugTag,
+    metavar="CLOSES[:RESOLUTION]",
+    help="add Closes tag and optionally a resolution for a given Gentoo bug or upstream PR URL",
+    docs="""
+        Indicate that a bug or PR may be closed. The optional resolution string
+        for Gentoo's Bugzilla describes what happened to a bug. It is
+        case-insensitive and must be one of FIXED, PKGREMOVED or OBSOLETE.
+    """,
 )
 commit_opts.add_argument(
     "-T", "--tag", action=CommitTag, metavar="NAME:VALUE", help="add commit tag"
