@@ -46,19 +46,14 @@ _pkgdev() {
     COMPREPLY=($(compgen -W "${base_options}" -- "${cur}"))
 
     # find the subcommand
-    while [[ "${i}" -lt "${COMP_CWORD}" ]]; do
-        local s="${COMP_WORDS[i]}"
-        case "${s}" in
-            -*) ;;
-            *)
-                cmd="${s}"
-                break
-                ;;
-        esac
-        ((i++))
+    for (( i=1; i < COMP_CWORD; i++ )); do
+        if [[ ${COMP_WORDS[i]} != -* ]]; then
+            cmd=${COMP_WORDS[i]}
+            break
+        fi
     done
 
-    if [[ "${i}" -eq "${COMP_CWORD}" ]]; then
+    if (( i == COMP_CWORD )); then
         COMPREPLY+=($(compgen -W "${subcommands}" -- "${cur}"))
         return
     fi
@@ -88,7 +83,7 @@ _pkgdev() {
                     COMPREPLY=()
                     ;;
                 -M | --message-template)
-                    COMPREPLY=($(compgen -f -- "${cur}"))
+                    _filedir
                     ;;
                 -s | --scan | --mangle)
                     COMPREPLY=($(compgen -W "${boolean_options}" -- "${cur}"))
@@ -108,7 +103,7 @@ _pkgdev() {
 
             case "${prev}" in
                 -d | --distdir)
-                    COMPREPLY=($(compgen -d -- "${cur}"))
+                    _filedir -d
                     ;;
                 *)
                     COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
@@ -224,10 +219,10 @@ _pkgdev() {
                     COMPREPLY=()
                     ;;
                 --template-file)
-                    COMPREPLY=($(compgen -f -- "${cur}"))
+                    _filedir
                     ;;
                 --logs-dir)
-                    COMPREPLY=($(compgen -d -- "${cur}"))
+                    _filedir -d
                     ;;
                 --extra-env-file)
                     if [[ -d /etc/portage/env/ ]]; then
@@ -264,7 +259,7 @@ _pkgdev() {
                     COMPREPLY=()
                     ;;
                 --dot)
-                    COMPREPLY=($(compgen -f -- "${cur}"))
+                    _filedir
                     ;;
                 *)
                     COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
