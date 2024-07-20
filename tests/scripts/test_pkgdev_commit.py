@@ -152,6 +152,36 @@ class TestPkgdevCommitParseArgs:
                 options, _ = tool.parse_args(["commit", opt, "https://bugs.gentoo.org/2"])
                 assert options.footer == {("Closes", "https://bugs.gentoo.org/2")}
 
+            # bug IDs and URLs with good resolutions
+            for opt in ("-c", "--closes"):
+                for values, expected in (
+                    (("", "FIXED", "fiXed"), ""),
+                    (("PKGREMOVED", "pkgRemovEd"), " (pkgremoved)"),
+                    (("OBSOLETE", "obSoleTe"), " (obsolete)"),
+                ):
+                    for value in values:
+                        for bug in "1", "https://bugs.gentoo.org/1":
+                            options, _ = tool.parse_args(["commit", opt, f"{bug}:{value}"])
+                            assert options.footer == {
+                                ("Closes", f"https://bugs.gentoo.org/1{expected}")
+                            }
+
+            # bad bug-resolution pair
+            for opt in ("-c", "--closes"):
+                for value, expected in (
+                    (":", "invalid commit tag"),
+                    (":1", "invalid commit tag"),
+                    (":fixed", "invalid commit tag"),
+                    ("1:invalid", "should be one of"),
+                    ("https://bugs.gentoo.org/1:invalid", "should be one of"),
+                ):
+                    with pytest.raises(SystemExit) as excinfo:
+                        options, _ = tool.parse_args(["commit", opt, value])
+                    assert excinfo.value.code == 2
+                    out, err = capsys.readouterr()
+                    assert not out
+                    assert expected in err
+
             # bad URL
             for opt in ("-b", "-c"):
                 with pytest.raises(SystemExit) as excinfo:
