@@ -10,6 +10,7 @@ import tempfile
 import textwrap
 from collections import defaultdict, deque, UserDict
 from dataclasses import dataclass
+from enum import Enum
 from functools import partial
 from itertools import chain
 
@@ -57,13 +58,17 @@ class ArgumentParser(cli.ArgumentParser):
 class BugTag(argparse.Action):
     """Register bug-related tag to inject into the commit message footer."""
 
-    def __call__(self, parser, namespace, value, option_string=None):
+    def parse_url(self, value):
         try:
             url = f"https://bugs.gentoo.org/{int(value)}"
         except ValueError:
             url = value
             if not url.startswith(("https://", "http://")):
                 raise argparse.ArgumentError(self, f"invalid URL: {url}")
+        return url
+
+    def __call__(self, parser, namespace, value, option_string=None):
+        url = self.parse_url(value)
         namespace.footer.add((self.dest.capitalize(), url))
 
 
@@ -80,6 +85,39 @@ class CommitTag(argparse.Action):
         namespace.footer.add((name.capitalize(), val))
 
 
+class BugzillaAwareBugTag(BugTag):
+    """Register bug-related tag and resolution to inject into the commit message footer."""
+
+    class Resolution(Enum):
+        FIXED = "fixed"
+        OBSOLETE = "obsolete"
+        PKGREMOVED = "pkgremoved"
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        has_resolution = False
+        try:
+            bug, val = values.rsplit(":", 1)
+            if not bug:
+                raise argparse.ArgumentError(self, f"invalid commit tag: {values!r}")
+            if not val.startswith("//"):
+                has_resolution = True
+                res = self.Resolution(val.lower()) if val else self.Resolution.FIXED
+        except ValueError:
+            if has_resolution:
+                err = f"{val!r} should be one of: {', '.join([m.value for m in self.Resolution])}"
+                raise argparse.ArgumentError(self, err)
+
+        if not has_resolution:
+            super().__call__(parser, namespace, values, option_string)
+            return
+        url = self.parse_url(bug)
+        is_bgo = "bugs.gentoo.org" in url
+        if is_bgo and not res is self.Resolution.FIXED:
+            url = f"{url} ({res.value})"
+
+        namespace.footer.add((self.dest.capitalize(), url))
+
+
 commit = ArgumentParser(
     prog="pkgdev commit",
     description="create git commit",
@@ -92,7 +130,16 @@ commit_opts.add_argument(
     "-b", "--bug", action=BugTag, help="add Bug tag for a given Gentoo or upstream bug"
 )
 commit_opts.add_argument(
-    "-c", "--closes", action=BugTag, help="add Closes tag for a given Gentoo bug or upstream PR URL"
+    "-c",
+    "--closes",
+    action=BugzillaAwareBugTag,
+    metavar="CLOSES[:RESOLUTION]",
+    help="add Closes tag and optionally a resolution for a given Gentoo bug or upstream PR URL",
+    docs="""
+        Indicate that a bug or PR may be closed. The optional resolution string
+        for Gentoo's Bugzilla describes what happened to a bug. It is
+        case-insensitive and must be one of FIXED, OBSOLETE or PKGREMOVED.
+    """,
 )
 commit_opts.add_argument(
     "-T", "--tag", action=CommitTag, metavar="NAME:VALUE", help="add commit tag"
