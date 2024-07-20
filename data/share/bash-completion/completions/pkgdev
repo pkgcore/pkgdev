@@ -4,7 +4,7 @@ source "/usr/share/bash-completion/helpers/gentoo-common.sh"
 
 _pkgdev() {
     local i=1 cmd cur prev words cword split
-    _init_completion || return
+    _init_completion -n : || return
 
     local subcommands="
         bugs
@@ -79,7 +79,23 @@ _pkgdev() {
             "
 
             case "${prev}" in
-                -[bcTm] | --bug | --closes | --tag | --message)
+                -c | --closes)
+                    local resolutions=(
+                        fixed
+                        obsolete
+                        pkgremoved
+                    )
+
+                    local bug="${cur%:*}"
+                    if [[ ${bug} != ${cur} && ${bug} != http?(s) ]]; then
+                        local bugres="${resolutions[*]/#/${bug}:}"
+                        COMPREPLY=($(compgen -W "${bugres}" -- "${cur}"))
+                        _comp_ltrim_colon_completions "$cur"
+                    else
+                        COMPREPLY=()
+                    fi
+                    ;;
+                -[bTm] | --bug | --tag | --message)
                     COMPREPLY=()
                     ;;
                 -M | --message-template)
