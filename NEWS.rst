@@ -2,6 +2,19 @@
 Release Notes
 =============
 
+pkgdev 0.2.11 (2024-09-06)
+-------------------------
+
+- bash completion: improve path handling (Arthur Zamarin)
+
+- mask: update removal line to match GLEP-84 (Arthur Zamarin)
+
+- mask: support auto filing of last-rite bug & PMASKED bugs (Arthur Zamarin, #187)
+
+- mask: support comma separated bugs for ``-b`` and ``--bug`` (Arthur Zamarin)
+
+- tatt: fix template generating extra empty file (Arthur Zamarin)
+
 pkgdev 0.2.10 (2024-03-12)
 -------------------------
 
