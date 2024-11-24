@@ -1045,12 +1045,14 @@ class TestPkgdevCommit:
                 assert mo.group("begin") == years[:4] + "-"
                 assert mo.group("holder") == "Gentoo Authors"
 
+        # Keyword mangling when modifying existing ebuilds
         for original, expected in (
             ('"arm64 amd64 x86"', "amd64 arm64 x86"),
             ('"arm64 amd64 ~x86"', "amd64 arm64 ~x86"),
             ('"arm64 ~x86 amd64"', "amd64 arm64 ~x86"),
             ('"arm64 ~x86 ~amd64"', "~amd64 arm64 ~x86"),
             ("arm64 ~x86 ~amd64", "~amd64 arm64 ~x86"),
+            ("arm64 ~x86 ~amd64 -sparc", "~amd64 arm64 -sparc ~x86"),
         ):
             # munge the keywords
             with open(ebuild_path, "r+") as f:
@@ -1065,6 +1067,23 @@ class TestPkgdevCommit:
                 lines = f.read().splitlines()
                 mo = keywords_regex.match(lines[-1])
                 assert mo.group("keywords") == expected
+
+        # Keyword mangling when adding new ebuilds
+        ebuild_path = repo.create_ebuild("cat/pkg-1", keywords=("arm64", "x86", "~amd64", "-sparc"))
+        commit(["-a", "-m", "version bump (no removal)"])
+        with open(ebuild_path) as f:
+            lines = f.read().splitlines()
+            mo = keywords_regex.match(lines[-1])
+            assert mo.group("keywords") == "~amd64 ~arm64 -sparc ~x86"
+
+        # Keyword mangling when adding and removing ebuilds simultaniously (git interpreted as rename)
+        git_repo.remove(ebuild_path, commit=False)
+        ebuild_path = repo.create_ebuild("cat/pkg-2", keywords=("arm64", "x86", "~amd64", "-sparc"))
+        commit(["-a", "-m", "version bump (no removal)"])
+        with open(ebuild_path) as f:
+            lines = f.read().splitlines()
+            mo = keywords_regex.match(lines[-1])
+            assert mo.group("keywords") == "~amd64 ~arm64 -sparc ~x86"
 
     def test_scan(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
