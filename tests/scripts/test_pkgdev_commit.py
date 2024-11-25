@@ -1070,7 +1070,7 @@ class TestPkgdevCommit:
 
         # Keyword mangling when adding new ebuilds
         ebuild_path = repo.create_ebuild("cat/pkg-1", keywords=("arm64", "x86", "~amd64", "-sparc"))
-        commit(["-a", "-m", "version bump (no removal)"])
+        commit(["-a", "-m", "version bump (type A, without removal)"])
         with open(ebuild_path) as f:
             lines = f.read().splitlines()
             mo = keywords_regex.match(lines[-1])
@@ -1079,11 +1079,29 @@ class TestPkgdevCommit:
         # Keyword mangling when adding and removing ebuilds simultaniously (git interpreted as rename)
         git_repo.remove(ebuild_path, commit=False)
         ebuild_path = repo.create_ebuild("cat/pkg-2", keywords=("arm64", "x86", "~amd64", "-sparc"))
-        commit(["-a", "-m", "version bump (no removal)"])
+        commit(["-a", "-m", "version bump (type R, with removal)"])
         with open(ebuild_path) as f:
             lines = f.read().splitlines()
             mo = keywords_regex.match(lines[-1])
             assert mo.group("keywords") == "~amd64 ~arm64 -sparc ~x86"
+
+        # Keyword mangling when moving a package to another category
+        ebuild_path = repo.create_ebuild(
+            "oldcat/oldname-0", keywords=("arm64", "x86", "~amd64", "-sparc")
+        )
+        git_repo.add_all("oldcat/oldname-0")
+        os.mkdir(os.path.join(git_repo.path, "newcat"))
+        os.mkdir(os.path.join(git_repo.path, "newcat/newname"))
+        git_repo.move(
+            pjoin(git_repo.path, "oldcat/oldname/oldname-0.ebuild"),
+            pjoin(git_repo.path, "newcat/newname/newname-0.ebuild"),
+            commit=False,
+        )
+        commit(["-a", "-m", "rename package (type R, but no PV change)"])
+        with open(os.path.join(git_repo.path, "newcat/newname/newname-0.ebuild")) as f:
+            lines = f.read().splitlines()
+            mo = keywords_regex.match(lines[-1])
+            assert mo.group("keywords") == "~amd64 arm64 -sparc x86"
 
     def test_scan(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
