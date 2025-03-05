@@ -54,7 +54,7 @@ use_opts.add_argument(
     "-u",
     "--use-combos",
     default=0,
-    type=arghparse.positive_int,
+    type=int,
     metavar="NUMBER",
     help="Maximal number USE combinations to be tested",
 )
@@ -197,6 +197,8 @@ def _tatt_validate(parser, namespace):
 
 @tatt.bind_final_check
 def _validate_args(parser, namespace):
+    if namespace.use_combos < 0:
+        parser.error("number of use combos must be non-negative")
     if namespace.bug is not None:
         if namespace.keywording is not None:
             parser.error("cannot use --bug with --keywording or --stablereq")
