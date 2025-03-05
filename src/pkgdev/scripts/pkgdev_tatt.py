@@ -384,6 +384,12 @@ def main(options, out, err):
 
     from jinja2 import Template
 
+    if not any("test" in pkg.defined_phases for pkg in pkgs):
+        if not options.use_combos > 0:
+            return err.error(
+                "no packages define a src_test, and --use-combos is not a positive integer. Cannot create any jobs, exiting..."
+            )
+
     script = Template(template, trim_blocks=True, lstrip_blocks=True).render(
         jobs=list(_build_jobs(options, pkgs)),
         report_file=job_name + ".report",
