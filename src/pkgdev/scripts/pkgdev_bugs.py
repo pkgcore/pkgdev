@@ -385,10 +385,15 @@ class DependencyGraph:
         if intersect := tuple(filter(restrict.match, all_pkgs)):
             return max(intersect)
         matches = sorted(filter(restrict.match, pkgset), reverse=True)
+        # prefer package with any stable keyword
         if prefer_semi_stable:
             for match in matches:
                 if not all(keyword.startswith("~") for keyword in match.keywords):
                     return match
+        # prefer package with any keyword
+        for match in matches:
+            if match.keywords:
+                return match
         return matches[0]
 
     def extend_targets_stable_groups(self, groups):
