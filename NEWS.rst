@@ -2,6 +2,15 @@
 Release Notes
 =============
 
+pkgdev 0.2.12 (2025-06-14)
+-------------------------
+
+- tatt: support ``--use-combos 0`` (to be used with ``--test``) (Arthur
+  Zamarin)
+
+- bugs: when selecting a matching package, prefer those with keywords (Arthur
+  Zamarin, #205)
+
 pkgdev 0.2.11 (2024-09-06)
 -------------------------
 
