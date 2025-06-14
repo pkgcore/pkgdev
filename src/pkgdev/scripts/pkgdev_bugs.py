@@ -497,9 +497,9 @@ class DependencyGraph:
             if pkg_has_stable and not keywords:  # package already done
                 self.out.write(f"Nothing to stable for {pkg.unversioned_atom}")
                 continue
-            assert (
-                keywords
-            ), f"no keywords for {pkg.versioned_atom}, currently unsupported by tool: https://github.com/pkgcore/pkgdev/issues/123"
+            assert keywords, (
+                f"no keywords for {pkg.versioned_atom}, currently unsupported by tool: https://github.com/pkgcore/pkgdev/issues/123"
+            )
             self.nodes.add(new_node := GraphNode(((pkg, keywords),)))
             vertices[pkg] = new_node
             if reason:

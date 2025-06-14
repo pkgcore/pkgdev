@@ -309,8 +309,10 @@ def _build_job(namespace, pkg, is_test: bool):
     )
     for solution in solutions:
         use_flags, use_expand = _groupby_use_expand(solution, use_expand_prefixes, enabled, iuse)
-        yield " ".join(use_flags) + " " + " ".join(
-            f'{var.upper()}: {" ".join(vals)}' for var, vals in use_expand.items()
+        yield (
+            " ".join(use_flags)
+            + " "
+            + " ".join(f"{var.upper()}: {' '.join(vals)}" for var, vals in use_expand.items())
         )
 
 
@@ -335,7 +337,7 @@ def _create_config_files(pkgs, job_name, is_keywording):
     with (res := portage_accept_keywords / f"pkgdev_tatt_{job_name}.keywords").open("w") as f:
         f.write(f"# Job created by pkgdev tatt for {job_name!r}\n")
         for pkg in pkgs:
-            f.write(f'{pkg.versioned_atom} {"**" if is_keywording else ""}\n')
+            f.write(f"{pkg.versioned_atom} {'**' if is_keywording else ''}\n")
     yield str(res)
 
     _create_config_dir(portage_env)

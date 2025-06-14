@@ -26,7 +26,7 @@ def mk_pkg(repo, cpvstr, maintainers, **kwargs):
                     <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                     <pkgmetadata>
                         <maintainer type="person">
-                            {' '.join(f'<email>{maintainer}@gentoo.org</email>' for maintainer in maintainers)}
+                            {" ".join(f"<email>{maintainer}@gentoo.org</email>" for maintainer in maintainers)}
                         </maintainer>
                     </pkgmetadata>
                 """

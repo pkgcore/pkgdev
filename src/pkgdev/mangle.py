@@ -82,7 +82,7 @@ class Mangler:
                 new_kw = " ".join(kw)
                 if not mo.group("quote"):
                     new_kw = f'"{new_kw}"'
-                lines[i] = f'{mo.group("pre")}{new_kw}{mo.group("post")}'
+                lines[i] = f"{mo.group('pre')}{new_kw}{mo.group('post')}"
                 break
         return change.update("\n".join(lines) + "\n")
 

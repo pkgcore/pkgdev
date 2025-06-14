@@ -33,7 +33,7 @@ output_opts.add_argument(
         Output table using specified tabular format (defaults to compressed,
         custom format).
 
-        Available formats: {', '.join(tabulate_formats)}
+        Available formats: {", ".join(tabulate_formats)}
     """,
 )
 output_opts.add_argument(
