@@ -7,6 +7,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import tomllib
 import urllib.request as urllib
 from collections import defaultdict
 from datetime import datetime
@@ -37,11 +38,6 @@ from snakeoil.osutils import pjoin
 
 from ..cli import ArgumentParser
 from .argparsers import _determine_cwd_repo, cwd_repo_argparser, BugzillaApiKey
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 bugs = ArgumentParser(
     prog="pkgdev bugs",
