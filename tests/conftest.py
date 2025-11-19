@@ -1,3 +1,5 @@
+import copy
+import logging
 import os
 import shutil
 import tempfile
@@ -13,7 +15,7 @@ pytest_plugins = ["pkgcore"]
 
 @pytest.fixture(scope="session")
 def temporary_home():
-    """Generate a temporary directory and set$HOME to it."""
+    """Generate a temporary directory and set $HOME to it."""
     old_home = os.environ.get("HOME")
     new_home = None
     try:
@@ -26,6 +28,18 @@ def temporary_home():
         else:
             os.environ["HOME"] = old_home
             shutil.rmtree(new_home)  # pyright: ignore[reportArgumentType]
+
+
+@pytest.fixture(autouse=True, scope="function")
+def protect_logging():
+    """Protect pytest logging configuration from any tool logging manipulation"""
+    state = None
+    try:
+        state = copy.deepcopy(logging.root)
+        yield
+    finally:
+        if state is not None:
+            logging.root = state
 
 
 @pytest.fixture(scope="session")
