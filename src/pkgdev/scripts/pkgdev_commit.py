@@ -5,10 +5,11 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import tarfile
 import tempfile
 import textwrap
-from collections import defaultdict, deque, UserDict
+from collections import UserDict, defaultdict, deque
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
@@ -17,8 +18,8 @@ from itertools import chain
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import MalformedAtom
 from pkgcore.ebuild.atom import atom as atom_cls
-from pkgcore.ebuild.repository import UnconfiguredTree, tree
 from pkgcore.ebuild.repo_objs import RepoConfig
+from pkgcore.ebuild.repository import UnconfiguredTree, tree
 from pkgcore.operations import observer as observer_mod
 from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
@@ -317,7 +318,12 @@ class HistoricalRepo(UnconfiguredTree):
             error = old_files.stderr.read().decode().strip()
             raise Exception(f"failed populating archive repo: {error}")
         with tarfile.open(mode="r|", fileobj=old_files.stdout) as tar:
-            tar.extractall(path=self.location)
+            extra_kwargs = {}
+            # see filter in https://docs.python.org/3/library/tarfile.html#tarfile.TarFile.extractall
+            # Whilst we trust git archive, we still leave the basic protections on.
+            if sys.version_info >= (3, 12, 0):
+                extra_kwargs["filter"] = "data"
+            tar.extractall(path=self.location, **extra_kwargs)
 
 
 def change(*statuses):
