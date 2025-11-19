@@ -82,7 +82,7 @@ mask_opts.add_argument(
         field for the message to be accepted by ``gentoo-dev-announce``.
 
         For spawning the preferred email composer, the ``xdg-email`` tool from
-        ``x11-misc/xdg-utils`` package.
+        ``x11-misc/xdg-utils`` package is used.
     """,
 )
 mask_opts.add_argument(
@@ -91,7 +91,7 @@ mask_opts.add_argument(
     help="file a last-rite bug",
     docs="""
         Files a last-rite bug for the masked package, which blocks listed
-        reference bugs. ``PMASKED`` keyword is added all all referenced bugs.
+        reference bugs. ``PMASKED`` keyword is added to all referenced bugs.
     """,
 )
 
