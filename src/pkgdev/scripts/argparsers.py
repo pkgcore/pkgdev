@@ -48,11 +48,12 @@ def _determine_git_repo(parser, namespace):
 
 class BugzillaApiKey:
     @classmethod
-    def mangle_argparser(cls, parser):
+    def mangle_argparser(cls, parser, required=False):
         parser.add_argument(
             "--api-key",
             metavar="TOKEN",
             help="Bugzilla API key",
+            required=required,
             docs="""
                 The Bugzilla API key to use for authentication. WARNING: using this
                 option will expose your API key to other users of the same system.

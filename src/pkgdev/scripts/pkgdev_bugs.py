@@ -46,7 +46,7 @@ bugs = ArgumentParser(
     quiet=False,
     parents=(cwd_repo_argparser,),
 )
-BugzillaApiKey.mangle_argparser(bugs)
+BugzillaApiKey.mangle_argparser(bugs, required=True)
 bugs.add_argument(
     "targets",
     metavar="target",
