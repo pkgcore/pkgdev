@@ -5,22 +5,22 @@ import configparser
 import logging
 import os
 
+from pkgcore.repository import errors as repo_errors
 from pkgcore.util import commandline
+from pkgcore.util.commandline import _mk_domain
 from snakeoil.cli import arghparse
 from snakeoil.contexts import patch
 from snakeoil.klass import jit_attr_none
 from snakeoil.mappings import OrderedSet
-from pkgcore.repository import errors as repo_errors
-from pkgcore.util.commandline import _mk_domain
 
 from . import const
 
 
 class Tool(commandline.Tool):
-    def main(self):
+    def main(self, *args, **kwargs):
         # suppress all pkgcore log messages
         logging.getLogger("pkgcore").setLevel(100)
-        return super().main()
+        return super().main(*args, **kwargs)
 
 
 class ConfigArg(argparse._StoreAction):
