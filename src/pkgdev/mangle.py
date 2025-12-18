@@ -70,16 +70,31 @@ class Mangler:
 
     @mangle("keywords")
     def _keywords(self, change):
-        """Fix keywords order."""
+        """Fix keywords order and destalbilize new versions."""
 
         def keywords_sort_key(kw):
             return tuple(reversed(kw.lstrip("-~").partition("-")))
 
+        def keywords_remove_stable(kws):
+            return [kw if kw.startswith("~") or kw.startswith("-") else "~" + kw for kw in kws]
+
         lines = change.data.splitlines()
         for i, line in enumerate(lines):
             if mo := keywords_regex.match(line):
-                kw = sorted(mo.group("keywords").split(), key=keywords_sort_key)
-                new_kw = " ".join(kw)
+                kws = sorted(mo.group("keywords").split(), key=keywords_sort_key)
+                # Only remove stable keywords on new ebuild creations
+                # For our purposes, renames are also new ebuild creations
+                print(change.atom.version)
+                # print(change.atom.revision)
+                if change.status == "A":
+                    kws = keywords_remove_stable(kws)
+                if (
+                    change.status == "R"
+                    and change.old is not None
+                    and change.old.version != change.atom.version
+                ):
+                    kws = keywords_remove_stable(kws)
+                new_kw = " ".join(kws)
                 if not mo.group("quote"):
                     new_kw = f'"{new_kw}"'
                 lines[i] = f"{mo.group('pre')}{new_kw}{mo.group('post')}"
