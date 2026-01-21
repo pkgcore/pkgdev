@@ -113,7 +113,7 @@ class BugzillaAwareBugTag(BugTag):
             return
         url = self.parse_url(bug)
         is_bgo = "bugs.gentoo.org" in url
-        if is_bgo and not res is self.Resolution.FIXED:
+        if is_bgo and res is not self.Resolution.FIXED:
             url = f"{url} ({res.value})"
 
         namespace.footer.add((self.dest.capitalize(), url))

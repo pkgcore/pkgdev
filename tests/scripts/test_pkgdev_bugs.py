@@ -1,16 +1,11 @@
 import itertools
 import os
-import sys
 import json
 import textwrap
-from types import SimpleNamespace
 from unittest.mock import patch
 
-import pytest
 from pkgcore.ebuild.atom import atom
-from pkgcore.test.misc import FakePkg
 from pkgdev.scripts import pkgdev_bugs as bugs
-from snakeoil.formatters import PlainTextFormatter
 from snakeoil.osutils import pjoin
 
 
