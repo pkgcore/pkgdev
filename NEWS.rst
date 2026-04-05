@@ -5,8 +5,11 @@ Release Notes
 pkgdev 0.2.13 (unreleased)
 ---------------------------
 
-Packaging
-~~~~~~~~~~
+**Fixes:**
+
+- tests no longer are sensitive to ``git --config --global`` content.
+
+**Packaging:**
 
 - ``pytest >= 9.0`` is now required
 
