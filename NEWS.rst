@@ -11,6 +11,8 @@ pkgdev 0.2.13 (unreleased)
 
 **Packaging:**
 
+- ``snakeoil`` compatibility is up to 0.12.  That release removes deprecations that
+  pkgdev currently relies upon, but will be addressed avant.
 - ``pytest >= 9.0`` is now required
 
 
