@@ -16,13 +16,13 @@ from typing import List
 from pkgcore.ebuild.atom import MalformedAtom
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.ebuild.profiles import ProfileNode
-from snakeoil.bash import iter_read_bash
+from snakeoil.bash import read_bash
 from snakeoil.cli import arghparse
 from snakeoil.osutils import pjoin
 from snakeoil.strings import pluralism
 
 from .. import git
-from .argparsers import cwd_repo_argparser, git_repo_argparser, BugzillaApiKey
+from .argparsers import BugzillaApiKey, cwd_repo_argparser, git_repo_argparser
 
 mask = arghparse.ArgumentParser(
     prog="pkgdev mask",
@@ -203,7 +203,7 @@ class MaskFile:
             lines = f.readlines()
 
         # determine mask groups by line number
-        mask_map = dict(iter_read_bash(self.path, enum_line=True))
+        mask_map = dict(read_bash(self.path, enum_line=True))
         for mask_lines in map(list, consecutive_groups(mask_map)):
             # use profile's EAPI setting to coerce supported masks
             atoms = [self.profile.eapi_atom(mask_map[x]) for x in mask_lines]
