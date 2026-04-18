@@ -656,6 +656,8 @@ class DependencyGraph:
             for node, origs in reverse_edges.items():
                 if len(origs) != 1:
                     continue
+                if node.bugno is not None:
+                    continue
                 existing_keywords = frozenset().union(
                     *(
                         pkgver.keywords
@@ -666,6 +668,8 @@ class DependencyGraph:
                 if existing_keywords & frozenset().union(*(pkg[1] for pkg in node.pkgs)):
                     continue  # not fully new keywords
                 orig = next(iter(origs))
+                if orig.bugno is not None:
+                    continue
                 self.out.write(f"Merging {node} into {orig}")
                 self.merge_nodes((orig, node))
                 found_someone = True
@@ -675,7 +679,9 @@ class DependencyGraph:
         for group, pkgs in self.options.repo.stabilization_groups.items():
             restrict = packages.OrRestriction(*pkgs)
             mergable = tuple(
-                node for node in self.nodes if any(restrict.match(pkg) for pkg, _ in node.pkgs)
+                node
+                for node in self.nodes
+                if node.bugno is None and any(restrict.match(pkg) for pkg, _ in node.pkgs)
             )
             if mergable:
                 self.out.write(f"Merging @{group} group nodes: {mergable}")
@@ -759,9 +765,6 @@ def main(options, out: Formatter, err: Formatter):
         options.targets = list(_load_from_stdin(out))
     d.load_targets(options.targets)
     d.build_full_graph()
-    d.merge_stabilization_groups()
-    d.merge_cycles()
-    d.merge_new_keywords_children()
 
     if not d.nodes:
         out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
@@ -769,6 +772,10 @@ def main(options, out: Formatter, err: Formatter):
 
     if userquery("Check for open bugs matching current graph?", out, err, default_answer=False):
         d.scan_existing_bugs(options.api_key)
+
+    d.merge_stabilization_groups()
+    d.merge_cycles()
+    d.merge_new_keywords_children()
 
     if options.edit_graph:
         toml = d.output_graph_toml()
