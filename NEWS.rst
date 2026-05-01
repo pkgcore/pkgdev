@@ -2,18 +2,15 @@
 Release Notes
 =============
 
-pkgdev 0.2.13 (unreleased)
+pkgdev 0.2.13 (2026-05-01)
 ---------------------------
-
-**Fixes:**
-
-- tests no longer are sensitive to ``git --config --global`` content.
-
-**Packaging:**
+- tests no longer are sensitive to ``git --config --global`` content (Brian
+  Harring)
 
 - ``snakeoil`` compatibility is up to 0.12.  That release removes deprecations that
-  pkgdev currently relies upon, but will be addressed avant.
-- ``pytest >= 9.0`` is now required
+  pkgdev currently relies upon, but will be addressed avant (Brian Harring)
+
+- ``pytest >= 9.0`` is now required (Brian Harring)
 
 
 pkgdev 0.2.12 (2025-06-14)
