@@ -309,6 +309,7 @@ def _build_job(namespace, pkg, is_test: bool):
     )
     for solution in solutions:
         use_flags, use_expand = _groupby_use_expand(solution, use_expand_prefixes, enabled, iuse)
+        use_flags.difference_update({"test"})  # test is handled separately by PM
         yield (
             " ".join(use_flags)
             + " "
