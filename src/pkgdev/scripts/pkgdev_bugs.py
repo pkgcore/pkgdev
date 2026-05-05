@@ -675,7 +675,8 @@ class DependencyGraph:
                 found_someone = True
                 break
 
-    def merge_stabilization_groups(self):
+    def merge_stabilization_groups(self, out: Formatter, err: Formatter) -> bool:
+        all_pkgs = {pkg.unversioned_atom for node in self.nodes for pkg, _ in node.pkgs}
         for group, pkgs in self.options.repo.stabilization_groups.items():
             restrict = packages.OrRestriction(*pkgs)
             mergable = tuple(
@@ -684,8 +685,20 @@ class DependencyGraph:
                 if node.bugno is None and any(restrict.match(pkg) for pkg, _ in node.pkgs)
             )
             if mergable:
+                if missing_pkgs := pkgs - all_pkgs:
+                    self.out.write(
+                        self.out.fg("yellow"),
+                        f"Detected {len(missing_pkgs)} missing packages in @{group} group\n",
+                        "\n".join(f" - {pkg}" for pkg in sorted(missing_pkgs)),
+                        self.out.reset,
+                    )
+                    if not userquery(
+                        " Confirm this was intentional?", out, err, default_answer=False
+                    ):
+                        return False
                 self.out.write(f"Merging @{group} group nodes: {mergable}")
                 self.merge_nodes(mergable)
+        return True
 
     def scan_existing_bugs(self, api_key: str):
         # Paginate the search request with batches of 100 items to avoid HTTP 414 errors
@@ -785,7 +798,9 @@ def main(options, out: Formatter, err: Formatter):
     if userquery("Check for open bugs matching current graph?", out, err, default_answer=False):
         d.scan_existing_bugs(options.api_key)
 
-    d.merge_stabilization_groups()
+    if not d.merge_stabilization_groups(out, err):
+        out.write(out.fg("red"), "Aborted", out.reset)
+        return 1
     d.merge_cycles()
     d.merge_new_keywords_children()
 
