@@ -29,9 +29,9 @@ classifiers = [
 dynamic = ["version"]
 
 dependencies = [
-	"snakeoil~=0.10.1",
-	"pkgcore~=0.12.30",
-	"pkgcheck~=0.10.36",
+	"snakeoil~=0.11.0",
+	"pkgcore~=0.12.32",
+	"pkgcheck~=0.10.39",
 ]
 
 [project.optional-dependencies]
