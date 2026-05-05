@@ -2,6 +2,11 @@
 Release Notes
 =============
 
+pkgdev 0.2.14 (2026-05-05)
+---------------------------
+
+- fix dependencies (Arthur Zamarin)
+
 pkgdev 0.2.13 (2026-05-01)
 ---------------------------
 - tests no longer are sensitive to ``git --config --global`` content (Brian
