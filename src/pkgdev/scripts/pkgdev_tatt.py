@@ -321,7 +321,7 @@ def _build_jobs(namespace, pkgs):
         for flags in islice(_build_job(namespace, pkg, False), namespace.use_combos):
             yield pkg.versioned_atom, False, flags
 
-        if namespace.test and "test" in pkg.defined_phases:
+        if namespace.test:
             yield pkg.versioned_atom, True, next(iter(_build_job(namespace, pkg, True)))
 
 
@@ -384,13 +384,12 @@ def main(options, out, err):
     else:
         template = read_text("pkgdev.tatt", "template.sh.jinja")
 
-    from jinja2 import Template
+    if options.use_combos <= 0 and not options.test:
+        return err.error(
+            "no --test and --use-combos isn't a positive integer. Cannot create any jobs, exiting..."
+        )
 
-    if not any("test" in pkg.defined_phases for pkg in pkgs):
-        if not options.use_combos > 0:
-            return err.error(
-                "no packages define a src_test, and --use-combos is not a positive integer. Cannot create any jobs, exiting..."
-            )
+    from jinja2 import Template
 
     script = Template(template, trim_blocks=True, lstrip_blocks=True).render(
         jobs=list(_build_jobs(options, pkgs)),
