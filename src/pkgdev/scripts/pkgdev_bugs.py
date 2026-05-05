@@ -764,6 +764,10 @@ def _load_from_stdin(out: Formatter):
 
 @bugs.bind_main_func
 def main(options, out: Formatter, err: Formatter):
+    if options.api_key is None:
+        err.write(out.fg("red"), "No API key provided, exiting", out.reset)
+        return 1
+
     search_repo = options.search_repo
     options.targets = options.targets or []
     d = DependencyGraph(out, err, options)
@@ -821,10 +825,6 @@ def main(options, out: Formatter, err: Formatter):
     if not userquery(
         f"Continue and create {bugs_count} stablereq bugs?", out, err, default_answer=False
     ):
-        return 1
-
-    if options.api_key is None:
-        err.write(out.fg("red"), "No API key provided, exiting", out.reset)
         return 1
 
     disabled, enabled = options.auto_cc_arches
