@@ -688,29 +688,37 @@ class DependencyGraph:
                 self.merge_nodes(mergable)
 
     def scan_existing_bugs(self, api_key: str):
-        params = urlencode(
-            {
-                "Bugzilla_api_key": api_key,
-                "include_fields": "id,cf_stabilisation_atoms,summary",
-                "component": "Stabilization",
-                "resolution": "---",
-                "f1": "cf_stabilisation_atoms",
-                "o1": "anywords",
-                "v1": {pkg[0].unversioned_atom for node in self.nodes for pkg in node.pkgs},
-            },
-            doseq=True,
-        )
-        request = urllib.Request(
-            url="https://bugs.gentoo.org/rest/bug?" + params,
-            method="GET",
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-        )
-        with urllib.urlopen(request, timeout=30) as response:
-            reply = json.loads(response.read().decode("utf-8"))
-        for bug in reply["bugs"]:
+        # Paginate the search request with batches of 100 items to avoid HTTP 414 errors
+        all_packages = list({pkg[0].unversioned_atom for node in self.nodes for pkg in node.pkgs})
+        batch_size = 100
+        all_bugs = []
+
+        for i in range(0, len(all_packages), batch_size):
+            params = urlencode(
+                {
+                    "Bugzilla_api_key": api_key,
+                    "include_fields": "id,cf_stabilisation_atoms,summary",
+                    "component": "Stabilization",
+                    "resolution": "---",
+                    "f1": "cf_stabilisation_atoms",
+                    "o1": "anywords",
+                    "v1": all_packages[i : i + batch_size],
+                },
+                doseq=True,
+            )
+            request = urllib.Request(
+                url="https://bugs.gentoo.org/rest/bug?" + params,
+                method="GET",
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+            )
+            with urllib.urlopen(request, timeout=30) as response:
+                reply = json.loads(response.read().decode("utf-8"))
+                all_bugs.extend(reply.get("bugs", []))
+
+        for bug in all_bugs:
             bug_atoms = (
                 parse_atom(line.split(" ", 1)[0]).unversioned_atom
                 for line in map(str.strip, bug["cf_stabilisation_atoms"].splitlines())
