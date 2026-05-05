@@ -17,9 +17,9 @@ from urllib.parse import urlencode
 
 from pkgcheck import const as pkgcheck_const
 from pkgcheck.addons import ArchesAddon, init_addon
+from pkgcheck.addons.git import GitAddedRepo, GitAddon, GitModifiedRepo
 from pkgcheck.addons.profiles import ProfileAddon
-from pkgcheck.addons.git import GitAddon, GitAddedRepo, GitModifiedRepo
-from pkgcheck.checks import visibility, stablereq
+from pkgcheck.checks import stablereq, visibility
 from pkgcheck.scripts import argparse_actions
 from pkgcore.ebuild.atom import atom
 from pkgcore.ebuild.ebuild_src import package
@@ -37,7 +37,7 @@ from snakeoil.formatters import Formatter
 from snakeoil.osutils import pjoin
 
 from ..cli import ArgumentParser
-from .argparsers import _determine_cwd_repo, cwd_repo_argparser, BugzillaApiKey
+from .argparsers import BugzillaApiKey, _determine_cwd_repo, cwd_repo_argparser
 
 bugs = ArgumentParser(
     prog="pkgdev bugs",
@@ -401,7 +401,7 @@ class DependencyGraph:
                 except (ValueError, IndexError):
                     self.err.write(f"Unable to find match for {pkg.unversioned_atom}")
 
-    def _extend_projects(self, disabled, enabled):
+    def _extend_projects(self, disabled: frozenset[str], enabled: frozenset[str]):
         members = defaultdict(set)
         self.out.write("Fetching projects.xml")
         self.out.flush()
@@ -410,15 +410,17 @@ class DependencyGraph:
                 for member in project.members:
                     members[member.email].add(email)
 
-        disabled = frozenset(disabled).union(*(members[email] for email in disabled))
-        enabled = frozenset(enabled).union(*(members[email] for email in enabled))
+        disabled = disabled.union(*(members[email] for email in disabled))
+        enabled = enabled.union(*(members[email] for email in enabled))
         return disabled, enabled
 
     def extend_maintainers(self):
         disabled, enabled = self.options.find_by_maintainer
+        disabled = frozenset({e if "@" in e else f"{e}@gentoo.org" for e in disabled})
+        enabled = frozenset({e if "@" in e else f"{e}@gentoo.org" for e in enabled})
         if self.options.projects:
             disabled, enabled = self._extend_projects(disabled, enabled)
-        emails = frozenset(enabled).difference(disabled)
+        emails = enabled.difference(disabled)
         if not emails:
             return
         search_repo = self.options.search_repo
@@ -530,7 +532,6 @@ class DependencyGraph:
             dot.close()
 
     def output_graph_toml(self):
-        self.auto_cc_arches
         bugs = dict(enumerate(self.nodes, start=1))
         reverse_bugs = {node: bugno for bugno, node in bugs.items()}
 
