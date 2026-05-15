@@ -9,7 +9,7 @@ base_options=(
   '(--debug --help -h)--debug[enable debugging output]'
   '(--quiet -q --verbose -v)'{-q,--quiet}'[suppress non-error output]'
   '(--verbose -v --quiet -q)'{-v,--verbose}'[show verbose output]'
-  "--color[Color output]:yes/no:((y\:'yes' n\:'no'))"
+  "--color[enable/disable color support]:yes/no:((y\:'yes' n\:'no'))"
 )
 
 _arguments -C \
@@ -23,11 +23,13 @@ case $state in
     typeset -a subcommands
 
     subcommands=(
-      commit:'create git commit'
-      manifest:'update package manifests'
-      mask:'mask packages'
-      push:'run QA checks on commits and push them'
-      showkw:'show package keywords'
+      'bugs:automatic bugs filer'
+      'commit:create git commit'
+      'manifest:update package manifests'
+      'mask:mask packages'
+      'push:run QA checks on commits and push them'
+      'showkw:show package keywords'
+      'tatt:package testing tool'
     )
 
     _describe -t subcommands subcommand subcommands && ret=0
@@ -44,13 +46,14 @@ case $state in
           {'(--closes)-c','(-c)--closes'}'[add Closes tag for a given Gentoo bug or upstream PR URL]:bug ID or URL' \
           {'(--tag)-T','(-T)--tag'}'[add commit tag]:tag\:value' \
           {'(--dry-run)-n','(-n)--dry-run'}'[pretend to create commit]' \
-          {'(--scan)-s','(-s)--scan'}'[run pkgcheck against staged changes]' \
-          {'(--ask)-A','(-A)--ask'}'[confirm creating commit with QA errors]' \
-          '--mangle[forcibly enable/disable file mangling]' \
-          '--signoff[add a Signed-off-by trailer]' \
-          '--gpg-sign[enable GPG signing]' \
-          '--no-gpg-sign[disable GPG signing]' \
-          \*{--message,-m}'[specify commit message]:message' \
+          {'(--scan)-s','(-s)--scan'}'[run pkgcheck against staged changes]:boolean:(true false)' \
+          {'(--ask)-A','(-A)--ask'}'[confirm creating commit with QA errors]:boolean:(true false)' \
+          {'(--mangle)','()--mangle'}'[forcibly enable/disable file mangling]:boolean:(true false)' \
+          {'(--signoff)','()--signoff'}'[add a Signed-off-by trailer]:boolean:(true false)' \
+          '(--gpg-sign --no-gpg-sign)--gpg-sign[enable GPG signing]' \
+          '(--gpg-sign --no-gpg-sign)--no-gpg-sign[disable GPG signing]' \
+          {'(--distdir)-d','(-d)--distdir'}'[target download directory]:distdir:_files -/' \
+          \*{'(--message)-m','(-m)--message'}'[specify commit message]:message' \
           {'(--message-template)-M','(-M)--message-template'}'[use commit message template from specified file]:template:_files' \
           {'(--edit)-e','(-e)--edit'}'[force edit of commit]' \
           {'(--update)-u','(-u)--update'}'[stage all changed files]' \
@@ -64,20 +67,23 @@ case $state in
           {'(--force)-f','(-f)--force'}'[forcibly remanifest packages]' \
           {'(--mirrors)-m','(-m)--mirrors'}'[enable fetching from Gentoo mirrors]' \
           '--if-modified[only check packages that have uncommitted modifications]' \
+          '--ignore-fetch-restricted[ignore fetch restricted ebuilds]' \
           && ret=0
         ;;
       (mask)
         _arguments -C -A '-*' \
           $base_options \
-          {'(--rites)-r','(-r)--rites'}'[mark for last rites]' \
-          {'(--bugs)-b','(-b)--bugs'}'[reference bug in the mask comment]' \
+          '--api-key[Bugzilla API key]:api key' \
+          {'(--rites)-r','(-r)--rites'}'[mark for last rites]:days' \
+          {'(--bugs)-b','(-b)--bugs'}'[reference bug in the mask comment]:bugs' \
           '--email[spawn email composer with prepared email for sending to mailing lists]' \
+          '--file-bug[file a last-rite bug]' \
           && ret=0
         ;;
       (push)
         _arguments -C -A '-*' \
           $base_options \
-          {'(--ask)-A','(-A)--ask'}'[confirm pushing commits with QA errors]' \
+          {'(--ask)-A','(-A)--ask'}'[confirm pushing commits with QA errors]:boolean:(true false)' \
           {'(--dry-run)-n','(-n)--dry-run'}'[pretend to push commits]' \
           '--pull[run git pull --rebase before scanning]' \
           && ret=0
@@ -85,7 +91,7 @@ case $state in
       (showkw)
         _arguments -C -A '-*' \
           $base_options \
-          {'(--format)-f','(-f)--format'}'[keywords table format]' \
+          {'(--format)-f','(-f)--format'}'[keywords table format]:format:(fancy_grid fancy_outline github grid html jira latex latex_booktabs latex_longtable latex_raw mediawiki moinmoin orgtbl pipe plain presto pretty psql rst showkw simple textile tsv unsafehtml youtrack)' \
           {'(--collapse)-c','(-c)--collapse'}'[show collapsed list of arches]' \
           {'(--stable)-s','(-s)--stable'}'[show stable arches]' \
           {'(--unstable)-u','(-u)--unstable'}'[show unstable arches]' \
@@ -95,8 +101,42 @@ case $state in
           {'(--repo)-r','(-r)--repo'}'[repo to query]:repo' \
           && ret=0
         ;;
-      (*)
-        _nothing
+      (tatt)
+        _arguments -C -A '-*' \
+          $base_options \
+          '--api-key[Bugzilla API key]:api key' \
+          {'(--job-name)-j','(-j)--job-name'}'[name template for created job script]:name' \
+          {'(--bug)-b','(-b)--bug'}'[single bug to take package list from]:bug' \
+          {'(--test)-t','(-t)--test'}'[run test phase for the packages]' \
+          {'(--use-combos)-u','(-u)--use-combos'}'[maximal number USE combinations to be tested]:number' \
+          '--ignore-prefixes[USE flags prefixes that won'\''t be randomized]:prefixes' \
+          '(--use-random --use-expand-random)--use-default[prefer to use default use flags configuration]' \
+          '(--use-default --use-expand-random)--use-random[turn on random use flags, with default USE_EXPAND]' \
+          '(--use-default --use-random)--use-expand-random[turn on random use flags, including USE_EXPAND]' \
+          {'(--packages)-p','(-p)--packages'}'[extended atom matching of packages]:packages' \
+          {'(--stablereq)-s','(-s)--stablereq'}'[test packages for stable keywording requests]' \
+          {'(--keywording)-k','(-k)--keywording'}'[test packages for keywording requests]' \
+          '--template-file[template file to use for the job script]:template:_files' \
+          '--logs-dir[directory to save build logs for failing tasks]:dir:_files -/' \
+          '--emerge-opts[options to be passed to emerge invocations]:opts' \
+          '--extra-env-file[extra /etc/portage/env/ file names to be used]:files' \
+          && ret=0
+        ;;
+      (bugs)
+        _arguments -C -A '-*' \
+          $base_options \
+          '--api-key[Bugzilla API key]:api key' \
+          '--dot[path file where to save the graph in dot format]:file:_files' \
+          '--edit-graph[open editor to modify the graph before filing bugs]' \
+          '--auto-cc-arches[automatically add CC-ARCHES for listed email addresses]:emails' \
+          '--find-by-maintainer[collect all packages maintained by listed email addresses]:emails' \
+          '--projects[include packages maintained by projects]' \
+          '--filter-stablereqs[filter targets for packages with active StableRequest result]' \
+          '--blocks[bugs which should be blocked by newly created bugs]:bugs' \
+          '--stabletime[stable request timeframe in days]:days' \
+          {'(--stablereq)-s','(-s)--stablereq'}'[file stable request bugs]' \
+          {'(--keywording)-k','(-k)--keywording'}'[file rekeywording bugs]' \
+          && ret=0
         ;;
     esac
     ;;
