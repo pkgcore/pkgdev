@@ -700,11 +700,12 @@ class DependencyGraph:
                 self.merge_nodes(mergable)
         return True
 
-    def scan_existing_bugs(self, api_key: str):
+    def scan_existing_bugs(self, api_key: str) -> bool:
         # Paginate the search request with batches of 100 items to avoid HTTP 414 errors
         all_packages = list({pkg[0].unversioned_atom for node in self.nodes for pkg in node.pkgs})
         batch_size = 100
         all_bugs = []
+        has_output = False
 
         for i in range(0, len(all_packages), batch_size):
             params = urlencode(
@@ -747,7 +748,9 @@ class DependencyGraph:
                         self.out.reset,
                     )
                     self.out.write(" -> bug summary: ", bug["summary"])
+                    has_output = True
                     break
+        return has_output
 
     def file_bugs(self, api_key: str, auto_cc_arches: frozenset[str], block_bugs: list[int]):
         def observe(node: GraphNode):
@@ -795,8 +798,11 @@ def main(options, out: Formatter, err: Formatter):
         out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
         return 1
 
+    has_output = False
     if userquery("Check for open bugs matching current graph?", out, err, default_answer=False):
-        d.scan_existing_bugs(options.api_key)
+        if d.scan_existing_bugs(options.api_key):
+            out.flush()
+            has_output = True
 
     if not d.merge_stabilization_groups(out, err):
         out.write(out.fg("red"), "Aborted", out.reset)
@@ -814,8 +820,13 @@ def main(options, out: Formatter, err: Formatter):
         d.output_dot(options.dot)
         out.write(out.fg("green"), f"Dot file written to {options.dot}", out.reset)
         out.flush()
+        has_output = True
 
     if options.edit_graph:
+        if has_output and not userquery("Ready to open editor?", out, err, default_answer=True):
+            out.write(out.fg("red"), "Aborted", out.reset)
+            return 1
+
         editor = shlex.split(os.environ.get("VISUAL", os.environ.get("EDITOR", "nano")))
         try:
             subprocess.run(editor + [toml.name], check=True)
