@@ -71,6 +71,7 @@ _pkgdev() {
                 --mangle
                 --signoff
                 --gpg-sign --no-gpg-sign
+                -d --distdir
                 -m --message
                 -M --message-template
                 -e --edit
@@ -98,6 +99,9 @@ _pkgdev() {
                 -[bTm] | --bug | --tag | --message)
                     COMPREPLY=()
                     ;;
+                -d | --distdir)
+                    _filedir -d
+                    ;;
                 -M | --message-template)
                     _filedir
                     ;;
@@ -115,6 +119,7 @@ _pkgdev() {
                 -m --mirrors
                 -d --distdir
                 --if-modified
+                --ignore-fetch-restricted
             "
 
             case "${prev}" in
@@ -129,10 +134,10 @@ _pkgdev() {
             ;;
         mask)
             subcmd_options="
-                -r --rites
-                -b --bug
-                --email
                 --api-key
+                -r --rites
+                -b --bug --bugs
+                --email
                 --file-bug
             "
 
@@ -221,7 +226,7 @@ _pkgdev() {
                 --use-default
                 --use-random
                 --use-expand-random
-                -p --package
+                -p --packages
                 -s --stablereq
                 -k --keywording
                 --template-file
@@ -231,7 +236,7 @@ _pkgdev() {
             "
 
             case "${prev}" in
-                -[jbup] | --api-key | --job-name | --bug | --use-combos | --package | --emerge-opts)
+                -[jbup] | --api-key | --job-name | --bug | --use-combos | --packages | --emerge-opts)
                     COMPREPLY=()
                     ;;
                 --template-file)
