@@ -2,6 +2,38 @@
 Release Notes
 =============
 
+pkgdev 0.2.15 (2026-05-15)
+--------------------------
+
+**pkgdev tatt:**
+
+- tatt: remove bogus check for ``src_test`` (Arthur Zamarin, #224)
+
+- tatt: don't add ``USE="test"`` when testing (Arthur Zamarin, #219)
+
+**pkgdev bugs:**
+
+- bugs: support auto adding ``@gentoo.org`` for emails (Arthur Zamarin)
+
+- bugs: batch query for bugs with many packages (Arthur Zamarin, #214)
+
+- bugs: support obsoleting bugs when not exact version matches (Arthur Zamarin,
+  #206)
+
+- bugs: show all open matching bugs when scanning for existing bugs (Arthur
+  Zamarin, #207)
+
+- bugs: fix open bug search with deps (Joe Kappus, #222)
+
+- bugs: require API key earlier (Arthur Zamarin, #217)
+
+- bugs: confirm with user when only partial stabilization group (Arthur Zamarin,
+  #211)
+
+- bugs: flush and query before opening editor (Arthur Zamarin, #204)
+
+- bugs: skip hard masked targets (Arthur Zamarin, #210)
+
 pkgdev 0.2.14 (2026-05-05)
 ---------------------------
 
