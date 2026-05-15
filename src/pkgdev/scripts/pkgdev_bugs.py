@@ -208,7 +208,7 @@ def parse_atom(pkg: str):
 
 
 class GraphNode:
-    __slots__ = ("pkgs", "edges", "bugno", "summary", "cc_arches")
+    __slots__ = ("pkgs", "edges", "bugno", "summary", "cc_arches", "obsoletes")
 
     def __init__(self, pkgs: tuple[tuple[package, set[str]], ...], bugno=None):
         self.pkgs = pkgs
@@ -216,6 +216,7 @@ class GraphNode:
         self.bugno = bugno
         self.summary = ""
         self.cc_arches = None
+        self.obsoletes: set[int] = set()
 
     def __eq__(self, __o: object):
         return self is __o
@@ -337,7 +338,34 @@ class GraphNode:
         self.bugno = int(reply["id"])
         if observer is not None:
             observer(self)
+        self.obsolete_bugs(api_key)
         return self.bugno
+
+    def obsolete_bugs(self, api_key: str):
+        if not self.obsoletes:
+            return
+        assert self.bugno is not None
+
+        # Batch all bug IDs into a single PUT request
+        request_data = dict(
+            Bugzilla_api_key=api_key,
+            status="RESOLVED",
+            resolution="OBSOLETE",
+            see_also={"add": [f"https://bugs.gentoo.org/{self.bugno}"]},
+        )
+        if len(self.obsoletes) > 1:
+            request_data["ids"] = list(self.obsoletes)
+        request = urllib.Request(
+            url=f"https://bugs.gentoo.org/rest/bug/{','.join(map(str, self.obsoletes))}",
+            data=json.dumps(request_data).encode("utf-8"),
+            method="PUT",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
+        with urllib.urlopen(request, timeout=30) as response:
+            json.loads(response.read().decode("utf-8"))
 
 
 class DependencyGraph:
@@ -560,6 +588,7 @@ class DependencyGraph:
                 f'"bug-{i}"' for i, src in bugs.items() if node in src.edges
             ):
                 toml.write(f"blocks = [{node_blocks}]\n")
+            toml.write(f"obsoletes = {sorted(node.obsoletes)}\n")
             for pkg, arches in node.pkgs:
                 try:
                     match = next(self.modified_repo.itermatch(pkg.versioned_atom))
@@ -600,6 +629,7 @@ class DependencyGraph:
         for node_name, data_node in data.items():
             new_bugs[node_name].summary = data_node.get("summary", "")
             new_bugs[node_name].cc_arches = data_node.get("cc_arches", None)
+            new_bugs[node_name].obsoletes = set(data_node.get("obsoletes", ()))
             for dep in data_node.get("depends", ()):
                 if isinstance(dep, int):
                     new_bugs[node_name].edges.add(new_bugs.setdefault(dep, GraphNode((), dep)))
@@ -748,15 +778,35 @@ class DependencyGraph:
                 if line
             )
             bug_match = boolean.OrRestriction(*bug_atoms)
+            exact_match = boolean.OrRestriction(
+                *(
+                    parse_atom(line.split(" ", 1)[0])
+                    for line in map(str.strip, bug["cf_stabilisation_atoms"].splitlines())
+                    if line
+                )
+            )
             for node in self.nodes:
                 if node.bugno is None and all(bug_match.match(pkg[0]) for pkg in node.pkgs):
-                    node.bugno = bug["id"]
+                    is_exact_match = all(exact_match.match(pkg[0]) for pkg in node.pkgs)
                     self.out.write(
                         self.out.fg("yellow"),
-                        f"Found https://bugs.gentoo.org/{node.bugno} for node {node}",
+                        f"Found https://bugs.gentoo.org/{bug['id']} for node {node}",
                         self.out.reset,
+                        " (exact version match)" if is_exact_match else " (atom match)",
                     )
                     self.out.write(" -> bug summary: ", bug["summary"])
+                    if is_exact_match:
+                        node.bugno = bug["id"]
+                    else:
+                        if userquery(
+                            "Not an exact match. Do you want to obsolete?",
+                            self.out,
+                            self.err,
+                            default_answer=False,
+                        ):
+                            node.obsoletes.add(bug["id"])
+                        else:
+                            node.bugno = bug["id"]
                     has_output = True
                     break
         return has_output
