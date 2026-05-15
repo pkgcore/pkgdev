@@ -372,6 +372,7 @@ class DependencyGraph:
         restrict = boolean.AndRestriction(
             *restrict,
             packages.PackageRestriction("properties", values.ContainmentMatch("live", negate=True)),
+            packages.OrRestriction(*self.options.search_repo.pkg_masks, negate=True),
         )
         # prefer using user selected targets
         if intersect := tuple(filter(restrict.match, self.targets)):
@@ -464,6 +465,7 @@ class DependencyGraph:
     def load_targets(self, targets: list[tuple[str, str]]):
         result = []
         search_repo = self.options.search_repo
+        masked = packages.OrRestriction(*self.options.search_repo.pkg_masks)
         for _, target in targets:
             try:
                 pkgset = search_repo.match(target)
@@ -474,6 +476,13 @@ class DependencyGraph:
                             break
                     else:  # no stablereq
                         continue
+                if masked.match(target):
+                    self.err.write(
+                        self.err.fg("yellow"),
+                        f"Target {target} is masked, skipping",
+                        self.err.reset,
+                    )
+                    continue
                 result.append(self.find_best_match([target], pkgset, False))
             except (ValueError, IndexError):
                 bugs.error(f"Restriction {target} has no match in repository", status=3)
