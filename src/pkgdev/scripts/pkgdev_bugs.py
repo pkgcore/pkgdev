@@ -808,7 +808,6 @@ class DependencyGraph:
                         else:
                             node.bugno = bug["id"]
                     has_output = True
-                    break
         return has_output
 
     def file_bugs(self, api_key: str, auto_cc_arches: frozenset[str], block_bugs: list[int]):
