@@ -468,7 +468,7 @@ class DependencyGraph:
         for res in check.feed(self.mk_fake_pkg(pkg, keywords)):
             if isinstance(res, visibility.NonsolvableDeps):
                 for dep in res.deps:
-                    dep = atom(dep).no_usedeps
+                    dep: atom = atom(dep).no_usedeps
                     issues[dep.key][res.keyword.lstrip("~")].add(dep)
 
         for pkgname, problems in issues.items():
@@ -481,13 +481,25 @@ class DependencyGraph:
                 for keyword, deps in problems.items():
                     try:
                         match = self.find_best_match(deps, pkgset)
+                        results[match].add(keyword)
                     except (ValueError, IndexError):
-                        deps_str = " , ".join(map(str, deps))
-                        bugs.error(
-                            f"unable to find match for restrictions: {deps_str}",
-                            status=3,
-                        )
-                    results[match].add(keyword)
+                        # deps may contain contradictory version atoms (e.g. from
+                        # multiple USE-conditional targets like net8.0/net9.0/net10.0),
+                        # so try each atom individually
+                        found = False
+                        for dep in deps:
+                            try:
+                                match = self.find_best_match({dep}, pkgset)
+                                results[match].add(keyword)
+                                found = True
+                            except (ValueError, IndexError):
+                                pass
+                        if not found:
+                            deps_str = " , ".join(map(str, deps))
+                            bugs.error(
+                                f"unable to find match for restrictions: {deps_str}",
+                                status=3,
+                            )
                 yield from results.items()
 
     def load_targets(self, targets: list[tuple[str, str]]):
