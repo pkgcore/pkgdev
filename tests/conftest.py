@@ -3,11 +3,12 @@ import logging
 import os
 import shutil
 import tempfile
+from unittest import mock
 
 import pytest
 from snakeoil.cli import arghparse
 
-from pkgdev.cli import Tool
+from pkgdev.cli import ConfigFileParser, Tool
 from pkgdev.scripts import pkgdev
 
 pytest_plugins = ["pkgcore"]
@@ -21,7 +22,8 @@ def temporary_home():
     try:
         new_home = tempfile.mkdtemp()
         os.environ["HOME"] = new_home
-        yield
+        with mock.patch.object(ConfigFileParser, "default_configs", ()):
+            yield
     finally:
         if old_home is None:
             del os.environ["HOME"]
