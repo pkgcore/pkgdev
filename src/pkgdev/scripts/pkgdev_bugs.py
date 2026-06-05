@@ -648,7 +648,7 @@ class DependencyGraph:
                 elif new_bugs.get(dep) is not None:
                     new_bugs[node_name].edges.add(new_bugs[dep])
                 else:
-                    bugs.error(f"[{node_name}]['depends']: unknown dependency {dep!r}")
+                    raise ValueError(f"[{node_name}]['depends']: unknown dependency {dep!r}")
         self.nodes = set(new_bugs.values())
         self.starting_nodes = {node for node in self.nodes if not node.edges}
 
@@ -898,13 +898,22 @@ def main(options, out: Formatter, err: Formatter):
             return 1
 
         editor = shlex.split(os.environ.get("VISUAL", os.environ.get("EDITOR", "nano")))
-        try:
-            subprocess.run(editor + [toml.name], check=True)
-        except subprocess.CalledProcessError:
-            bugs.error("failed writing mask comment")
-        except FileNotFoundError:
-            bugs.error(f"nonexistent editor: {editor[0]!r}")
-        d.load_graph_toml(toml.name)
+        while True:
+            try:
+                subprocess.run(editor + [toml.name], check=True)
+            except subprocess.CalledProcessError:
+                bugs.error("failed writing mask comment")
+            except FileNotFoundError:
+                bugs.error(f"nonexistent editor: {editor[0]!r}")
+            try:
+                d.load_graph_toml(toml.name)
+            except Exception as e:
+                err.write(err.fg("red"), f"Invalid graph: {e}", err.reset)
+                err.flush()
+                if userquery("  Reopen editor to fix the error?", out, err, default_answer=True):
+                    continue
+                return 1
+            break
         for node in d.nodes:
             node.cleanup_keywords(search_repo)
 
