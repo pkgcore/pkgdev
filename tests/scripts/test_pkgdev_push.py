@@ -3,10 +3,10 @@ import textwrap
 from contextlib import chdir
 from functools import partial
 from io import StringIO
+from os.path import join as pjoin
 from unittest.mock import patch
 
 import pytest
-from snakeoil.osutils import pjoin
 
 from pkgdev.scripts import run
 

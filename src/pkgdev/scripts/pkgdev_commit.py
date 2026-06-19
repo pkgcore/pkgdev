@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from itertools import chain
+from os.path import join as pjoin
 
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import MalformedAtom
@@ -26,7 +27,6 @@ from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
 from snakeoil.klass import jit_attr
 from snakeoil.mappings import OrderedFrozenSet, OrderedSet
-from snakeoil.osutils import pjoin
 
 from .. import cli, git
 from ..mangle import GentooMangler, Mangler

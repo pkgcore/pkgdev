@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from itertools import groupby
 from operator import itemgetter
+from os.path import join as pjoin
 from typing import List
 
 from pkgcore.ebuild.atom import MalformedAtom
@@ -18,7 +19,6 @@ from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.ebuild.profiles import ProfileNode
 from snakeoil.bash import read_bash
 from snakeoil.cli import arghparse
-from snakeoil.osutils import pjoin
 from snakeoil.strings import pluralism
 
 from .. import git

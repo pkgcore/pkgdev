@@ -5,11 +5,11 @@ from contextlib import chdir
 from datetime import datetime
 from functools import partial
 from io import StringIO
+from os.path import join as pjoin
 from unittest.mock import patch
 
 import pytest
 from snakeoil.contexts import os_environ
-from snakeoil.osutils import pjoin
 
 from pkgdev.mangle import copyright_regex, keywords_regex
 from pkgdev.scripts import run

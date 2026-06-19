@@ -1,12 +1,13 @@
 import itertools
-import os
 import json
+import os
 import textwrap
+from os.path import join as pjoin
 from unittest.mock import patch
 
 from pkgcore.ebuild.atom import atom
+
 from pkgdev.scripts import pkgdev_bugs as bugs
-from snakeoil.osutils import pjoin
 
 
 def mk_pkg(repo, cpvstr, maintainers, **kwargs):

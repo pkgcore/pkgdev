@@ -4,13 +4,13 @@ import textwrap
 from contextlib import chdir
 from datetime import datetime, timedelta, timezone
 from functools import partial
+from os.path import join as pjoin
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 from pkgcore.ebuild.atom import atom as atom_cls
 from snakeoil.contexts import os_environ
-from snakeoil.osutils import pjoin
 
 from pkgdev.scripts import run
 

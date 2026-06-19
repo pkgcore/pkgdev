@@ -13,6 +13,7 @@ from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from itertools import chain
+from os.path import join as pjoin
 from urllib.parse import urlencode
 
 from pkgcheck import const as pkgcheck_const
@@ -34,7 +35,6 @@ from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
 from snakeoil.data_source import bytes_data_source
 from snakeoil.formatters import Formatter
-from snakeoil.osutils import pjoin
 
 from ..cli import ArgumentParser
 from .argparsers import BugzillaApiKey, _determine_cwd_repo, cwd_repo_argparser
