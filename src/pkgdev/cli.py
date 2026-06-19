@@ -4,12 +4,12 @@ import argparse
 import configparser
 import logging
 import os
+from unittest.mock import patch
 
 from pkgcore.repository import errors as repo_errors
 from pkgcore.util import commandline
 from pkgcore.util.commandline import _mk_domain
 from snakeoil.cli import arghparse
-from snakeoil.contexts import patch
 from snakeoil.klass import jit_attr_none
 from snakeoil.mappings import OrderedSet
 
