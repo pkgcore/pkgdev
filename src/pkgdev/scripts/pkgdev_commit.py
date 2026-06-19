@@ -418,6 +418,9 @@ class MetadataSummary(ChangeSummary):
         elif old_pkg.stabilize_allarches != new_pkg.stabilize_allarches:
             status = "mark" if new_pkg.stabilize_allarches else "drop"
             return f"{status} ALLARCHES"
+        elif old_pkg.straight_to_stable != new_pkg.straight_to_stable:
+            status = "mark" if new_pkg.straight_to_stable else "drop"
+            return f"{status} straight-to-stable"
         elif old_pkg.upstreams != new_pkg.upstreams:
             new = set(new_pkg.upstreams)
             old = set(old_pkg.upstreams)
