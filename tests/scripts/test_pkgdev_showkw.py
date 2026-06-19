@@ -1,10 +1,11 @@
 import textwrap
+from contextlib import chdir
 from functools import partial
 from typing import List, NamedTuple
 from unittest.mock import patch
 
 import pytest
-from snakeoil.contexts import chdir, os_environ
+from snakeoil.contexts import os_environ
 
 from pkgdev.scripts import run
 

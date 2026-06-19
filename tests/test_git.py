@@ -1,9 +1,10 @@
 import subprocess
+from contextlib import chdir
 from unittest.mock import patch
 
 import pytest
 from snakeoil.cli.exceptions import UserException
-from snakeoil.contexts import chdir
+
 from pkgdev import git
 
 

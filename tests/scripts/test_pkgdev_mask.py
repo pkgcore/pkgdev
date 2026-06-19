@@ -1,6 +1,7 @@
 import os
 import sys
 import textwrap
+from contextlib import chdir
 from datetime import datetime, timedelta, timezone
 from functools import partial
 from pathlib import Path
@@ -8,9 +9,10 @@ from unittest.mock import patch
 
 import pytest
 from pkgcore.ebuild.atom import atom as atom_cls
-from pkgdev.scripts import run
-from snakeoil.contexts import chdir, os_environ
+from snakeoil.contexts import os_environ
 from snakeoil.osutils import pjoin
+
+from pkgdev.scripts import run
 
 
 class TestPkgdevMaskParseArgs:

@@ -1,11 +1,12 @@
+from contextlib import chdir
 from functools import partial
 from typing import List, Set
 from unittest.mock import patch
 
 import pytest
-from pkgdev.scripts import run
-from snakeoil.contexts import chdir
 from snakeoil.osutils import pjoin
+
+from pkgdev.scripts import run
 
 
 class TestPkgdevManifestParseArgs:
