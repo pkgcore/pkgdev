@@ -6,6 +6,13 @@ _pkgdev() {
     local i=1 cmd cur prev words cword split
     _comp_initialize -n : "$@" || return
 
+    # If the previous word looks like a group of short options,
+    # handle it as if it were just the last short option.
+    # e.g. "-qr" -> "-r"
+    if [[ ${prev} =~ ^-[a-zA-Z]{2,}$ ]]; then
+        prev="-${prev:(-1)}"
+    fi
+
     local subcommands="
         bugs
         commit
