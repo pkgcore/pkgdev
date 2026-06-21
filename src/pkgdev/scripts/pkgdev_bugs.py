@@ -1,6 +1,7 @@
 """Automatic bugs filer"""
 
 import contextlib
+import enum
 import json
 import os
 import shlex
@@ -39,21 +40,123 @@ from snakeoil.formatters import Formatter
 from ..cli import ArgumentParser
 from .argparsers import BugzillaApiKey, _determine_cwd_repo, cwd_repo_argparser
 
+
+class NodeCategory(enum.Enum):
+    KEYWORDREQ = enum.auto()
+    STABLEREQ = enum.auto()
+
+
+# per-category strings: Bugzilla component, description verb, summary suffix
+_CATEGORY_META = {
+    NodeCategory.STABLEREQ: {
+        "component": "Stabilization",
+        "verb": "stabilize",
+        "suffix": "stablereq",
+    },
+    NodeCategory.KEYWORDREQ: {
+        "component": "Keywording",
+        "verb": "keyword",
+        "suffix": "keywordreq",
+    },
+}
+
+_CATEGORY_BY_SUFFIX = {meta["suffix"]: category for category, meta in _CATEGORY_META.items()}
+
+
+class StoreTargetArches(commandline.StoreTarget):
+    """``StoreTarget`` variant accepting trailing arches after each atom.
+
+    A target may carry a whitespace separated list of arches after the atom,
+    nattka-style, e.g. ``=cat/pkg-1.0 amd64 x86``. This produces 3-tuples
+    ``(token, restriction, arches)`` instead of the usual ``(token, restriction)``.
+
+    Note: this reimplements ``StoreTarget.__call__`` (it cannot inject the arch
+    splitting otherwise), supporting only the subset of features used by the
+    ``pkgdev bugs`` targets argument (package sets and stdin ``-``).
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if self.use_sets:
+            setattr(namespace, self.use_sets, [])
+
+        if isinstance(values, str):
+            values = [values]
+        elif values is not None and len(values) == 1 and values[0] == "-":
+            if not sys.stdin.isatty():
+                values = [x.strip() for x in sys.stdin.readlines() if x.strip()]
+                # reassign stdin to allow interactivity (currently only works for unix)
+                sys.stdin = open("/dev/tty")
+            else:
+                parser.error("'-' is only valid when piping data in")
+
+        result = []
+        for token in values:
+            if self.use_sets and token.startswith("@"):
+                namespace.sets.append(token[1:])
+                continue
+            atom_str, *arches = token.split()
+            try:
+                restriction = parserestrict.parse_match(atom_str)
+            except parserestrict.ParseError as e:
+                parser.error(e)
+            result.append((atom_str, restriction, frozenset(arches)))
+        setattr(namespace, self.dest, result)
+
+
 bugs = ArgumentParser(
     prog="pkgdev bugs",
     description=__doc__,
     verbose=False,
     quiet=False,
     parents=(cwd_repo_argparser,),
+    docs="""
+        Automatically file stabilization (``STABLEREQ``) and keywording
+        (``KEYWORDREQ``) bugs on Gentoo's Bugzilla, resolving and linking the
+        dependency graph between the created bugs.
+
+        The mode is selected with ``--stablereq`` (the default) or
+        ``--keywording``. For stabilization the target arches are derived from
+        the package's current ``~arch`` keywords. For keywording they are
+        derived from the keywords other versions of the package carry (restoring
+        dropped keywords, i.e. rekeywording); when they cannot be derived they
+        must be given explicitly as a whitespace separated list after the atom.
+
+        While filing stabilization bugs, dependencies that are not yet keyworded
+        on a required arch get a keywording bug filed automatically, and the
+        stabilization bug is made to depend on it.
+
+        Examples::
+
+            # file a stablereq bug, arches taken from the ~arch keywords
+            pkgdev bugs '=dev-libs/foo-1.2.3'
+
+            # rekeyword a version, restoring the keywords other versions have
+            pkgdev bugs --keywording '=dev-libs/foo-1.2.3'
+
+            # keyword a package for an explicit list of arches
+            pkgdev bugs --keywording '=dev-libs/foo-1.2.3 ppc64 riscv'
+
+            # file stablereq bugs for all packages maintained by an address
+            pkgdev bugs --find-by-maintainer foo@gentoo.org
+
+            # ... limited to those with an active StableRequest result
+            pkgdev bugs --find-by-maintainer foo@gentoo.org --filter-stablereqs
+    """,
 )
 BugzillaApiKey.mangle_argparser(bugs)
 bugs.add_argument(
     "targets",
     metavar="target",
     nargs="*",
-    action=commandline.StoreTarget,
+    action=StoreTargetArches,
     use_sets="sets",
     help="extended atom matching of packages",
+    docs="""
+        Extended atom matching of packages. Each target may carry a whitespace
+        separated list of arches after the atom, e.g. ``=cat/pkg-1.0 amd64 x86``,
+        which is required for keywording packages where the arches cannot be
+        derived automatically.
+    """,
 )
 bugs.add_argument(
     "--dot",
@@ -179,20 +282,28 @@ def _validate_args(namespace, attr):
 
 @bugs.bind_final_check
 def _validate_args(parser, namespace):
-    if namespace.keywording:
-        parser.error("keywording is not implemented yet, sorry")
+    if namespace.keywording and namespace.filter_stablereqs:
+        parser.error("--keywording is incompatible with --filter-stablereqs")
+    namespace.category = NodeCategory.KEYWORDREQ if namespace.keywording else NodeCategory.STABLEREQ
 
 
-def _get_suggested_keywords(repo, pkg: package):
+def _get_suggested_keywords(repo, pkg: package, streq: bool = True):
+    # for stablereq only consider already stable keywords on other versions, for
+    # keywordreq also consider ~arch keywords (those can be propagated as new keywords)
+    disallow_prefix = "-~" if streq else "-"
     match_keywords = {
-        x
+        x.lstrip("~")
         for pkgver in repo.match(pkg.unversioned_atom)
         for x in pkgver.keywords
-        if x[0] not in "-~"
+        if x[0] not in disallow_prefix
     }
 
-    # limit stablereq to whatever is ~arch right now
-    match_keywords.intersection_update(x.lstrip("~") for x in pkg.keywords if x[0] == "~")
+    if streq:
+        # limit stablereq to whatever is ~arch right now
+        match_keywords.intersection_update(x.lstrip("~") for x in pkg.keywords if x[0] == "~")
+    else:
+        # limit keywordreq to missing keywords (strip all keywords already present)
+        match_keywords.difference_update(x.lstrip("~-") for x in pkg.keywords)
 
     return frozenset({x for x in match_keywords if "-" not in x})
 
@@ -208,15 +319,25 @@ def parse_atom(pkg: str):
 
 
 class GraphNode:
-    __slots__ = ("pkgs", "edges", "bugno", "summary", "cc_arches", "obsoletes")
+    __slots__ = ("pkgs", "category", "edges", "bugno", "summary", "cc_arches", "obsoletes")
 
-    def __init__(self, pkgs: tuple[tuple[package, set[str]], ...], bugno=None):
+    def __init__(
+        self,
+        pkgs: tuple[tuple[package, set[str]], ...],
+        category: NodeCategory = NodeCategory.STABLEREQ,
+        bugno=None,
+    ):
         self.pkgs = pkgs
+        self.category = category
         self.edges: set[GraphNode] = set()
         self.bugno = bugno
         self.summary = ""
         self.cc_arches = None
         self.obsoletes: set[int] = set()
+
+    @property
+    def is_keywordreq(self):
+        return self.category is NodeCategory.KEYWORDREQ
 
     def __eq__(self, __o: object):
         return self is __o
@@ -231,8 +352,15 @@ class GraphNode:
         return str(self)
 
     def lines(self):
+        # keywordreq bugs are usually version-less ; stablereq bugs are version-pinned
         for pkg, keywords in self.pkgs:
-            yield f"{pkg.versioned_atom} {' '.join(sort_keywords(keywords))}"
+            if self.is_keywordreq:
+                atom_str = pkg.unversioned_atom
+                kws = (kw if kw in ("*", "^") else f"~{kw}" for kw in sort_keywords(keywords))
+            else:
+                atom_str = pkg.versioned_atom
+                kws = sort_keywords(keywords)
+            yield f"{atom_str} {' '.join(kws)}"
 
     @property
     def dot_edge(self):
@@ -250,7 +378,7 @@ class GraphNode:
                 previous = frozenset(keywords)
 
         for pkg, keywords in self.pkgs:
-            suggested = _get_suggested_keywords(repo, pkg)
+            suggested = _get_suggested_keywords(repo, pkg, streq=not self.is_keywordreq)
             if keywords == set(suggested):
                 keywords.clear()
                 keywords.add("*")
@@ -259,9 +387,14 @@ class GraphNode:
     def bug_summary(self):
         if self.summary:
             return self.summary
-        summary = f"{', '.join(pkg.versioned_atom.cpvstr for pkg, _ in self.pkgs)}: stablereq"
+        suffix = _CATEGORY_META[self.category]["suffix"]
+        if self.is_keywordreq:
+            names = [str(pkg.unversioned_atom) for pkg, _ in self.pkgs]
+        else:
+            names = [pkg.versioned_atom.cpvstr for pkg, _ in self.pkgs]
+        summary = f"{', '.join(names)}: {suffix}"
         if len(summary) > 90 and len(self.pkgs) > 1:
-            return f"{self.pkgs[0][0].versioned_atom.cpvstr} and friends: stablereq"
+            return f"{names[0]} and friends: {suffix}"
         return summary
 
     @property
@@ -298,7 +431,7 @@ class GraphNode:
             keywords = []
         maintainers = tuple(maintainers) or ("maintainer-needed@gentoo.org",)
 
-        description = ["Please stabilize", ""]
+        description = [f"Please {_CATEGORY_META[self.category]['verb']}", ""]
         if modified_repo is not None:
             for pkg, _ in self.pkgs:
                 with contextlib.suppress(StopIteration):
@@ -312,7 +445,7 @@ class GraphNode:
         request_data = dict(
             Bugzilla_api_key=api_key,
             product="Gentoo Linux",
-            component="Stabilization",
+            component=_CATEGORY_META[self.category]["component"],
             severity="enhancement",
             version="unspecified",
             summary=self.bug_summary,
@@ -380,19 +513,21 @@ class DependencyGraph:
         self.nodes: set[GraphNode] = set()
         self.starting_nodes: set[GraphNode] = set()
         self.targets: tuple[package] = ()
+        self.target_arches: dict[package, frozenset[str]] = {}
 
         git_addon = init_addon(GitAddon, options)
         self.added_repo = git_addon.cached_repo(GitAddedRepo)
         self.modified_repo = git_addon.cached_repo(GitModifiedRepo)
         self.stablereq_check = stablereq.StableRequestCheck(self.options, git_addon=git_addon)
 
-    def mk_fake_pkg(self, pkg: package, keywords: set[str]):
+    def mk_fake_pkg(self, pkg: package, keywords: set[str], stable: bool = True):
+        kws = tuple(keywords) if stable else tuple(f"~{kw}" for kw in keywords)
         return FakePkg(
             cpv=pkg.cpvstr,
             eapi=str(pkg.eapi),
             iuse=pkg.iuse,
             repo=pkg.repo,
-            keywords=tuple(keywords),
+            keywords=kws,
             data={attr: str(getattr(pkg, attr.lower())) for attr in pkg.eapi.dep_keys},
         )
 
@@ -426,7 +561,7 @@ class DependencyGraph:
         for group in groups:
             for pkg in stabilization_groups[group]:
                 try:
-                    yield None, pkg
+                    yield None, pkg, frozenset()
                 except (ValueError, IndexError):
                     self.err.write(f"Unable to find match for {pkg.unversioned_atom}")
 
@@ -459,13 +594,13 @@ class DependencyGraph:
             for pkg in pkgs:
                 xml = LocalMetadataXml(pjoin(search_repo.location[0], cat, pkg, "metadata.xml"))
                 if emails.intersection(m.email for m in xml.maintainers):
-                    yield None, parserestrict.parse_match(f"{cat}/{pkg}")
+                    yield None, parserestrict.parse_match(f"{cat}/{pkg}"), frozenset()
 
-    def _find_dependencies(self, pkg: package, keywords: set[str]):
+    def _find_dependencies(self, pkg: package, keywords: set[str], stable: bool = True):
         check = visibility.VisibilityCheck(self.options, profile_addon=self.profile_addon)
 
         issues: dict[str, dict[str, set[atom]]] = defaultdict(partial(defaultdict, set))
-        for res in check.feed(self.mk_fake_pkg(pkg, keywords)):
+        for res in check.feed(self.mk_fake_pkg(pkg, keywords, stable=stable)):
             if isinstance(res, visibility.NonsolvableDeps):
                 for dep in res.deps:
                     dep: atom = atom(dep).no_usedeps
@@ -502,11 +637,11 @@ class DependencyGraph:
                             )
                 yield from results.items()
 
-    def load_targets(self, targets: list[tuple[str, str]]):
+    def load_targets(self, targets: list[tuple[str, object, frozenset[str]]]):
         result = []
         search_repo = self.options.search_repo
         masked = packages.OrRestriction(*self.options.search_repo.pkg_masks)
-        for _, target in targets:
+        for _, target, arches in targets:
             try:
                 pkgset = search_repo.match(target)
                 if self.options.filter_stablereqs:
@@ -523,47 +658,121 @@ class DependencyGraph:
                         self.err.reset,
                     )
                     continue
-                result.append(self.find_best_match([target], pkgset, False))
+                match = self.find_best_match([target], pkgset, False)
+                result.append(match)
+                if arches:
+                    self.target_arches[match] = arches
             except (ValueError, IndexError):
                 bugs.error(f"Restriction {target} has no match in repository", status=3)
         self.targets = tuple(result)
 
-    def build_full_graph(self):
-        check_nodes = [(pkg, set(), "") for pkg in self.targets]
-
-        vertices: dict[package, GraphNode] = {}
-        edges = []
-        while len(check_nodes):
-            pkg, keywords, reason = check_nodes.pop(0)
-            if pkg in vertices:
-                vertices[pkg].pkgs[0][1].update(keywords)
-                continue
-
-            pkg_has_stable = any(x[0] not in "-~" for x in pkg.keywords)
-            keywords.update(_get_suggested_keywords(self.options.repo, pkg))
-            if pkg_has_stable and not keywords:  # package already done
-                self.out.write(f"Nothing to stable for {pkg.unversioned_atom}")
-                continue
-            assert keywords, (
-                f"no keywords for {pkg.versioned_atom}, currently unsupported by tool: https://github.com/pkgcore/pkgdev/issues/123"
+    def _reject_masked_keywords(self, pkg: package, arches: set[str], reason: str):
+        all_masked = "-*" in pkg.keywords
+        masked = sorted(
+            a
+            for a in arches
+            if f"-{a}" in pkg.keywords
+            or (all_masked and a not in pkg.keywords and f"~{a}" not in pkg.keywords)
+        )
+        if masked:
+            origin = f" (required by {reason})" if reason else ""
+            via = "-*" if all_masked else ", ".join("-" + a for a in masked)
+            bugs.error(
+                f"{pkg.versioned_atom} masks keyword(s) {', '.join(masked)} via "
+                f"{via}{origin}; refusing to file a keywording request, the mask must "
+                f"be removed manually first",
+                status=3,
             )
-            self.nodes.add(new_node := GraphNode(((pkg, keywords),)))
-            vertices[pkg] = new_node
+
+    def build_full_graph(self):
+        STABLEREQ, KEYWORDREQ = NodeCategory.STABLEREQ, NodeCategory.KEYWORDREQ
+        check_nodes = [
+            (pkg, set(self.target_arches.get(pkg, ())), self.options.category, "")
+            for pkg in self.targets
+        ]
+
+        vertices: dict[tuple[package, NodeCategory], GraphNode] = {}
+        edges = []
+
+        def explore_deps(pkg: package, arches: set[str], category: NodeCategory):
+            """Queue the dependencies of ``pkg`` that are unsolvable on ``arches``."""
+            for dep, dep_arches in self._find_dependencies(
+                pkg, arches, stable=category is STABLEREQ
+            ):
+                if category is STABLEREQ:
+                    # the dep must become stable on dep_arches
+                    edges.append(((pkg, STABLEREQ), (dep, STABLEREQ)))
+                    check_nodes.append((dep, set(dep_arches), STABLEREQ, str(pkg.versioned_atom)))
+                    # arches the dep isn't keyworded on at all must be keyworded first;
+                    # chain dep-stablereq -> dep-keywordreq
+                    keyword_needed = {
+                        a
+                        for a in dep_arches
+                        if a not in dep.keywords and f"~{a}" not in dep.keywords
+                    }
+                    if keyword_needed:
+                        edges.append(((dep, STABLEREQ), (dep, KEYWORDREQ)))
+                        check_nodes.append(
+                            (dep, set(keyword_needed), KEYWORDREQ, str(pkg.versioned_atom))
+                        )
+                else:
+                    edges.append(((pkg, KEYWORDREQ), (dep, KEYWORDREQ)))
+                    check_nodes.append((dep, set(dep_arches), KEYWORDREQ, str(pkg.versioned_atom)))
+
+        while len(check_nodes):
+            pkg, keywords, category, reason = check_nodes.pop(0)
+            if (pkg, category) in vertices:
+                # already visited: add any genuinely new arches and explore their deps
+                existing = vertices[(pkg, category)].pkgs[0][1]
+                if new_arches := keywords - existing:
+                    if category is KEYWORDREQ:
+                        self._reject_masked_keywords(pkg, new_arches, reason)
+                    existing.update(new_arches)
+                    explore_deps(pkg, new_arches, category)
+                continue
+
+            streq = category is STABLEREQ
+            verb = _CATEGORY_META[category]["verb"]
+            if streq:
+                keywords.update(_get_suggested_keywords(self.options.repo, pkg, streq=True))
+                if not keywords:
+                    # nothing left to stabilize (already stable or never keyworded)
+                    self.out.write(f"Nothing to stable for {pkg.unversioned_atom}")
+                    continue
+            else:
+                # explicit (command line) or dependency-driven arches are authoritative;
+                # only fall back to the other-versions heuristic when none were given
+                if not keywords:
+                    keywords.update(_get_suggested_keywords(self.options.repo, pkg, streq=False))
+                if not keywords:
+                    # keywordreq with no derivable arches: the user must specify them
+                    bugs.error(
+                        f"no keywords to add for {pkg.versioned_atom}; specify arches "
+                        f"explicitly on the command line, e.g. '{pkg.unversioned_atom} <arch>...'",
+                        status=3,
+                    )
+                self._reject_masked_keywords(pkg, keywords, reason)
+            self.nodes.add(new_node := GraphNode(((pkg, keywords),), category=category))
+            vertices[(pkg, category)] = new_node
             if reason:
                 reason = f" [added for {reason}]"
             self.out.write(
-                f"Checking {pkg.versioned_atom} on {' '.join(sort_keywords(keywords))!r}{reason}"
+                f"Checking {pkg.versioned_atom} to {verb} on "
+                f"{' '.join(sort_keywords(keywords))!r}{reason}"
             )
             self.out.flush()
 
-            for dep, keywords in self._find_dependencies(pkg, keywords):
-                edges.append((pkg, dep))
-                check_nodes.append((dep, keywords, str(pkg.versioned_atom)))
+            explore_deps(pkg, keywords, category)
 
         for src, dst in edges:
-            vertices[src].edges.add(vertices[dst])
+            if (src_node := vertices.get(src)) is not None and (
+                dst_node := vertices.get(dst)
+            ) is not None:
+                src_node.edges.add(dst_node)
         self.starting_nodes = {
-            vertices[starting_node] for starting_node in self.targets if starting_node in vertices
+            vertices[(starting_node, self.options.category)]
+            for starting_node in self.targets
+            if (starting_node, self.options.category) in vertices
         }
 
     def output_dot(self, dot_file: str):
@@ -590,6 +799,7 @@ class DependencyGraph:
                 continue  # already filed
             toml.write(f"[bug-{bugno}]\n")
             toml.write(f'summary = "{node.bug_summary}"\n')
+            toml.write(f'category = "{_CATEGORY_META[node.category]["suffix"]}"\n')
             toml.write(f"cc_arches = {str(node.should_cc_arches(self.auto_cc_arches)).lower()}\n")
             if node_depends := ", ".join(
                 (f'"bug-{reverse_bugs[dep]}"' if dep.bugno is None else str(dep.bugno))
@@ -637,14 +847,19 @@ class DependencyGraph:
                 for pkg, keywords in data_node.items()
                 if pkg.startswith("=")
             )
-            new_bugs[node_name] = GraphNode(pkgs)
+            category = _CATEGORY_BY_SUFFIX.get(
+                data_node.get("category", "stablereq"), NodeCategory.STABLEREQ
+            )
+            new_bugs[node_name] = GraphNode(pkgs, category=category)
         for node_name, data_node in data.items():
             new_bugs[node_name].summary = data_node.get("summary", "")
             new_bugs[node_name].cc_arches = data_node.get("cc_arches", None)
             new_bugs[node_name].obsoletes = set(data_node.get("obsoletes", ()))
             for dep in data_node.get("depends", ()):
                 if isinstance(dep, int):
-                    new_bugs[node_name].edges.add(new_bugs.setdefault(dep, GraphNode((), dep)))
+                    new_bugs[node_name].edges.add(
+                        new_bugs.setdefault(dep, GraphNode((), bugno=dep))
+                    )
                 elif new_bugs.get(dep) is not None:
                     new_bugs[node_name].edges.add(new_bugs[dep])
                 else:
@@ -653,10 +868,14 @@ class DependencyGraph:
         self.starting_nodes = {node for node in self.nodes if not node.edges}
 
     def merge_nodes(self, nodes: tuple[GraphNode, ...]) -> GraphNode:
+        categories = {node.category for node in nodes}
+        assert len(categories) == 1, f"refusing to merge nodes of mixed categories: {categories}"
         self.nodes.difference_update(nodes)
         is_start = bool(self.starting_nodes.intersection(nodes))
         self.starting_nodes.difference_update(nodes)
-        new_node = GraphNode(list(chain.from_iterable(n.pkgs for n in nodes)))
+        new_node = GraphNode(
+            list(chain.from_iterable(n.pkgs for n in nodes)), category=categories.pop()
+        )
 
         for node in nodes:
             new_node.edges.update(node.edges.difference(nodes))
@@ -690,6 +909,12 @@ class DependencyGraph:
             assert starting_node in self.nodes
             while cycle := self._find_cycles(tuple(self.nodes), [starting_node]):
                 self.out.write("Found cycle: ", " -> ".join(str(n) for n in cycle))
+                if len({node.category for node in cycle}) != 1:
+                    bugs.error(
+                        "found a dependency cycle spanning both keywording and "
+                        f"stabilization, which cannot be merged: {' -> '.join(map(str, cycle))}",
+                        status=3,
+                    )
                 start_nodes.difference_update(cycle)
                 new_node = self.merge_nodes(cycle)
                 if starting_node not in self.nodes:
@@ -721,6 +946,10 @@ class DependencyGraph:
                 orig = next(iter(origs))
                 if orig.bugno is not None:
                     continue
+                if orig.category is not node.category:
+                    # never fold a keywordreq companion into its stablereq parent: that
+                    # would put ~arch keywords into a Stabilization bug
+                    continue
                 self.out.write(f"Merging {node} into {orig}")
                 self.merge_nodes((orig, node))
                 found_someone = True
@@ -733,7 +962,9 @@ class DependencyGraph:
             mergable = tuple(
                 node
                 for node in self.nodes
-                if node.bugno is None and any(restrict.match(pkg) for pkg, _ in node.pkgs)
+                if node.bugno is None
+                and node.category is NodeCategory.STABLEREQ
+                and any(restrict.match(pkg) for pkg, _ in node.pkgs)
             )
             if mergable:
                 if missing_pkgs := pkgs - all_pkgs:
@@ -762,8 +993,8 @@ class DependencyGraph:
             params = urlencode(
                 {
                     "Bugzilla_api_key": api_key,
-                    "include_fields": "id,cf_stabilisation_atoms,summary",
-                    "component": "Stabilization",
+                    "include_fields": "id,cf_stabilisation_atoms,summary,component",
+                    "component": ["Stabilization", "Keywording"],
                     "resolution": "---",
                     "f1": "cf_stabilisation_atoms",
                     "o1": "anywords",
@@ -798,6 +1029,8 @@ class DependencyGraph:
                 )
             )
             for node in self.nodes:
+                if bug.get("component") != _CATEGORY_META[node.category]["component"]:
+                    continue
                 if node.bugno is None and all(bug_match.match(pkg[0]) for pkg in node.pkgs):
                     is_exact_match = all(exact_match.match(pkg[0]) for pkg in node.pkgs)
                     self.out.write(
@@ -841,7 +1074,8 @@ def _load_from_stdin(out: Formatter):
         out.warn("No packages were specified, reading from stdin...")
         for line in sys.stdin.readlines():
             if line := line.split("#", 1)[0].strip():
-                yield line, parserestrict.parse_match(line)
+                atom_str, *arches = line.split()
+                yield atom_str, parserestrict.parse_match(atom_str), frozenset(arches)
         # reassign stdin to allow interactivity (currently only works for unix)
         sys.stdin = open("/dev/tty")
     else:
@@ -922,13 +1156,18 @@ def main(options, out: Formatter, err: Formatter):
             out.write(out.fg("green"), f"Dot file written to {options.dot}", out.reset)
             out.flush()
 
-    bugs_count = len(tuple(node for node in d.nodes if node.bugno is None))
-    if bugs_count == 0:
+    pending = [node for node in d.nodes if node.bugno is None]
+    if not pending:
         out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
         return 1
+    counts = {
+        meta["suffix"]: sum(node.category is category for node in pending)
+        for category, meta in _CATEGORY_META.items()
+    }
+    summary = ", ".join(f"{count} {suffix}" for suffix, count in counts.items() if count)
 
     if not userquery(
-        f"Continue and create {bugs_count} stablereq bugs?", out, err, default_answer=False
+        f"Continue and create {len(pending)} bugs ({summary})?", out, err, default_answer=False
     ):
         return 1
 

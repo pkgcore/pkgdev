@@ -2,6 +2,15 @@
 Release Notes
 =============
 
+pkgdev 0.2.16 (unreleased)
+--------------------------
+
+**pkgdev bugs:**
+
+- bugs: support filing keywording (``KEYWORDREQ``) bugs and detecting required
+  keywording of stablereq dependencies, chaining the stable bug to depend on the
+  keyword bug (Arthur Zamarin, #123)
+
 pkgdev 0.2.15 (2026-05-15)
 --------------------------
 
