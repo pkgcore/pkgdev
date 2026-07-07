@@ -639,7 +639,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <stabilize-allarches/>
                         </pkgmetadata>
@@ -717,7 +717,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
@@ -749,7 +749,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
@@ -771,7 +771,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
@@ -789,7 +789,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                         </pkgmetadata>
                     """
@@ -803,7 +803,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
@@ -821,7 +821,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
@@ -840,7 +840,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
@@ -858,7 +858,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
@@ -880,7 +880,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
@@ -901,7 +901,7 @@ class TestPkgdevCommit:
                 textwrap.dedent(
                     """\
                         <?xml version="1.0" encoding="UTF-8"?>
-                        <!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+                        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
                         <pkgmetadata>
                             <maintainer type="person">
                                 <email>person@email.com</email>
