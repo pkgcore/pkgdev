@@ -28,9 +28,9 @@ from pkgcore.ebuild.ebuild_src import package
 from pkgcore.ebuild.errors import MalformedAtom
 from pkgcore.ebuild.misc import sort_keywords
 from pkgcore.ebuild.repo_objs import LocalMetadataXml, ProjectsXml
+from pkgcore.package.mutated import MutatedPkg
 from pkgcore.repository import multiplex
 from pkgcore.restrictions import boolean, packages, values
-from pkgcore.test.misc import FakePkg
 from pkgcore.util import commandline, parserestrict
 from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
@@ -522,14 +522,7 @@ class DependencyGraph:
 
     def mk_fake_pkg(self, pkg: package, keywords: set[str], stable: bool = True):
         kws = tuple(keywords) if stable else tuple(f"~{kw}" for kw in keywords)
-        return FakePkg(
-            cpv=pkg.cpvstr,
-            eapi=str(pkg.eapi),
-            iuse=pkg.iuse,
-            repo=pkg.repo,
-            keywords=kws,
-            data={attr: str(getattr(pkg, attr.lower())) for attr in pkg.eapi.dep_keys},
-        )
+        return MutatedPkg(pkg, {"keywords": kws})
 
     def find_best_match(self, restrict, pkgset: list[package], prefer_semi_stable=True) -> package:
         restrict = boolean.AndRestriction(
