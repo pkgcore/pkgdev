@@ -11,6 +11,13 @@ pkgdev 0.2.16 (unreleased)
   keywording of stablereq dependencies, chaining the stable bug to depend on the
   keyword bug (Arthur Zamarin, #123)
 
+**pkgdev tatt:**
+
+- tatt: ``--use-combos`` now produces genuinely different USE combinations.
+  Flags unconstrained by ``REQUIRED_USE`` were left to the constraint solver,
+  which assigns them last, so every combination after the first differed only
+  in a handful of them (Arthur Zamarin)
+
 pkgdev 0.2.15 (2026-05-15)
 --------------------------
 

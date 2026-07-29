@@ -9,7 +9,7 @@ from itertools import islice
 from pathlib import Path
 
 from pkgcore.restrictions import boolean, packages, values
-from pkgcore.restrictions.required_use import find_constraint_satisfaction
+from pkgcore.restrictions.required_use import find_constraint_satisfaction, iter_flags
 from pkgcore.util import commandline
 from pkgcore.util import packages as pkgutils
 from snakeoil.cli import arghparse
@@ -300,21 +300,54 @@ def _build_job(namespace, pkg, is_test: bool):
             use for use in enabled.union(default_on_iuse) if use.startswith(ignore_prefixes)
         )
 
-    solutions = find_constraint_satisfaction(
-        pkg.required_use,
-        iuse.union(immutable),
-        force_true,
-        force_false,
-        frozenset(prefer_true),
-    )
-    for solution in solutions:
-        use_flags, use_expand = _groupby_use_expand(solution, use_expand_prefixes, enabled, iuse)
-        use_flags.difference_update({"test"})  # test is handled separately by PM
-        yield (
-            " ".join(use_flags)
-            + " "
-            + " ".join(f"{var.upper()}: {' '.join(vals)}" for var, vals in use_expand.items())
-        )
+    # only flags REQUIRED_USE mentions need solving; the rest can't violate it
+    constrained = frozenset(iter_flags(pkg.required_use))
+    unconstrained = iuse.difference(constrained)
+    prefer_true = frozenset(prefer_true)
+    randomize = namespace.random_use in "rR"
+    keep_preferred = ignore_prefixes if randomize else ()
+
+    def resolve_unconstrained():
+        """Values for the flags kept out of the problem"""
+        for flag in unconstrained:
+            if flag in force_true:
+                yield flag, True
+            elif flag in force_false:
+                yield flag, False
+            elif randomize and not flag.startswith(keep_preferred):
+                yield flag, random.choice((True, False))
+            else:
+                yield flag, flag in prefer_true
+
+    wanted = max(namespace.use_combos, 1)
+    produced = 0
+    while produced < wanted:
+        exhausted = True
+        for solution in find_constraint_satisfaction(
+            pkg.required_use,
+            constrained.union(immutable),
+            force_true,
+            force_false,
+            prefer_true,
+        ):
+            exhausted = False
+            solution.update(resolve_unconstrained())
+            use_flags, use_expand = _groupby_use_expand(
+                solution, use_expand_prefixes, enabled, iuse
+            )
+            use_flags.difference_update({"test"})  # test is handled separately by PM
+            yield (
+                " ".join(use_flags)
+                + " "
+                + " ".join(f"{var.upper()}: {' '.join(vals)}" for var, vals in use_expand.items())
+            )
+            produced += 1
+            if produced >= wanted:
+                return
+        # replay the combinations if REQUIRED_USE admits fewer than asked for,
+        # redrawing the unconstrained flags each pass
+        if exhausted or not randomize:
+            return
 
 
 def _build_jobs(namespace, pkgs):

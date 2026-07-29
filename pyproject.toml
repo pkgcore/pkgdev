@@ -29,7 +29,7 @@ dynamic = ["version"]
 
 dependencies = [
 	"snakeoil~=0.11.1",
-	"pkgcore~=0.12.34",
+	"pkgcore@git+https://github.com/pkgcore/pkgcore.git#master",
 	"pkgcheck~=0.10.40",
 ]
 
@@ -82,4 +82,3 @@ testpaths = ["tests"]
 
 [tool.vulture]
 paths = ["src/pkgdev/"]
-
