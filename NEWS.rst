@@ -11,6 +11,10 @@ pkgdev 0.2.16 (unreleased)
   keywording of stablereq dependencies, chaining the stable bug to depend on the
   keyword bug (Arthur Zamarin, #123)
 
+- bugs: fix ``--edit-graph`` silently dropping the bug for the requested
+  target when one of its dependencies already had an open bug (Arthur
+  Zamarin, #218)
+
 **pkgdev tatt:**
 
 - tatt: ``--use-combos`` now produces genuinely different USE combinations.

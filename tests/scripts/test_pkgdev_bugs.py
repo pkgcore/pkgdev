@@ -289,3 +289,32 @@ class TestStableKeywordChain:
             bugs.NodeCategory.KEYWORDREQ,
             bugs.NodeCategory.STABLEREQ,
         }
+
+    def test_edit_graph_roundtrip_preserves_starting_node(self, repo):
+        # regression test for https://github.com/pkgcore/pkgdev/issues/218 :
+        # a target node with an already-filed dependency must remain a starting
+        # node after an output_graph_toml() -> load_graph_toml() round trip
+        repo.create_ebuild("cat/a-1", KEYWORDS=["~amd64"])
+        repo.create_ebuild("cat/b-1", KEYWORDS=["~amd64"])
+        a = max(repo.itermatch(atom("=cat/a-1")))
+        b = max(repo.itermatch(atom("=cat/b-1")))
+
+        graph = self._mk_graph(repo)
+        graph.options = SimpleNamespace(repo=repo, search_repo=repo)
+        graph.auto_cc_arches = frozenset()
+        graph.modified_repo = SimpleNamespace(itermatch=lambda *a, **k: iter(()))
+        graph.added_repo = SimpleNamespace(itermatch=lambda *a, **k: iter(()))
+
+        # dep already has a bug filed; target doesn't yet
+        dep_node = bugs.GraphNode(((b, {"amd64"}),), bugno=100)
+        target_node = bugs.GraphNode(((a, {"amd64"}),))
+        target_node.edges.add(dep_node)
+        graph.nodes = {target_node, dep_node}
+        graph.starting_nodes = {target_node}
+
+        toml_file = graph.output_graph_toml()
+        graph.load_graph_toml(toml_file.name)
+
+        assert len(graph.starting_nodes) == 1
+        (loaded_target,) = graph.starting_nodes
+        assert {p.cpvstr for p, _ in loaded_target.pkgs} == {"cat/a-1"}

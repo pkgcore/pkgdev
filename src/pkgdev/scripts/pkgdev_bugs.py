@@ -797,6 +797,8 @@ class DependencyGraph:
             toml.write(f'summary = "{node.bug_summary}"\n')
             toml.write(f'category = "{_CATEGORY_META[node.category]["suffix"]}"\n')
             toml.write(f"cc_arches = {str(node.should_cc_arches(self.auto_cc_arches)).lower()}\n")
+            if node in self.starting_nodes:
+                toml.write("starting = true\n")
             if node_depends := ", ".join(
                 (f'"bug-{reverse_bugs[dep]}"' if dep.bugno is None else str(dep.bugno))
                 for dep in node.edges
@@ -861,7 +863,11 @@ class DependencyGraph:
                 else:
                     raise ValueError(f"[{node_name}]['depends']: unknown dependency {dep!r}")
         self.nodes = set(new_bugs.values())
-        self.starting_nodes = {node for node in self.nodes if not node.edges}
+        self.starting_nodes = {
+            new_bugs[node_name]
+            for node_name, data_node in data.items()
+            if data_node.get("starting", False)
+        }
 
     def merge_nodes(self, nodes: tuple[GraphNode, ...]) -> GraphNode:
         categories = {node.category for node in nodes}
