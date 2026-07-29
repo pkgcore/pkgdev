@@ -274,10 +274,10 @@ stablereq.StableRequestCheck.mangle_argparser(bugs)
 def _validate_args(namespace, attr):
     _determine_cwd_repo(bugs, namespace)
     setattr(namespace, attr, namespace.repo)
-    setattr(namespace, "verbosity", 1)
-    setattr(namespace, "search_repo", search_repo := multiplex.tree(*namespace.repo.trees))
-    setattr(namespace, "gentoo_repo", search_repo)
-    setattr(namespace, "query_caching_freq", "package")
+    namespace.verbosity = 1
+    namespace.search_repo = (search_repo := multiplex.tree(*namespace.repo.trees))
+    namespace.gentoo_repo = search_repo
+    namespace.query_caching_freq = "package"
 
 
 @bugs.bind_final_check
@@ -319,7 +319,7 @@ def parse_atom(pkg: str):
 
 
 class GraphNode:
-    __slots__ = ("pkgs", "category", "edges", "bugno", "summary", "cc_arches", "obsoletes")
+    __slots__ = ("bugno", "category", "cc_arches", "edges", "obsoletes", "pkgs", "summary")
 
     def __init__(
         self,
@@ -591,6 +591,10 @@ class DependencyGraph:
 
     def _find_dependencies(self, pkg: package, keywords: set[str], stable: bool = True):
         check = visibility.VisibilityCheck(self.options, profile_addon=self.profile_addon)
+        # the fake pkgs fed here aren't parsed ebuild sources (no .tree), so skip the
+        # optfeature check, which requires a tree-sitter parse tree to run
+        if hasattr(check, "check_optfeature"):
+            check.check_optfeature = lambda pkg: iter(())
 
         issues: dict[str, dict[str, set[atom]]] = defaultdict(partial(defaultdict, set))
         for res in check.feed(self.mk_fake_pkg(pkg, keywords, stable=stable)):
@@ -777,8 +781,7 @@ class DependencyGraph:
                 if node.bugno is not None:
                     node_text += f"\\nbug #{node.bugno}"
                 dot.write(f'\t{node.dot_edge}[label="{node_text}"];\n')
-                for other in node.edges:
-                    dot.write(f"\t{node.dot_edge} -> {other.dot_edge};\n")
+                dot.writelines(f"\t{node.dot_edge} -> {other.dot_edge};\n" for other in node.edges)
             dot.write("}\n")
             dot.close()
 
