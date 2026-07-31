@@ -29,8 +29,8 @@ dynamic = ["version"]
 
 dependencies = [
 	"snakeoil~=0.11.1",
-	"pkgcore@git+https://github.com/pkgcore/pkgcore.git#master",
-	"pkgcheck~=0.10.40",
+	"pkgcore~=0.12.37",
+	"pkgcheck~=0.10.42",
 ]
 
 [project.optional-dependencies]
