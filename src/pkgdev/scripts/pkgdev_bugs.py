@@ -1,8 +1,6 @@
 """Automatic bugs filer"""
 
 import contextlib
-import enum
-import json
 import os
 import shlex
 import subprocess
@@ -15,7 +13,6 @@ from datetime import datetime
 from functools import partial
 from itertools import chain
 from os.path import join as pjoin
-from urllib.parse import urlencode
 
 from pkgcheck import const as pkgcheck_const
 from pkgcheck.addons import ArchesAddon, init_addon
@@ -23,6 +20,9 @@ from pkgcheck.addons.git import GitAddedRepo, GitAddon, GitModifiedRepo
 from pkgcheck.addons.profiles import ProfileAddon
 from pkgcheck.checks import stablereq, visibility
 from pkgcheck.scripts import argparse_actions
+from pkgcore.bugzilla import BugCategory, BugQuery, BugUpdate, Bugzilla, NewBug, PackageList
+from pkgcore.bugzilla.apikey import BugzillaApiKey
+from pkgcore.bugzilla.changes import summarise
 from pkgcore.ebuild.atom import atom
 from pkgcore.ebuild.ebuild_src import package
 from pkgcore.ebuild.errors import MalformedAtom
@@ -37,30 +37,11 @@ from snakeoil.cli.input import userquery
 from snakeoil.data_source import bytes_data_source
 from snakeoil.formatters import Formatter
 
+from .. import __version__
 from ..cli import ArgumentParser
-from .argparsers import BugzillaApiKey, _determine_cwd_repo, cwd_repo_argparser
+from .argparsers import _determine_cwd_repo, cwd_repo_argparser
 
-
-class NodeCategory(enum.Enum):
-    KEYWORDREQ = enum.auto()
-    STABLEREQ = enum.auto()
-
-
-# per-category strings: Bugzilla component, description verb, summary suffix
-_CATEGORY_META = {
-    NodeCategory.STABLEREQ: {
-        "component": "Stabilization",
-        "verb": "stabilize",
-        "suffix": "stablereq",
-    },
-    NodeCategory.KEYWORDREQ: {
-        "component": "Keywording",
-        "verb": "keyword",
-        "suffix": "keywordreq",
-    },
-}
-
-_CATEGORY_BY_SUFFIX = {meta["suffix"]: category for category, meta in _CATEGORY_META.items()}
+_CATEGORY_BY_SUFFIX = {x.summary_suffix: x for x in BugCategory}
 
 
 class StoreTargetArches(commandline.StoreTarget):
@@ -284,7 +265,8 @@ def _validate_args(namespace, attr):
 def _validate_args(parser, namespace):
     if namespace.keywording and namespace.filter_stablereqs:
         parser.error("--keywording is incompatible with --filter-stablereqs")
-    namespace.category = NodeCategory.KEYWORDREQ if namespace.keywording else NodeCategory.STABLEREQ
+    namespace.category = BugCategory.KEYWORDREQ if namespace.keywording else BugCategory.STABLEREQ
+    namespace.bugzilla = Bugzilla(namespace.api_key, user_agent=f"pkgdev-bugs/{__version__}")
 
 
 def _get_suggested_keywords(repo, pkg: package, streq: bool = True):
@@ -324,7 +306,7 @@ class GraphNode:
     def __init__(
         self,
         pkgs: tuple[tuple[package, set[str]], ...],
-        category: NodeCategory = NodeCategory.STABLEREQ,
+        category: BugCategory = BugCategory.STABLEREQ,
         bugno=None,
     ):
         self.pkgs = pkgs
@@ -337,7 +319,7 @@ class GraphNode:
 
     @property
     def is_keywordreq(self):
-        return self.category is NodeCategory.KEYWORDREQ
+        return self.category is BugCategory.KEYWORDREQ
 
     def __eq__(self, __o: object):
         return self is __o
@@ -384,18 +366,12 @@ class GraphNode:
                 keywords.add("*")
 
     @property
+    def package_list(self) -> PackageList:
+        return PackageList("\n".join(self.lines()))
+
+    @property
     def bug_summary(self):
-        if self.summary:
-            return self.summary
-        suffix = _CATEGORY_META[self.category]["suffix"]
-        if self.is_keywordreq:
-            names = [str(pkg.unversioned_atom) for pkg, _ in self.pkgs]
-        else:
-            names = [pkg.versioned_atom.cpvstr for pkg, _ in self.pkgs]
-        summary = f"{', '.join(names)}: {suffix}"
-        if len(summary) > 90 and len(self.pkgs) > 1:
-            return f"{names[0]} and friends: {suffix}"
-        return summary
+        return self.summary or summarise(self.package_list, self.category)
 
     @property
     def node_maintainers(self):
@@ -413,7 +389,7 @@ class GraphNode:
 
     def file_bug(
         self,
-        api_key: str,
+        bugzilla: Bugzilla,
         auto_cc_arches: frozenset[str],
         block_bugs: list[int],
         modified_repo: multiplex.tree,
@@ -423,15 +399,9 @@ class GraphNode:
             return self.bugno
         for dep in self.edges:
             if dep.bugno is None:
-                dep.file_bug(api_key, auto_cc_arches, (), modified_repo, observer)
-        maintainers = self.node_maintainers
-        if self.should_cc_arches(auto_cc_arches):
-            keywords = ["CC-ARCHES"]
-        else:
-            keywords = []
-        maintainers = tuple(maintainers) or ("maintainer-needed@gentoo.org",)
+                dep.file_bug(bugzilla, auto_cc_arches, (), modified_repo, observer)
 
-        description = [f"Please {_CATEGORY_META[self.category]['verb']}", ""]
+        description = [f"Please {self.category.verb}", ""]
         if modified_repo is not None:
             for pkg, _ in self.pkgs:
                 with contextlib.suppress(StopIteration):
@@ -442,63 +412,28 @@ class GraphNode:
                         f" {pkg.versioned_atom.cpvstr}: no change for {days_old} days, since {modified:%Y-%m-%d}"
                     )
 
-        request_data = dict(
-            Bugzilla_api_key=api_key,
-            product="Gentoo Linux",
-            component=_CATEGORY_META[self.category]["component"],
-            severity="enhancement",
-            version="unspecified",
-            summary=self.bug_summary,
-            description="\n".join(description).strip(),
-            keywords=keywords,
-            cf_stabilisation_atoms="\n".join(self.lines()),
-            assigned_to=maintainers[0],
-            cc=maintainers[1:],
-            depends_on=list({dep.bugno for dep in self.edges}),
-            blocks=block_bugs,
+        self.bugno = bugzilla.create(
+            NewBug.arch_request(
+                self.category,
+                self.package_list,
+                maintainers=tuple(self.node_maintainers),
+                cc_arches=self.should_cc_arches(auto_cc_arches),
+                summary=self.bug_summary,
+                description="\n".join(description).strip(),
+                depends_on=tuple({dep.bugno for dep in self.edges}),
+                blocks=tuple(block_bugs),
+            )
         )
-        request = urllib.Request(
-            url="https://bugs.gentoo.org/rest/bug",
-            data=json.dumps(request_data).encode("utf-8"),
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-        )
-        with urllib.urlopen(request, timeout=30) as response:
-            reply = json.loads(response.read().decode("utf-8"))
-        self.bugno = int(reply["id"])
         if observer is not None:
             observer(self)
-        self.obsolete_bugs(api_key)
+        self.obsolete_bugs(bugzilla)
         return self.bugno
 
-    def obsolete_bugs(self, api_key: str):
+    def obsolete_bugs(self, bugzilla: Bugzilla):
         if not self.obsoletes:
             return
         assert self.bugno is not None
-
-        # Batch all bug IDs into a single PUT request
-        request_data = dict(
-            Bugzilla_api_key=api_key,
-            status="RESOLVED",
-            resolution="OBSOLETE",
-            see_also={"add": [f"https://bugs.gentoo.org/{self.bugno}"]},
-        )
-        if len(self.obsoletes) > 1:
-            request_data["ids"] = list(self.obsoletes)
-        request = urllib.Request(
-            url=f"https://bugs.gentoo.org/rest/bug/{','.join(map(str, self.obsoletes))}",
-            data=json.dumps(request_data).encode("utf-8"),
-            method="PUT",
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            },
-        )
-        with urllib.urlopen(request, timeout=30) as response:
-            json.loads(response.read().decode("utf-8"))
+        bugzilla.update(sorted(self.obsoletes), BugUpdate.obsoleted_by(self.bugno))
 
 
 class DependencyGraph:
@@ -682,16 +617,16 @@ class DependencyGraph:
             )
 
     def build_full_graph(self):
-        STABLEREQ, KEYWORDREQ = NodeCategory.STABLEREQ, NodeCategory.KEYWORDREQ
+        STABLEREQ, KEYWORDREQ = BugCategory.STABLEREQ, BugCategory.KEYWORDREQ
         check_nodes = [
             (pkg, set(self.target_arches.get(pkg, ())), self.options.category, "")
             for pkg in self.targets
         ]
 
-        vertices: dict[tuple[package, NodeCategory], GraphNode] = {}
+        vertices: dict[tuple[package, BugCategory], GraphNode] = {}
         edges = []
 
-        def explore_deps(pkg: package, arches: set[str], category: NodeCategory):
+        def explore_deps(pkg: package, arches: set[str], category: BugCategory):
             """Queue the dependencies of ``pkg`` that are unsolvable on ``arches``."""
             for dep, dep_arches in self._find_dependencies(
                 pkg, arches, stable=category is STABLEREQ
@@ -729,7 +664,7 @@ class DependencyGraph:
                 continue
 
             streq = category is STABLEREQ
-            verb = _CATEGORY_META[category]["verb"]
+            verb = category.verb
             if streq:
                 keywords.update(_get_suggested_keywords(self.options.repo, pkg, streq=True))
                 if not keywords:
@@ -795,7 +730,7 @@ class DependencyGraph:
                 continue  # already filed
             toml.write(f"[bug-{bugno}]\n")
             toml.write(f'summary = "{node.bug_summary}"\n')
-            toml.write(f'category = "{_CATEGORY_META[node.category]["suffix"]}"\n')
+            toml.write(f'category = "{node.category.summary_suffix}"\n')
             toml.write(f"cc_arches = {str(node.should_cc_arches(self.auto_cc_arches)).lower()}\n")
             if node in self.starting_nodes:
                 toml.write("starting = true\n")
@@ -846,7 +781,7 @@ class DependencyGraph:
                 if pkg.startswith("=")
             )
             category = _CATEGORY_BY_SUFFIX.get(
-                data_node.get("category", "stablereq"), NodeCategory.STABLEREQ
+                data_node.get("category", "stablereq"), BugCategory.STABLEREQ
             )
             new_bugs[node_name] = GraphNode(pkgs, category=category)
         for node_name, data_node in data.items():
@@ -965,7 +900,7 @@ class DependencyGraph:
                 node
                 for node in self.nodes
                 if node.bugno is None
-                and node.category is NodeCategory.STABLEREQ
+                and node.category is BugCategory.STABLEREQ
                 and any(restrict.match(pkg) for pkg, _ in node.pkgs)
             )
             if mergable:
@@ -984,66 +919,35 @@ class DependencyGraph:
                 self.merge_nodes(mergable)
         return True
 
-    def scan_existing_bugs(self, api_key: str) -> bool:
-        # Paginate the search request with batches of 100 items to avoid HTTP 414 errors
+    def scan_existing_bugs(self, bugzilla: Bugzilla) -> bool:
         all_packages = list({pkg[0].unversioned_atom for node in self.nodes for pkg in node.pkgs})
-        batch_size = 100
-        all_bugs = []
         has_output = False
 
-        for i in range(0, len(all_packages), batch_size):
-            params = urlencode(
-                {
-                    "Bugzilla_api_key": api_key,
-                    "include_fields": "id,cf_stabilisation_atoms,summary,component",
-                    "component": ["Stabilization", "Keywording"],
-                    "resolution": "---",
-                    "f1": "cf_stabilisation_atoms",
-                    "o1": "anywords",
-                    "v1": all_packages[i : i + batch_size],
-                },
-                doseq=True,
-            )
-            request = urllib.Request(
-                url="https://bugs.gentoo.org/rest/bug?" + params,
-                method="GET",
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                },
-            )
-            with urllib.urlopen(request, timeout=30) as response:
-                reply = json.loads(response.read().decode("utf-8"))
-                all_bugs.extend(reply.get("bugs", []))
+        query = (
+            BugQuery.component(BugCategory.KEYWORDREQ, BugCategory.STABLEREQ)
+            & BugQuery.unresolved()
+            & BugQuery.package_list_any(all_packages)
+        )
+        all_bugs = bugzilla.search(query).values()
 
         for bug in all_bugs:
-            bug_atoms = (
-                parse_atom(line.split(" ", 1)[0]).unversioned_atom
-                for line in map(str.strip, bug["cf_stabilisation_atoms"].splitlines())
-                if line
-            )
-            bug_match = boolean.OrRestriction(*bug_atoms)
-            exact_match = boolean.OrRestriction(
-                *(
-                    parse_atom(line.split(" ", 1)[0])
-                    for line in map(str.strip, bug["cf_stabilisation_atoms"].splitlines())
-                    if line
-                )
-            )
+            bug_atoms = bug.package_list.atoms
+            bug_match = boolean.OrRestriction(*(a.unversioned_atom for a in bug_atoms))
+            exact_match = boolean.OrRestriction(*bug_atoms)
             for node in self.nodes:
-                if bug.get("component") != _CATEGORY_META[node.category]["component"]:
+                if bug.component != node.category.component:
                     continue
                 if node.bugno is None and all(bug_match.match(pkg[0]) for pkg in node.pkgs):
                     is_exact_match = all(exact_match.match(pkg[0]) for pkg in node.pkgs)
                     self.out.write(
                         self.out.fg("yellow"),
-                        f"Found https://bugs.gentoo.org/{bug['id']} for node {node}",
+                        f"Found {bug.url} for node {node}",
                         self.out.reset,
                         " (exact version match)" if is_exact_match else " (atom match)",
                     )
-                    self.out.write(" -> bug summary: ", bug["summary"])
+                    self.out.write(" -> bug summary: ", bug.summary)
                     if is_exact_match:
-                        node.bugno = bug["id"]
+                        node.bugno = bug.id
                     else:
                         if userquery(
                             "Not an exact match. Do you want to obsolete?",
@@ -1051,13 +955,13 @@ class DependencyGraph:
                             self.err,
                             default_answer=False,
                         ):
-                            node.obsoletes.add(bug["id"])
+                            node.obsoletes.add(bug.id)
                         else:
-                            node.bugno = bug["id"]
+                            node.bugno = bug.id
                     has_output = True
         return has_output
 
-    def file_bugs(self, api_key: str, auto_cc_arches: frozenset[str], block_bugs: list[int]):
+    def file_bugs(self, bugzilla: Bugzilla, auto_cc_arches: frozenset[str], block_bugs: list[int]):
         def observe(node: GraphNode):
             self.out.write(
                 f"https://bugs.gentoo.org/{node.bugno} ",
@@ -1068,7 +972,7 @@ class DependencyGraph:
             self.out.flush()
 
         for node in self.starting_nodes:
-            node.file_bug(api_key, auto_cc_arches, block_bugs, self.modified_repo, observe)
+            node.file_bug(bugzilla, auto_cc_arches, block_bugs, self.modified_repo, observe)
 
 
 def _load_from_stdin(out: Formatter):
@@ -1106,7 +1010,7 @@ def main(options, out: Formatter, err: Formatter):
 
     has_output = False
     if userquery("Check for open bugs matching current graph?", out, err, default_answer=False):
-        if d.scan_existing_bugs(options.api_key):
+        if d.scan_existing_bugs(options.bugzilla):
             out.flush()
             has_output = True
 
@@ -1163,8 +1067,8 @@ def main(options, out: Formatter, err: Formatter):
         out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
         return 1
     counts = {
-        meta["suffix"]: sum(node.category is category for node in pending)
-        for category, meta in _CATEGORY_META.items()
+        category.summary_suffix: sum(node.category is category for node in pending)
+        for category in BugCategory
     }
     summary = ", ".join(f"{count} {suffix}" for suffix, count in counts.items() if count)
 
@@ -1175,4 +1079,4 @@ def main(options, out: Formatter, err: Formatter):
 
     disabled, enabled = options.auto_cc_arches
     blocks = list(frozenset(map(int, options.blocks)))
-    d.file_bugs(options.api_key, frozenset(enabled).difference(disabled), blocks)
+    d.file_bugs(options.bugzilla, frozenset(enabled).difference(disabled), blocks)

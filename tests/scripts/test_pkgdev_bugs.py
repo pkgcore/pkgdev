@@ -1,12 +1,10 @@
-import itertools
-import json
 import os
 import textwrap
 from os.path import join as pjoin
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import pytest
+from pkgcore.bugzilla import BugCategory
 from pkgcore.ebuild.atom import atom
 
 from pkgdev.scripts import pkgdev_bugs as bugs
@@ -41,79 +39,61 @@ def mk_repo(repo):
     mk_pkg(repo, "cat/w-0", ["dev3"], RDEPEND="cat/x")
 
 
-class BugsSession:
-    def __init__(self):
-        self.counter = iter(itertools.count(1))
-        self.calls = []
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args): ...
-
-    def read(self):
-        return json.dumps({"id": next(self.counter)}).encode("utf-8")
-
-    def __call__(self, request, *_args, **_kwargs):
-        self.calls.append(json.loads(request.data))
-        return self
-
-
 class TestBugFiling:
-    def test_bug_filing(self, repo):
+    def test_bug_filing(self, repo, bugzilla_cassette):
         mk_repo(repo)
-        session = BugsSession()
+        bugzilla_cassette.creates_bugs()
         pkg = max(repo.itermatch(atom("=cat/u-0")))
-        with patch("pkgdev.scripts.pkgdev_bugs.urllib.urlopen", session):
-            bugs.GraphNode(((pkg, {"*"}),)).file_bug("API", frozenset(), (), None)
-        assert len(session.calls) == 1
-        call = session.calls[0]
+        bugs.GraphNode(((pkg, {"*"}),)).file_bug(
+            bugzilla_cassette.client(api_key="API"), frozenset(), (), None
+        )
+        assert len(bugzilla_cassette.calls) == 1
+        call = bugzilla_cassette.calls[0].body
         assert call["Bugzilla_api_key"] == "API"
         assert call["summary"] == "cat/u-0: stablereq"
         assert call["assigned_to"] == "dev1@gentoo.org"
-        assert not call["cc"]
+        assert "cc" not in call
         assert call["cf_stabilisation_atoms"] == "=cat/u-0 *"
-        assert not call["depends_on"]
+        assert "depends_on" not in call
 
-    def test_bug_filing_maintainer_needed(self, repo):
+    def test_bug_filing_maintainer_needed(self, repo, bugzilla_cassette):
         mk_repo(repo)
-        session = BugsSession()
+        bugzilla_cassette.creates_bugs()
         pkg = max(repo.itermatch(atom("=cat/z-0")))
-        with patch("pkgdev.scripts.pkgdev_bugs.urllib.urlopen", session):
-            bugs.GraphNode(((pkg, {"*"}),)).file_bug("API", frozenset(), (), None)
-        assert len(session.calls) == 1
-        call = session.calls[0]
+        bugs.GraphNode(((pkg, {"*"}),)).file_bug(
+            bugzilla_cassette.client(api_key="API"), frozenset(), (), None
+        )
+        assert len(bugzilla_cassette.calls) == 1
+        call = bugzilla_cassette.calls[0].body
         assert call["assigned_to"] == "maintainer-needed@gentoo.org"
-        assert not call["cc"]
+        assert "cc" not in call
 
-    def test_bug_filing_multiple_pkgs(self, repo):
+    def test_bug_filing_multiple_pkgs(self, repo, bugzilla_cassette):
         mk_repo(repo)
-        session = BugsSession()
+        bugzilla_cassette.creates_bugs()
         pkgX = max(repo.itermatch(atom("=cat/x-0")))
         pkgY = max(repo.itermatch(atom("=cat/y-0")))
         pkgZ = max(repo.itermatch(atom("=cat/z-0")))
         dep = bugs.GraphNode((), bugno=2)
         node = bugs.GraphNode(((pkgX, {"*"}), (pkgY, {"*"}), (pkgZ, {"*"})))
         node.edges.add(dep)
-        with patch("pkgdev.scripts.pkgdev_bugs.urllib.urlopen", session):
-            node.file_bug("API", frozenset(), (), None)
-        assert len(session.calls) == 1
-        call = session.calls[0]
+        node.file_bug(bugzilla_cassette.client(api_key="API"), frozenset(), (), None)
+        assert len(bugzilla_cassette.calls) == 1
+        call = bugzilla_cassette.calls[0].body
         assert call["summary"] == "cat/x-0, cat/y-0, cat/z-0: stablereq"
         assert call["assigned_to"] == "dev3@gentoo.org"
         assert call["cc"] == ["dev1@gentoo.org"]
         assert call["cf_stabilisation_atoms"] == "=cat/x-0 *\n=cat/y-0 *\n=cat/z-0 *"
         assert call["depends_on"] == [2]
 
-    def test_keyword_bug_filing(self, repo):
+    def test_keyword_bug_filing(self, repo, bugzilla_cassette):
         mk_repo(repo)
-        session = BugsSession()
+        bugzilla_cassette.creates_bugs()
         pkg = max(repo.itermatch(atom("=cat/u-0")))
-        node = bugs.GraphNode(((pkg, {"amd64"}),), category=bugs.NodeCategory.KEYWORDREQ)
-        with patch("pkgdev.scripts.pkgdev_bugs.urllib.urlopen", session):
-            node.file_bug("API", frozenset(), (), None)
-        assert len(session.calls) == 1
-        call = session.calls[0]
+        node = bugs.GraphNode(((pkg, {"amd64"}),), category=BugCategory.KEYWORDREQ)
+        node.file_bug(bugzilla_cassette.client(api_key="API"), frozenset(), (), None)
+        assert len(bugzilla_cassette.calls) == 1
+        call = bugzilla_cassette.calls[0].body
         # keywordreq bugs are version-less and request ~arch keywords
         assert call["component"] == "Keywording"
         assert call["summary"] == "cat/u: keywordreq"
@@ -138,7 +118,7 @@ class TestSuggestedKeywords:
 
 
 class TestStableKeywordChain:
-    def _mk_graph(self, repo, category=bugs.NodeCategory.STABLEREQ):
+    def _mk_graph(self, repo, category=BugCategory.STABLEREQ):
         # build a DependencyGraph without running its heavy __init__
         graph = bugs.DependencyGraph.__new__(bugs.DependencyGraph)
         graph.options = SimpleNamespace(repo=repo, category=category)
@@ -173,9 +153,9 @@ class TestStableKeywordChain:
             for node in graph.nodes
             for p, _ in node.pkgs
         }
-        parent_stable = by_key[("cat/parent-2", bugs.NodeCategory.STABLEREQ)]
-        dep_stable = by_key[("cat/dep-1", bugs.NodeCategory.STABLEREQ)]
-        dep_keyword = by_key[("cat/dep-1", bugs.NodeCategory.KEYWORDREQ)]
+        parent_stable = by_key[("cat/parent-2", BugCategory.STABLEREQ)]
+        dep_stable = by_key[("cat/dep-1", BugCategory.STABLEREQ)]
+        dep_keyword = by_key[("cat/dep-1", BugCategory.KEYWORDREQ)]
         # three distinct nodes, dep appears as both stable and keyword
         assert len(graph.nodes) == 3
         assert dep_stable is not dep_keyword
@@ -220,7 +200,7 @@ class TestStableKeywordChain:
         # a keyword target with no other versions to derive arches from must error
         repo.create_ebuild("cat/a-1", KEYWORDS=["~amd64"])
         pkg = max(repo.itermatch(atom("=cat/a-1")))
-        graph = self._mk_graph(repo, category=bugs.NodeCategory.KEYWORDREQ)
+        graph = self._mk_graph(repo, category=BugCategory.KEYWORDREQ)
         graph.targets = (pkg,)
         graph._find_dependencies = lambda *a, **k: iter(())
         with pytest.raises(SystemExit):
@@ -237,7 +217,7 @@ class TestStableKeywordChain:
         # requesting a masked keyword is a hard error
         repo.create_ebuild("cat/a-1", KEYWORDS=keywords)
         pkg = max(repo.itermatch(atom("=cat/a-1")))
-        graph = self._mk_graph(repo, category=bugs.NodeCategory.KEYWORDREQ)
+        graph = self._mk_graph(repo, category=BugCategory.KEYWORDREQ)
         graph.targets = (pkg,)
         graph.target_arches = {pkg: frozenset({"loong"})}
         graph._find_dependencies = lambda *a, **k: iter(())
@@ -286,8 +266,8 @@ class TestStableKeywordChain:
         )
         graph.load_graph_toml(str(toml_file))
         assert {node.category for node in graph.nodes} == {
-            bugs.NodeCategory.KEYWORDREQ,
-            bugs.NodeCategory.STABLEREQ,
+            BugCategory.KEYWORDREQ,
+            BugCategory.STABLEREQ,
         }
 
     def test_edit_graph_roundtrip_preserves_starting_node(self, repo):

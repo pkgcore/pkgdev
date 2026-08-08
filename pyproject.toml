@@ -29,7 +29,7 @@ dynamic = ["version"]
 
 dependencies = [
 	"snakeoil~=0.11.1",
-	"pkgcore~=0.12.37",
+	"pkgcore~=0.12.38",
 	"pkgcheck~=0.10.42",
 ]
 

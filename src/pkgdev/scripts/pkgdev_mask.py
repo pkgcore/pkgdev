@@ -1,19 +1,18 @@
-import json
 import os
 import re
 import shlex
 import subprocess
 import tempfile
 import textwrap
-import urllib.request as urllib
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from itertools import groupby
 from operator import itemgetter
 from os.path import join as pjoin
-from typing import List
 
+from pkgcore.bugzilla import BugUpdate, Bugzilla, BugzillaError, ListChange, NewBug
+from pkgcore.bugzilla.apikey import BugzillaApiKey
 from pkgcore.ebuild.atom import MalformedAtom
 from pkgcore.ebuild.atom import atom as atom_cls
 from pkgcore.ebuild.profiles import ProfileNode
@@ -21,8 +20,8 @@ from snakeoil.bash import read_bash
 from snakeoil.cli import arghparse
 from snakeoil.strings import pluralism
 
-from .. import git
-from .argparsers import BugzillaApiKey, cwd_repo_argparser, git_repo_argparser
+from .. import __version__, git
+from .argparsers import cwd_repo_argparser, git_repo_argparser
 
 mask = arghparse.ArgumentParser(
     prog="pkgdev mask",
@@ -146,6 +145,7 @@ def _mask_validate(parser, namespace):
 
     namespace.atoms = sorted(atoms)
     namespace.maintainers = sorted(maintainers) or ["maintainer-needed@gentoo.org"]
+    namespace.bugzilla = Bugzilla(namespace.api_key, user_agent=f"pkgdev-mask/{__version__}")
 
 
 @dataclass(frozen=True)
@@ -155,8 +155,8 @@ class Mask:
     author: str
     email: str
     date: str
-    comment: List[str]
-    atoms: List[atom_cls]
+    comment: list[str]
+    atoms: list[atom_cls]
 
     _removal_re = re.compile(r"^Removal: (?P<date>\d{4}-\d{2}-\d{2})")
 
@@ -274,11 +274,11 @@ def get_comment():
 
     with open(tmp.name) as f:
         # strip trailing whitespace from lines
-        comment = (x.rstrip() for x in f.readlines())
-    # strip comments
-    comment = (x for x in comment if not x.startswith("#"))
-    # strip leading/trailing newlines
-    comment = "\n".join(comment).strip().splitlines()
+        comment = (x.rstrip() for x in f)
+        # strip comments
+        comment = (x for x in comment if not x.startswith("#"))
+        # strip leading/trailing newlines
+        comment = "\n".join(comment).strip().splitlines()
     if not comment:
         mask.error("empty mask comment")
     return comment
@@ -287,7 +287,7 @@ def get_comment():
 def message_removal_notice(bugs: list[int], rites: int):
     summary = []
     if rites:
-        summary.append(f"Removal on {datetime.now(timezone.utc) + timedelta(days=rites):%Y-%m-%d}.")
+        summary.append(f"Removal on {datetime.now(UTC) + timedelta(days=rites):%Y-%m-%d}.")
     if bugs:
         # Bug(s) #A, #B, #C
         bug_list = ", ".join(f"#{b}" for b in bugs)
@@ -300,52 +300,24 @@ def file_last_rites_bug(options, message: str) -> int:
     summary = f"{', '.join(map(str, options.atoms))}: removal"
     if len(summary) > 90 and len(options.atoms) > 1:
         summary = f"{options.atoms[0]} and friends: removal"
-    request_data = dict(
-        Bugzilla_api_key=options.api_key,
-        product="Gentoo Linux",
-        component="Current packages",
-        version="unspecified",
-        summary=summary,
-        description="\n".join([*message, "", "package list:", *map(str, options.atoms)]).strip(),
-        keywords=["PMASKED"],
-        assigned_to=options.maintainers[0],
-        cc=options.maintainers[1:] + ["treecleaner@gentoo.org"],
-        deadline=(datetime.now(timezone.utc) + timedelta(days=options.rites)).strftime("%Y-%m-%d"),
-        blocks=list(options.bugs),
+    bug = NewBug.package_mask(
+        summary,
+        "\n".join([*message, "", "package list:", *map(str, options.atoms)]).strip(),
+        rites=options.rites,
+        maintainers=options.maintainers,
+        blocks=tuple(options.bugs),
     )
-    request = urllib.Request(
-        url="https://bugs.gentoo.org/rest/bug",
-        data=json.dumps(request_data).encode("utf-8"),
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-    )
-    with urllib.urlopen(request, timeout=30) as response:
-        reply = json.loads(response.read().decode("utf-8"))
-    return int(reply["id"])
+    return options.bugzilla.create(bug)
 
 
-def update_bugs_pmasked(api_key: str, bugs: list[int]):
+def update_bugs_pmasked(bugzilla, bugs: list[int]) -> bool:
     if not bugs:
         return True
-    request_data = dict(
-        Bugzilla_api_key=api_key,
-        ids=bugs,
-        keywords=dict(add=["PMASKED"]),
-    )
-    request = urllib.Request(
-        url=f"https://bugs.gentoo.org/rest/bug/{bugs[0]}",
-        data=json.dumps(request_data).encode("utf-8"),
-        method="PUT",
-        headers={
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-    )
-    with urllib.urlopen(request, timeout=30) as response:
-        return response.status == 200
+    try:
+        bugzilla.update(bugs, BugUpdate(keywords=ListChange.adding("PMASKED")))
+    except BugzillaError:
+        return False
+    return True
 
 
 def send_last_rites_email(m: Mask, subject_prefix: str):
@@ -372,7 +344,7 @@ def send_last_rites_email(m: Mask, subject_prefix: str):
 @mask.bind_main_func
 def _mask(options, out, err):
     mask_file = MaskFile(pjoin(options.repo.location, "profiles/package.mask"))
-    today = datetime.now(timezone.utc)
+    today = datetime.now(UTC)
 
     # pull name/email from git config
     p = git.run("config", "user.name", stdout=subprocess.PIPE)
@@ -385,7 +357,7 @@ def _mask(options, out, err):
         if bug_no := file_last_rites_bug(options, message):
             out.write(out.fg("green"), f"filed bug https://bugs.gentoo.org/{bug_no}", out.reset)
             out.flush()
-            if not update_bugs_pmasked(options.api_key, options.bugs):
+            if not update_bugs_pmasked(options.bugzilla, options.bugs):
                 err.write(err.fg("red"), "failed to update referenced bugs", err.reset)
                 err.flush()
             options.bugs.insert(0, bug_no)

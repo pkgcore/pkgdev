@@ -8,6 +8,7 @@ from importlib.resources import read_text
 from itertools import islice
 from pathlib import Path
 
+from pkgcore.bugzilla.apikey import BugzillaApiKey
 from pkgcore.restrictions import boolean, packages, values
 from pkgcore.restrictions.required_use import find_constraint_satisfaction, iter_flags
 from pkgcore.util import commandline
@@ -15,7 +16,6 @@ from pkgcore.util import packages as pkgutils
 from snakeoil.cli import arghparse
 
 from ..cli import ArgumentParser
-from .argparsers import BugzillaApiKey
 
 tatt = ArgumentParser(prog="pkgdev tatt", description=__doc__, verbose=False, quiet=False)
 BugzillaApiKey.mangle_argparser(tatt)
@@ -229,11 +229,18 @@ def _validate_args(parser, namespace):
 
 
 def _get_bugzilla_packages(namespace):
-    from nattka.bugzilla import BugCategory, NattkaBugzilla
     from nattka.package import match_package_list
 
-    nattka_bugzilla = NattkaBugzilla(api_key=namespace.api_key)
-    bug = next(iter(nattka_bugzilla.find_bugs(bugs=[namespace.bug]).values()))
+    try:
+        from nattka.bugzilla import BugCategory, NattkaBugzilla
+
+        nattka_bugzilla = NattkaBugzilla(api_key=namespace.api_key)
+        bug = next(iter(nattka_bugzilla.find_bugs(bugs=[namespace.bug]).values()))
+    except ImportError:
+        from pkgcore.bugzilla import BugCategory, Bugzilla
+
+        bug = Bugzilla(api_key=namespace.api_key).get(namespace.bug)
+
     namespace.keywording = bug.category == BugCategory.KEYWORDREQ
     repo = namespace.domain.repos["gentoo"].raw_repo
     src_repo = namespace.domain.source_repos_raw
