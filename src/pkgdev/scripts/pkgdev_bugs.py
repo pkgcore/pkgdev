@@ -20,7 +20,7 @@ from pkgcheck.addons.git import GitAddedRepo, GitAddon, GitModifiedRepo
 from pkgcheck.addons.profiles import ProfileAddon
 from pkgcheck.checks import stablereq, visibility
 from pkgcheck.scripts import argparse_actions
-from pkgcore.bugzilla import BugCategory, BugQuery, BugUpdate, Bugzilla, NewBug, PackageList
+from pkgcore.bugzilla import Bug, BugCategory, BugQuery, BugUpdate, Bugzilla, NewBug, PackageList
 from pkgcore.bugzilla.apikey import BugzillaApiKey
 from pkgcore.bugzilla.changes import summarise
 from pkgcore.ebuild.atom import atom
@@ -396,6 +396,8 @@ class GraphNode:
         observer=None,
     ) -> int:
         if self.bugno is not None:
+            # an already existing bug may still supersede older ones
+            self.obsolete_bugs(bugzilla)
             return self.bugno
         for dep in self.edges:
             if dep.bugno is None:
@@ -434,6 +436,7 @@ class GraphNode:
             return
         assert self.bugno is not None
         bugzilla.update(sorted(self.obsoletes), BugUpdate.obsoleted_by(self.bugno))
+        self.obsoletes.clear()  # don't repeat the update if visited again
 
 
 class DependencyGraph:
@@ -816,6 +819,7 @@ class DependencyGraph:
 
         for node in nodes:
             new_node.edges.update(node.edges.difference(nodes))
+            new_node.obsoletes.update(node.obsoletes)  # inherit pending obsoletions
 
         for node in self.nodes:
             if node.edges.intersection(nodes):
@@ -930,6 +934,7 @@ class DependencyGraph:
         )
         all_bugs = bugzilla.search(query).values()
 
+        matches: dict[GraphNode, list[tuple[bool, Bug]]] = defaultdict(list)
         for bug in all_bugs:
             bug_atoms = bug.package_list.atoms
             bug_match = boolean.OrRestriction(*(a.unversioned_atom for a in bug_atoms))
@@ -939,26 +944,32 @@ class DependencyGraph:
                     continue
                 if node.bugno is None and all(bug_match.match(pkg[0]) for pkg in node.pkgs):
                     is_exact_match = all(exact_match.match(pkg[0]) for pkg in node.pkgs)
-                    self.out.write(
-                        self.out.fg("yellow"),
-                        f"Found {bug.url} for node {node}",
-                        self.out.reset,
-                        " (exact version match)" if is_exact_match else " (atom match)",
-                    )
-                    self.out.write(" -> bug summary: ", bug.summary)
-                    if is_exact_match:
-                        node.bugno = bug.id
-                    else:
-                        if userquery(
-                            "Not an exact match. Do you want to obsolete?",
-                            self.out,
-                            self.err,
-                            default_answer=False,
-                        ):
-                            node.obsoletes.add(bug.id)
-                        else:
-                            node.bugno = bug.id
-                    has_output = True
+                    matches[node].append((is_exact_match, bug))
+
+        for node, node_bugs in matches.items():
+            # exact matches first, so the node keeps the exact bug and obsoletes
+            # the atom matches, regardless of the order bugzilla returned them in
+            for is_exact_match, bug in sorted(node_bugs, key=lambda m: (not m[0], m[1].id)):
+                self.out.write(
+                    self.out.fg("yellow"),
+                    f"Found {bug.url} for node {node}",
+                    self.out.reset,
+                    " (exact version match)" if is_exact_match else " (atom match)",
+                )
+                self.out.write(" -> bug summary: ", bug.summary)
+                if is_exact_match and node.bugno is None:
+                    node.bugno = bug.id
+                elif userquery(
+                    f"{'Duplicate of the matched bug' if is_exact_match else 'Not an exact match'}."
+                    " Do you want to obsolete?",
+                    self.out,
+                    self.err,
+                    default_answer=False,
+                ):
+                    node.obsoletes.add(bug.id)
+                elif node.bugno is None:
+                    node.bugno = bug.id
+                has_output = True
         return has_output
 
     def file_bugs(self, bugzilla: Bugzilla, auto_cc_arches: frozenset[str], block_bugs: list[int]):
@@ -973,6 +984,13 @@ class DependencyGraph:
 
         for node in self.starting_nodes:
             node.file_bug(bugzilla, auto_cc_arches, block_bugs, self.modified_repo, observe)
+        self.obsolete_bugs(bugzilla)
+
+    def obsolete_bugs(self, bugzilla: Bugzilla):
+        # nodes not walked by file_bugs may still have obsoletions pending
+        for node in self.nodes:
+            if node.bugno is not None:
+                node.obsolete_bugs(bugzilla)
 
 
 def _load_from_stdin(out: Formatter):
@@ -1064,6 +1082,15 @@ def main(options, out: Formatter, err: Formatter):
 
     pending = [node for node in d.nodes if node.bugno is None]
     if not pending:
+        # no bugs to file, but obsoletions of matched bugs may still be pending
+        if (obsoletes := {bugno for node in d.nodes for bugno in node.obsoletes}) and userquery(
+            f"No bugs to file, still obsolete {len(obsoletes)} bugs?",
+            out,
+            err,
+            default_answer=False,
+        ):
+            d.obsolete_bugs(options.bugzilla)
+            return 0
         out.write(out.fg("red"), "Nothing to do, exiting", out.reset)
         return 1
     counts = {

@@ -298,3 +298,87 @@ class TestStableKeywordChain:
         assert len(graph.starting_nodes) == 1
         (loaded_target,) = graph.starting_nodes
         assert {p.cpvstr for p, _ in loaded_target.pkgs} == {"cat/a-1"}
+
+
+class TestObsoletingBugs:
+    def _mk_graph(self, repo, monkeypatch, answer=True):
+        graph = bugs.DependencyGraph.__new__(bugs.DependencyGraph)
+        graph.options = SimpleNamespace(repo=repo, search_repo=repo)
+        graph.out = SimpleNamespace(
+            write=lambda *a, **k: None, flush=lambda: None, fg=lambda *a: "", reset=""
+        )
+        graph.err = graph.out
+        graph.nodes = set()
+        graph.starting_nodes = set()
+        graph.modified_repo = None
+        monkeypatch.setattr(bugs, "userquery", lambda *a, **k: answer)
+        return graph
+
+    @staticmethod
+    def _bug(bug_id, atoms):
+        return {
+            "id": bug_id,
+            "summary": f"bug {bug_id}",
+            "product": "Gentoo Linux",
+            "component": "Stabilization",
+            "cf_stabilisation_atoms": atoms,
+        }
+
+    @pytest.mark.parametrize("reverse", (False, True))
+    def test_obsolete_older_bug_with_exact_match(
+        self, repo, bugzilla_cassette, monkeypatch, reverse
+    ):
+        # regression test: an old atom match and a new exact match for the same node
+        # must obsolete the old one, no matter which order bugzilla returns them in
+        repo.create_ebuild("cat/a-1", KEYWORDS=["~amd64"])
+        pkg = max(repo.itermatch(atom("=cat/a-1")))
+
+        graph = self._mk_graph(repo, monkeypatch)
+        node = bugs.GraphNode(((pkg, {"amd64"}),))
+        graph.nodes = {node}
+        graph.starting_nodes = {node}
+
+        found = [self._bug(100, "=cat/a-0 amd64"), self._bug(200, "=cat/a-1 amd64")]
+        bugzilla_cassette.expect_bugs(*reversed(found) if reverse else found)
+        assert graph.scan_existing_bugs(bugzilla_cassette.client())
+        assert node.bugno == 200
+        assert node.obsoletes == {100}
+
+    def test_obsoletion_of_existing_bug_is_filed(self, repo, bugzilla_cassette, monkeypatch):
+        # nothing new to file, but the matched bug still has to obsolete the old one
+        repo.create_ebuild("cat/a-1", KEYWORDS=["~amd64"])
+        pkg = max(repo.itermatch(atom("=cat/a-1")))
+
+        graph = self._mk_graph(repo, monkeypatch)
+        node = bugs.GraphNode(((pkg, {"amd64"}),), bugno=200)
+        node.obsoletes.add(100)
+        graph.nodes = {node}
+        graph.starting_nodes = {node}
+
+        bugzilla_cassette.expect_changed(100)
+        graph.file_bugs(bugzilla_cassette.client(), frozenset(), [])
+
+        assert len(bugzilla_cassette.calls) == 1
+        call = bugzilla_cassette.calls[0]
+        assert call.method == "PUT"
+        assert call.body["ids"] == [100]
+        assert call.body["resolution"] == "OBSOLETE"
+        assert call.body["see_also"] == {"add": ["https://bugs.gentoo.org/200"]}
+        # consumed, so a second pass doesn't repeat the update
+        assert not node.obsoletes
+
+    def test_merge_nodes_keeps_obsoletes(self, repo, monkeypatch):
+        repo.create_ebuild("cat/a-1", KEYWORDS=["~amd64"])
+        repo.create_ebuild("cat/b-1", KEYWORDS=["~amd64"])
+        a = max(repo.itermatch(atom("=cat/a-1")))
+        b = max(repo.itermatch(atom("=cat/b-1")))
+
+        graph = self._mk_graph(repo, monkeypatch)
+        first = bugs.GraphNode(((a, {"amd64"}),))
+        first.obsoletes.add(100)
+        second = bugs.GraphNode(((b, {"amd64"}),))
+        second.obsoletes.add(101)
+        graph.nodes = {first, second}
+
+        merged = graph.merge_nodes((first, second))
+        assert merged.obsoletes == {100, 101}

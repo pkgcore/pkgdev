@@ -2,6 +2,15 @@
 Release Notes
 =============
 
+pkgdev 0.2.17 (unreleased)
+--------------------------
+
+**pkgdev bugs:**
+
+- bugs: fix obsoleting an older bug being a noop when an exact match bug was
+  found for the same node, when merging nodes, or when no new bugs were left
+  to file (Arthur Zamarin)
+
 pkgdev 0.2.16 (2026-07-31)
 --------------------------
 
