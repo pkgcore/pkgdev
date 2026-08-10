@@ -20,7 +20,16 @@ from pkgcheck.addons.git import GitAddedRepo, GitAddon, GitModifiedRepo
 from pkgcheck.addons.profiles import ProfileAddon
 from pkgcheck.checks import stablereq, visibility
 from pkgcheck.scripts import argparse_actions
-from pkgcore.bugzilla import Bug, BugCategory, BugQuery, BugUpdate, Bugzilla, NewBug, PackageList
+from pkgcore.bugzilla import (
+    Bug,
+    BugCategory,
+    BugQuery,
+    BugUpdate,
+    Bugzilla,
+    ListChange,
+    NewBug,
+    PackageList,
+)
 from pkgcore.bugzilla.apikey import BugzillaApiKey
 from pkgcore.bugzilla.changes import summarise
 from pkgcore.ebuild.atom import atom
@@ -396,12 +405,12 @@ class GraphNode:
         observer=None,
     ) -> int:
         if self.bugno is not None:
-            # an already existing bug may still supersede older ones
+            # an already existing bug may still be missing deps, and may supersede older bugs
+            if deps := self.file_missing_deps(bugzilla, auto_cc_arches, modified_repo, observer):
+                bugzilla.update(self.bugno, BugUpdate(depends_on=ListChange.adding(*deps)))
             self.obsolete_bugs(bugzilla)
             return self.bugno
-        for dep in self.edges:
-            if dep.bugno is None:
-                dep.file_bug(bugzilla, auto_cc_arches, (), modified_repo, observer)
+        self.file_missing_deps(bugzilla, auto_cc_arches, modified_repo, observer)
 
         description = [f"Please {self.category.verb}", ""]
         if modified_repo is not None:
@@ -430,6 +439,20 @@ class GraphNode:
             observer(self)
         self.obsolete_bugs(bugzilla)
         return self.bugno
+
+    def file_missing_deps(
+        self,
+        bugzilla: Bugzilla,
+        auto_cc_arches: frozenset[str],
+        modified_repo: multiplex.tree,
+        observer=None,
+    ) -> tuple[int, ...]:
+        """File bugs for the dependencies which lack one, returning their bug numbers."""
+        # collected upfront, as filing a dep may file another one sharing this node
+        pending = tuple(dep for dep in self.edges if dep.bugno is None)
+        for dep in pending:
+            dep.file_bug(bugzilla, auto_cc_arches, (), modified_repo, observer)
+        return tuple(dep.bugno for dep in pending)
 
     def obsolete_bugs(self, bugzilla: Bugzilla):
         if not self.obsoletes:

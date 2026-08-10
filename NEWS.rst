@@ -11,6 +11,10 @@ pkgdev 0.2.17 (unreleased)
   found for the same node, when merging nodes, or when no new bugs were left
   to file (Arthur Zamarin)
 
+- bugs: fix dependencies of a package matched to an already open bug never
+  being filed, although they were counted in the bugs to create. Those bugs
+  are now filed and added to the existing bug's dependencies (Arthur Zamarin)
+
 pkgdev 0.2.16 (2026-07-31)
 --------------------------
 

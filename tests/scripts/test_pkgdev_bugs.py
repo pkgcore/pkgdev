@@ -100,6 +100,25 @@ class TestBugFiling:
         assert call["description"].startswith("Please keyword")
         assert call["cf_stabilisation_atoms"] == "cat/u ~amd64"
 
+    def test_missing_deps_of_existing_bug(self, repo, bugzilla_cassette):
+        # a node matched to an existing bug must still file the dependency bugs
+        # which weren't filed yet, and get linked against them
+        mk_repo(repo)
+        pkg = max(repo.itermatch(atom("=cat/u-0")))
+        node = bugs.GraphNode((), bugno=200)
+        dep = bugs.GraphNode(((pkg, {"*"}),))
+        node.edges.add(dep)
+
+        bugzilla_cassette.expect_created(300).expect_changed(200)
+        assert node.file_bug(bugzilla_cassette.client(api_key="API"), frozenset(), (), None) == 200
+        assert dep.bugno == 300
+
+        assert len(bugzilla_cassette.calls) == 2
+        update = bugzilla_cassette.calls[1]
+        assert update.method == "PUT"
+        assert update.body["ids"] == [200]
+        assert update.body["depends_on"] == {"add": ["300"]}
+
 
 class TestSuggestedKeywords:
     def test_stablereq(self, repo):
