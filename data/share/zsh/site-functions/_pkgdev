@@ -110,6 +110,8 @@ case $state in
           {'(--test)-t','(-t)--test'}'[run test phase for the packages]' \
           {'(--use-combos)-u','(-u)--use-combos'}'[maximal number USE combinations to be tested]:number' \
           '--ignore-prefixes[USE flags prefixes that won'\''t be randomized]:prefixes' \
+          '--enable-prefixes[USE flags prefixes that will always be enabled]:prefixes' \
+          '--disable-prefixes[USE flags prefixes that will never be enabled]:prefixes' \
           '(--use-random --use-expand-random)--use-default[prefer to use default use flags configuration]' \
           '(--use-default --use-expand-random)--use-random[turn on random use flags, with default USE_EXPAND]' \
           '(--use-default --use-random)--use-expand-random[turn on random use flags, including USE_EXPAND]' \

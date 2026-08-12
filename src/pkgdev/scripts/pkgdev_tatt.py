@@ -7,6 +7,7 @@ from collections import defaultdict
 from importlib.resources import read_text
 from itertools import islice
 from pathlib import Path
+from typing import NamedTuple
 
 from pkgcore.bugzilla.apikey import BugzillaApiKey
 from pkgcore.restrictions import boolean, packages, values
@@ -14,6 +15,8 @@ from pkgcore.restrictions.required_use import find_constraint_satisfaction, iter
 from pkgcore.util import commandline
 from pkgcore.util import packages as pkgutils
 from snakeoil.cli import arghparse
+from snakeoil.cli.exceptions import UserException
+from snakeoil.strings import pluralism
 
 from ..cli import ArgumentParser
 
@@ -68,6 +71,36 @@ use_opts.add_argument(
         useful for USE flags such as ``python_targets_``. Note that this
         doesn't affect preference, but because of specific REQUIRED_USE will
         still be changed from defaults.
+    """,
+)
+use_opts.add_argument(
+    "--enable-prefixes",
+    default=[],
+    action=arghparse.CommaSeparatedValuesAppend,
+    help="USE flags prefixes that will always be enabled",
+    docs="""
+        Comma separated USE flags prefixes which are always enabled, in every
+        USE combination and in every mode.
+
+        Flags the profile masks cannot be enabled, and are kept disabled with
+        a warning. ``test`` is never affected, use ``--test`` for it.
+    """,
+)
+use_opts.add_argument(
+    "--disable-prefixes",
+    default=[],
+    action=arghparse.CommaSeparatedValuesAppend,
+    help="USE flags prefixes that will never be enabled",
+    docs="""
+        Comma separated USE flags prefixes which are never enabled, in every
+        USE combination and in every mode. This is useful for expensive or
+        known broken USE flags such as ``lto`` and ``pgo``.
+
+        Flags the profile forces on cannot be disabled, and are kept enabled
+        with a warning. ``test`` is never affected, use ``--test`` for it.
+
+        If ``REQUIRED_USE`` admits no combination once these options are
+        applied, the package cannot be tested and an error is raised.
     """,
 )
 random_use_opts = use_opts.add_mutually_exclusive_group()
@@ -278,13 +311,57 @@ def _groupby_use_expand(
     return use_flags, use_expand_dict
 
 
-def _build_job(namespace, pkg, is_test: bool):
-    use_expand_prefixes = tuple(s.lower() + "_" for s in namespace.domain.profile.use_expand)
-    immutable, enabled, _disabled = namespace.domain.get_package_use_unconfigured(pkg)
+class UnsatisfiableUse(UserException):
+    """No USE combination is testable for a package."""
 
+
+class _PkgUse(NamedTuple):
+    """USE flag state of a package, shared by all of its jobs."""
+
+    immutable: frozenset[str]
+    enabled: frozenset[str]
+    iuse: frozenset[str]
+    force_on: frozenset[str]
+    force_off: frozenset[str]
+
+
+def _resolve_use(namespace, pkg, err):
+    """Determine a package's USE flag state, honoring the prefix options."""
+    immutable, enabled, masked = namespace.domain.get_package_use_unconfigured(pkg)
     iuse = frozenset(pkg.iuse_stripped)
-    force_true = immutable.union(("test",) if is_test else ())
-    force_false = ("test",) if not is_test else ()
+
+    def matching(prefixes):
+        # "test" is driven by --test alone, never by the prefix options
+        return frozenset(use for use in iuse if use.startswith(tuple(prefixes))) - {"test"}
+
+    force_on, force_off = matching(namespace.enable_prefixes), matching(namespace.disable_prefixes)
+    if both := force_on.intersection(force_off):
+        raise UnsatisfiableUse(
+            f"{pkg.cpvstr}: USE flag{pluralism(both)} matched by both --enable-prefixes "
+            f"and --disable-prefixes: {', '.join(sorted(both))}"
+        )
+
+    # the profile has the last word, its forced and masked flags can't be flipped
+    for option, state, flags, profile_flags in (
+        ("--disable-prefixes", "forced", force_off, immutable),
+        ("--enable-prefixes", "masked", force_on, masked),
+    ):
+        if conflict := flags.intersection(profile_flags):
+            err.warn(
+                f"{pkg.cpvstr}: ignoring {option} for profile {state} USE "
+                f"flag{pluralism(conflict)}: {', '.join(sorted(conflict))}"
+            )
+    return _PkgUse(
+        immutable, enabled, iuse, force_on.difference(masked), force_off.difference(immutable)
+    )
+
+
+def _build_job(namespace, pkg, pkg_use: _PkgUse, is_test: bool):
+    use_expand_prefixes = tuple(s.lower() + "_" for s in namespace.domain.profile.use_expand)
+    immutable, enabled, iuse = pkg_use.immutable, pkg_use.enabled, pkg_use.iuse
+
+    force_true = immutable.union(pkg_use.force_on, ("test",) if is_test else ())
+    force_false = pkg_use.force_off.union(("test",) if not is_test else ())
 
     if namespace.random_use == "d":
         prefer_true = enabled
@@ -348,19 +425,27 @@ def _build_job(namespace, pkg, is_test: bool):
             produced += 1
             if produced >= wanted:
                 return
+        if not produced:
+            forced = sorted(pkg_use.force_on) + [f"-{use}" for use in sorted(pkg_use.force_off)]
+            raise UnsatisfiableUse(
+                f"{pkg.cpvstr}: no USE combination satisfies REQUIRED_USE"
+                + (f" with {', '.join(forced)}" if forced else "")
+            )
         # replay the combinations if REQUIRED_USE admits fewer than asked for,
         # redrawing the unconstrained flags each pass
         if exhausted or not randomize:
             return
 
 
-def _build_jobs(namespace, pkgs):
+def _build_jobs(namespace, pkgs, err):
     for pkg in pkgs:
-        for flags in islice(_build_job(namespace, pkg, False), namespace.use_combos):
+        pkg_use = _resolve_use(namespace, pkg, err)
+        for flags in islice(_build_job(namespace, pkg, pkg_use, False), namespace.use_combos):
             yield pkg.versioned_atom, False, flags
 
         if namespace.test:
-            yield pkg.versioned_atom, True, next(iter(_build_job(namespace, pkg, True)))
+            flags = next(iter(_build_job(namespace, pkg, pkg_use, True)))
+            yield pkg.versioned_atom, True, flags
 
 
 def _create_config_dir(directory: Path):
@@ -430,7 +515,7 @@ def main(options, out, err):
     from jinja2 import Template
 
     script = Template(template, trim_blocks=True, lstrip_blocks=True).render(
-        jobs=list(_build_jobs(options, pkgs)),
+        jobs=list(_build_jobs(options, pkgs, err)),
         report_file=job_name + ".report",
         job_name=job_name,
         log_dir=options.logs_dir,

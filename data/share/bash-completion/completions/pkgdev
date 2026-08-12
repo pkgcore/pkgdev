@@ -230,6 +230,8 @@ _pkgdev() {
                 -t --test
                 -u --use-combos
                 --ignore-prefixes
+                --enable-prefixes
+                --disable-prefixes
                 --use-default
                 --use-random
                 --use-expand-random

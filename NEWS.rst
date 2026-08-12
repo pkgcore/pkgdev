@@ -39,6 +39,13 @@ pkgdev 0.2.17 (unreleased)
 - tatt: fix ebuild ``IUSE`` defaults overriding the profile when deciding a
   package's default USE configuration (Arthur Zamarin, #183)
 
+- tatt: add ``--enable-prefixes`` and ``--disable-prefixes``, USE flag prefixes
+  which are always resp. never enabled, in every combination and every mode.
+  The profile has the last word: flags it forces on cannot be disabled and
+  flags it masks cannot be enabled, both kept as the profile has them with a
+  warning. A package whose ``REQUIRED_USE`` admits no combination once the
+  options are applied raises an error (Arthur Zamarin, #164)
+
 pkgdev 0.2.16 (2026-07-31)
 --------------------------
 
