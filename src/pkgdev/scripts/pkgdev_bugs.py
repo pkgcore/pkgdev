@@ -550,6 +550,68 @@ class DependencyGraph:
                 if emails.intersection(m.email for m in xml.maintainers):
                     yield None, parserestrict.parse_match(f"{cat}/{pkg}"), frozenset()
 
+    @staticmethod
+    def _any_of_groups(pkg: package, attr: str) -> tuple[tuple[atom, ...], ...]:
+        """The flat ``|| ( ... )`` blocks of one of ``pkg``'s depsets.
+
+        Nested blocks are left out: an alternative spelled ``( a b )`` needs
+        both of its atoms, which picking a single one can't express.
+        """
+        groups: list[tuple[atom, ...]] = []
+
+        def walk(node: boolean.base):
+            match node:
+                case atom():
+                    return
+                case packages.Conditional():
+                    children = node.payload
+                case boolean.OrRestriction() if all(
+                    isinstance(child, atom) for child in node.restrictions
+                ):
+                    groups.append(tuple(child.no_usedeps for child in node.restrictions))
+                    return
+                case _:
+                    children = node.restrictions
+            for child in children:
+                walk(child)
+
+        walk(getattr(pkg, attr))
+        return tuple(groups)
+
+    def _alternative_rank(self, dep: atom, keyword: str) -> tuple[bool, bool, bool]:
+        """Rank any-of alternative by how small new work it needs.
+
+        One with no version left to pick sorts last: it is masked, live or gone,
+        and choosing it only turns into "unable to find match" further down.
+        """
+        matches = self.options.repo.match(dep)
+        try:
+            self.find_best_match({dep}, matches)
+        except (ValueError, IndexError):
+            return True, True, True
+        selected = chain(self.targets, (p for node in self.nodes for p, _ in node.pkgs))
+        keyworded = (
+            keyword in match.keywords or f"~{keyword}" in match.keywords for match in matches
+        )
+        return False, not any(map(dep.match, selected)), not any(keyworded)
+
+    def _pick_alternatives(
+        self, groups: tuple[tuple[atom, ...], ...], keyword: str, deps: set[atom]
+    ) -> set[atom]:
+        """Reduce each failed any-of block in ``deps`` to a single alternative.
+
+        An unsolvable ``|| ( ... )`` is reported as all of its atoms, since any
+        one of them would solve it, but taking them all at face value files a
+        bug per alternative and then walks the deps of packages nobody needs.
+        Keep the one that asks for the least: already being handled, failing
+        that already keyworded, failing that the ebuild's own first choice.
+        """
+        for group in groups:
+            if len(alternatives := [dep for dep in group if dep in deps]) > 1:
+                deps = deps.difference(alternatives)
+                deps.add(min(alternatives, key=partial(self._alternative_rank, keyword=keyword)))
+        return deps
+
     def _find_dependencies(self, pkg: package, keywords: set[str], stable: bool = True):
         check = visibility.VisibilityCheck(self.options, profile_addon=self.profile_addon)
         # the fake pkgs fed here aren't parsed ebuild sources (no .tree), so skip the
@@ -557,12 +619,19 @@ class DependencyGraph:
         if hasattr(check, "check_optfeature"):
             check.check_optfeature = lambda pkg: iter(())
 
-        issues: dict[str, dict[str, set[atom]]] = defaultdict(partial(defaultdict, set))
+        # keyed by depset, as any-of blocks are only meaningful within one
+        failures: dict[str, dict[str, set[atom]]] = defaultdict(partial(defaultdict, set))
         for res in check.feed(self.mk_fake_pkg(pkg, keywords, stable=stable)):
             if isinstance(res, visibility.NonsolvableDeps):
-                for dep in res.deps:
-                    dep: atom = atom(dep).no_usedeps
-                    issues[dep.key][res.keyword.lstrip("~")].add(dep)
+                deps = failures[res.attr][res.keyword.lstrip("~")]
+                deps.update(atom(dep).no_usedeps for dep in res.deps)
+
+        issues: dict[str, dict[str, set[atom]]] = defaultdict(partial(defaultdict, set))
+        for attr, per_keyword in failures.items():
+            groups = self._any_of_groups(pkg, attr)
+            for keyword, deps in per_keyword.items():
+                for dep in self._pick_alternatives(groups, keyword, deps):
+                    issues[dep.key][keyword].add(dep)
 
         for pkgname, problems in issues.items():
             pkgset: list[package] = self.options.repo.match(atom(pkgname))

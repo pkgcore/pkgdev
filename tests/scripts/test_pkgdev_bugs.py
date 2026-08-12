@@ -136,18 +136,20 @@ class TestSuggestedKeywords:
         assert bugs._get_suggested_keywords(repo, pkg, streq=False) == frozenset({"x86"})
 
 
-class TestStableKeywordChain:
-    def _mk_graph(self, repo, category=BugCategory.STABLEREQ):
-        # build a DependencyGraph without running its heavy __init__
-        graph = bugs.DependencyGraph.__new__(bugs.DependencyGraph)
-        graph.options = SimpleNamespace(repo=repo, category=category)
-        graph.out = SimpleNamespace(write=lambda *a, **k: None, flush=lambda: None)
-        graph.err = graph.out
-        graph.nodes = set()
-        graph.starting_nodes = set()
-        graph.target_arches = {}
-        return graph
+def mk_graph(repo, category=BugCategory.STABLEREQ):
+    # build a DependencyGraph without running its heavy __init__
+    graph = bugs.DependencyGraph.__new__(bugs.DependencyGraph)
+    graph.options = SimpleNamespace(repo=repo, search_repo=repo, category=category)
+    graph.out = SimpleNamespace(write=lambda *a, **k: None, flush=lambda: None)
+    graph.err = graph.out
+    graph.nodes = set()
+    graph.starting_nodes = set()
+    graph.targets = ()
+    graph.target_arches = {}
+    return graph
 
+
+class TestStableKeywordChain:
     def test_stable_to_keyword_chain(self, repo):
         # the dependency has no amd64 keyword at all -> it must be keyworded before
         # it can be stabilized, producing a parent-stable -> dep-stable -> dep-keyword chain
@@ -157,7 +159,7 @@ class TestStableKeywordChain:
         parent = max(repo.itermatch(atom("=cat/parent-2")))
         dep = max(repo.itermatch(atom("=cat/dep-1")))
 
-        graph = self._mk_graph(repo)
+        graph = mk_graph(repo)
         graph.targets = (parent,)
 
         def fake_find_dependencies(pkg, keywords, stable=True):
@@ -195,7 +197,7 @@ class TestStableKeywordChain:
         d = max(repo.itermatch(atom("=cat/d-1")))
         e = max(repo.itermatch(atom("=cat/e-1")))
 
-        graph = self._mk_graph(repo)
+        graph = mk_graph(repo)
         graph.targets = (p1, p2)
         graph.target_arches = {p1: frozenset({"amd64"}), p2: frozenset({"arm"})}
 
@@ -219,7 +221,7 @@ class TestStableKeywordChain:
         # a keyword target with no other versions to derive arches from must error
         repo.create_ebuild("cat/a-1", KEYWORDS=["~amd64"])
         pkg = max(repo.itermatch(atom("=cat/a-1")))
-        graph = self._mk_graph(repo, category=BugCategory.KEYWORDREQ)
+        graph = mk_graph(repo, category=BugCategory.KEYWORDREQ)
         graph.targets = (pkg,)
         graph._find_dependencies = lambda *a, **k: iter(())
         with pytest.raises(SystemExit):
@@ -236,7 +238,7 @@ class TestStableKeywordChain:
         # requesting a masked keyword is a hard error
         repo.create_ebuild("cat/a-1", KEYWORDS=keywords)
         pkg = max(repo.itermatch(atom("=cat/a-1")))
-        graph = self._mk_graph(repo, category=BugCategory.KEYWORDREQ)
+        graph = mk_graph(repo, category=BugCategory.KEYWORDREQ)
         graph.targets = (pkg,)
         graph.target_arches = {pkg: frozenset({"loong"})}
         graph._find_dependencies = lambda *a, **k: iter(())
@@ -251,7 +253,7 @@ class TestStableKeywordChain:
         parent = max(repo.itermatch(atom("=cat/parent-2")))
         dep = max(repo.itermatch(atom("=cat/dep-1")))
 
-        graph = self._mk_graph(repo)
+        graph = mk_graph(repo)
         graph.targets = (parent,)
 
         def fake_find_dependencies(pkg, keywords, stable=True):
@@ -267,7 +269,7 @@ class TestStableKeywordChain:
 
     def test_load_graph_toml_category(self, repo, tmp_path):
         repo.create_ebuild("cat/a-1", KEYWORDS=["~amd64"])
-        graph = self._mk_graph(repo)
+        graph = mk_graph(repo)
         graph.options = SimpleNamespace(repo=repo, search_repo=repo)
         toml_file = tmp_path / "graph.toml"
         toml_file.write_text(
@@ -298,7 +300,7 @@ class TestStableKeywordChain:
         a = max(repo.itermatch(atom("=cat/a-1")))
         b = max(repo.itermatch(atom("=cat/b-1")))
 
-        graph = self._mk_graph(repo)
+        graph = mk_graph(repo)
         graph.options = SimpleNamespace(repo=repo, search_repo=repo)
         graph.auto_cc_arches = frozenset()
         graph.modified_repo = SimpleNamespace(itermatch=lambda *a, **k: iter(()))
@@ -317,6 +319,81 @@ class TestStableKeywordChain:
         assert len(graph.starting_nodes) == 1
         (loaded_target,) = graph.starting_nodes
         assert {p.cpvstr for p, _ in loaded_target.pkgs} == {"cat/a-1"}
+
+
+class TestAnyOfDependencies:
+    def test_flat_groups_are_found(self, repo):
+        repo.create_ebuild("cat/parent-1", RDEPEND="|| ( cat/a cat/b )", DEPEND="cat/c")
+        parent = max(repo.itermatch(atom("=cat/parent-1")))
+        assert bugs.DependencyGraph._any_of_groups(parent, "rdepend") == (
+            (atom("cat/a"), atom("cat/b")),
+        )
+        assert bugs.DependencyGraph._any_of_groups(parent, "depend") == ()
+
+    def test_groups_inside_use_conditionals(self, repo):
+        repo.create_ebuild("cat/parent-1", IUSE="foo", RDEPEND="foo? ( || ( cat/a cat/b ) )")
+        parent = max(repo.itermatch(atom("=cat/parent-1")))
+        assert bugs.DependencyGraph._any_of_groups(parent, "rdepend") == (
+            (atom("cat/a"), atom("cat/b")),
+        )
+
+    def test_nested_alternatives_are_skipped(self, repo):
+        # picking one atom out of "( cat/a cat/b )" would drop the other, which
+        # the alternative needs, so the block is left alone
+        repo.create_ebuild("cat/parent-1", RDEPEND="|| ( ( cat/a cat/b ) cat/c )")
+        parent = max(repo.itermatch(atom("=cat/parent-1")))
+        assert bugs.DependencyGraph._any_of_groups(parent, "rdepend") == ()
+
+    def _mk_alternatives(self, repo, *, keywords=("~amd64", "~amd64", "~amd64")):
+        for name, kws in zip("abc", keywords):
+            repo.create_ebuild(f"cat/{name}-1", KEYWORDS=[kws])
+        return ((atom("cat/a"), atom("cat/b"), atom("cat/c")),)
+
+    def test_selected_alternative_wins(self, repo):
+        # cat/b is already being handled, so nothing else has to be
+        groups = self._mk_alternatives(repo)
+        graph = mk_graph(repo)
+        graph.targets = (max(repo.itermatch(atom("=cat/b-1"))),)
+        deps = {atom("cat/a"), atom("cat/b"), atom("cat/c")}
+        assert graph._pick_alternatives(groups, "amd64", deps) == {atom("cat/b")}
+
+    def test_alternative_in_the_graph_wins(self, repo):
+        groups = self._mk_alternatives(repo)
+        graph = mk_graph(repo)
+        c = max(repo.itermatch(atom("=cat/c-1")))
+        graph.nodes = {bugs.GraphNode(((c, {"amd64"}),))}
+        deps = {atom("cat/a"), atom("cat/b"), atom("cat/c")}
+        assert graph._pick_alternatives(groups, "amd64", deps) == {atom("cat/c")}
+
+    def test_keyworded_alternative_beats_one_needing_a_keywordreq(self, repo):
+        # cat/a would have to be keyworded on amd64 first, cat/b wouldn't
+        groups = self._mk_alternatives(repo, keywords=("~x86", "~amd64", "~x86"))
+        graph = mk_graph(repo)
+        deps = {atom("cat/a"), atom("cat/b"), atom("cat/c")}
+        assert graph._pick_alternatives(groups, "amd64", deps) == {atom("cat/b")}
+
+    def test_ebuild_order_breaks_ties(self, repo):
+        # nothing to prefer, so the ebuild's own first choice is taken
+        groups = self._mk_alternatives(repo)
+        graph = mk_graph(repo)
+        deps = {atom("cat/a"), atom("cat/b"), atom("cat/c")}
+        assert graph._pick_alternatives(groups, "amd64", deps) == {atom("cat/a")}
+
+    def test_alternative_without_a_match_is_last(self, repo):
+        # cat/a is gone from the repo, so it can never solve the block
+        repo.create_ebuild("cat/b-1", KEYWORDS=["~amd64"])
+        repo.create_ebuild("cat/c-1", KEYWORDS=["~amd64"])
+        groups = ((atom("cat/a"), atom("cat/b"), atom("cat/c")),)
+        graph = mk_graph(repo)
+        deps = {atom("cat/a"), atom("cat/b"), atom("cat/c")}
+        assert graph._pick_alternatives(groups, "amd64", deps) == {atom("cat/b")}
+
+    def test_deps_outside_a_group_are_kept(self, repo):
+        # all-of failures are each mandatory, and a lone alternative isn't a choice
+        groups = self._mk_alternatives(repo)
+        graph = mk_graph(repo)
+        deps = {atom("cat/a"), atom("cat/d")}
+        assert graph._pick_alternatives(groups, "amd64", deps) == deps
 
 
 class TestObsoletingBugs:

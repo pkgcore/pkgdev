@@ -15,6 +15,12 @@ pkgdev 0.2.17 (unreleased)
   being filed, although they were counted in the bugs to create. Those bugs
   are now filed and added to the existing bug's dependencies (Arthur Zamarin)
 
+- bugs: fix every alternative of an unsolvable ``|| ( ... )`` dependency being
+  pulled into the graph, as pkgcheck reports all of its atoms although solving
+  any one of them is enough. A single alternative is now taken: one already
+  being handled, failing that one already keyworded on the arch, failing that
+  the ebuild's own first choice (Arthur Zamarin, #225)
+
 pkgdev 0.2.16 (2026-07-31)
 --------------------------
 
