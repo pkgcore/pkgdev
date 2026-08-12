@@ -214,6 +214,10 @@ template_opts.add_argument(
     """,
 )
 
+# consecutive passes turning up no new USE combination before giving up on
+# reaching --use-combos, so an unlucky draw doesn't cut the search short
+_DRY_PASSES = 20
+
 portage_config = Path("/etc/portage")
 portage_accept_keywords = portage_config / "package.accept_keywords"
 portage_package_use = portage_config / "package.use"
@@ -388,6 +392,15 @@ def _build_job(namespace, pkg, pkg_use: _PkgUse, is_test: bool):
     randomize = namespace.random_use in "rR"
     keep_preferred = ignore_prefixes if randomize else ()
 
+    def redrawn(flag: str):
+        """Whether a flag out of the problem takes a new value on every pass"""
+        return (
+            randomize
+            and flag not in force_true
+            and flag not in force_false
+            and not flag.startswith(keep_preferred)
+        )
+
     def resolve_unconstrained():
         """Values for the flags kept out of the problem"""
         for flag in unconstrained:
@@ -395,15 +408,19 @@ def _build_job(namespace, pkg, pkg_use: _PkgUse, is_test: bool):
                 yield flag, True
             elif flag in force_false:
                 yield flag, False
-            elif randomize and not flag.startswith(keep_preferred):
+            elif redrawn(flag):
                 yield flag, random.choice((True, False))
             else:
                 yield flag, flag in prefer_true
 
     wanted = max(namespace.use_combos, 1)
-    produced = 0
-    while produced < wanted:
-        exhausted = True
+    # the solver repeats itself every pass, so all a replay can vary is the
+    # redrawn flags. Refined to the real count once a pass has been solved
+    limit = wanted
+    seen: set[frozenset[str]] = set()
+    dry_passes = 0
+    while len(seen) < min(wanted, limit):
+        fresh = solutions = 0
         for solution in find_constraint_satisfaction(
             pkg.required_use,
             constrained.union(immutable),
@@ -411,8 +428,15 @@ def _build_job(namespace, pkg, pkg_use: _PkgUse, is_test: bool):
             force_false,
             prefer_true,
         ):
-            exhausted = False
+            solutions += 1
             solution.update(resolve_unconstrained())
+            # what is actually tested, so a repeat is a wasted rebuild
+            combo = frozenset(flag for flag, state in solution.items() if state and flag in iuse)
+            if combo in seen:
+                continue
+            seen.add(combo)
+            fresh += 1
+
             use_flags, use_expand = _groupby_use_expand(
                 solution, use_expand_prefixes, enabled, iuse
             )
@@ -422,18 +446,23 @@ def _build_job(namespace, pkg, pkg_use: _PkgUse, is_test: bool):
                 + " "
                 + " ".join(f"{var.upper()}: {' '.join(vals)}" for var, vals in use_expand.items())
             )
-            produced += 1
-            if produced >= wanted:
+            if len(seen) >= wanted:
                 return
-        if not produced:
+        if not seen:
             forced = sorted(pkg_use.force_on) + [f"-{use}" for use in sorted(pkg_use.force_off)]
             raise UnsatisfiableUse(
                 f"{pkg.cpvstr}: no USE combination satisfies REQUIRED_USE"
                 + (f" with {', '.join(forced)}" if forced else "")
             )
         # replay the combinations if REQUIRED_USE admits fewer than asked for,
-        # redrawing the unconstrained flags each pass
-        if exhausted or not randomize:
+        # redrawing the flags out of the problem each pass
+        if not randomize:
+            return
+        limit = solutions * 2 ** sum(map(redrawn, unconstrained))
+        # a package can still run out earlier than that, when REQUIRED_USE names
+        # a flag outside IUSE and distinct solutions collapse into one combination
+        dry_passes = 0 if fresh else dry_passes + 1
+        if dry_passes >= _DRY_PASSES:
             return
 
 

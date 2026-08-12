@@ -46,6 +46,10 @@ pkgdev 0.2.17 (unreleased)
   warning. A package whose ``REQUIRED_USE`` admits no combination once the
   options are applied raises an error (Arthur Zamarin, #164)
 
+- tatt: ``--use-combos`` no longer repeats a USE combination it already
+  emitted. A package with little to vary is now tested fewer times instead of
+  rebuilding the same thing over and over (Arthur Zamarin, #164)
+
 pkgdev 0.2.16 (2026-07-31)
 --------------------------
 
