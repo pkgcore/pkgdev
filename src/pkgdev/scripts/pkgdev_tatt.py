@@ -280,7 +280,6 @@ def _groupby_use_expand(
 
 def _build_job(namespace, pkg, is_test: bool):
     use_expand_prefixes = tuple(s.lower() + "_" for s in namespace.domain.profile.use_expand)
-    default_on_iuse = tuple(use[1:] for use in pkg.iuse if use.startswith("+"))
     immutable, enabled, _disabled = namespace.domain.get_package_use_unconfigured(pkg)
 
     iuse = frozenset(pkg.iuse_stripped)
@@ -288,7 +287,7 @@ def _build_job(namespace, pkg, is_test: bool):
     force_false = ("test",) if not is_test else ()
 
     if namespace.random_use == "d":
-        prefer_true = enabled.union(default_on_iuse)
+        prefer_true = enabled
     elif namespace.random_use in "rR":
         ignore_prefixes = set(namespace.ignore_prefixes)
         if namespace.random_use == "r":
@@ -303,9 +302,7 @@ def _build_job(namespace, pkg, is_test: bool):
         if prefer_true:
             random.shuffle(prefer_true)
             prefer_true = prefer_true[: random.randint(0, len(prefer_true) - 1)]
-        prefer_true.extend(
-            use for use in enabled.union(default_on_iuse) if use.startswith(ignore_prefixes)
-        )
+        prefer_true.extend(use for use in enabled if use.startswith(ignore_prefixes))
 
     # only flags REQUIRED_USE mentions need solving; the rest can't violate it
     constrained = frozenset(iter_flags(pkg.required_use))
