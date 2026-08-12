@@ -5,6 +5,13 @@ Release Notes
 pkgdev 0.2.17 (unreleased)
 --------------------------
 
+**Fixes:**
+
+- config: fix the user config file being silently ignored when
+  ``XDG_CONFIG_HOME`` is set to an empty (or relative) value, as is common in
+  containers and root shells. Per the XDG basedir spec such values are now
+  discarded in favor of ``~/.config`` (Arthur Zamarin, #179)
+
 **pkgdev bugs:**
 
 - bugs: fix obsoleting an older bug being a noop when an exact match bug was
