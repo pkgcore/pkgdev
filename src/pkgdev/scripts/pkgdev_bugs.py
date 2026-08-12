@@ -612,6 +612,21 @@ class DependencyGraph:
                 deps.add(min(alternatives, key=partial(self._alternative_rank, keyword=keyword)))
         return deps
 
+    @staticmethod
+    def _drop_settled(pkgset: list[package], arches: set[str], stable: bool) -> list[package]:
+        """Prefer the versions ``arches`` still has to be asked for.
+
+        A version already stable (or already keyworded) on an arch the check
+        reported unsolvable can't be what the dependency needs there, filing for
+        it again changes nothing. It gets picked all the same, being the closest
+        match, when a use dep dropped with the rest of the atom is what makes a
+        newer version the real answer. Nothing is left when the answer is a
+        version that doesn't exist yet, so keep the full set for that error.
+        """
+        prefixes = ("",) if stable else ("", "~")
+        settled = {f"{prefix}{arch}" for arch in arches for prefix in prefixes}
+        return [pkg for pkg in pkgset if not settled.intersection(pkg.keywords)] or pkgset
+
     def _find_dependencies(self, pkg: package, keywords: set[str], stable: bool = True):
         check = visibility.VisibilityCheck(self.options, profile_addon=self.profile_addon)
         # the fake pkgs fed here aren't parsed ebuild sources (no .tree), so skip the
@@ -635,14 +650,18 @@ class DependencyGraph:
 
         for pkgname, problems in issues.items():
             pkgset: list[package] = self.options.repo.match(atom(pkgname))
+            # one version has to answer every failing arch, so exclude those settled
+            # on any of them
+            candidates = self._drop_settled(pkgset, set(problems), stable)
             try:
-                match = self.find_best_match(set().union(*problems.values()), pkgset)
+                match = self.find_best_match(set().union(*problems.values()), candidates)
                 yield match, set(problems.keys())
             except (ValueError, IndexError):
                 results: dict[package, set[str]] = defaultdict(set)
                 for keyword, deps in problems.items():
+                    candidates = self._drop_settled(pkgset, {keyword}, stable)
                     try:
-                        match = self.find_best_match(deps, pkgset)
+                        match = self.find_best_match(deps, candidates)
                         results[match].add(keyword)
                     except (ValueError, IndexError):
                         # deps may contain contradictory version atoms (e.g. from
@@ -651,7 +670,7 @@ class DependencyGraph:
                         found = False
                         for dep in deps:
                             try:
-                                match = self.find_best_match({dep}, pkgset)
+                                match = self.find_best_match({dep}, candidates)
                                 results[match].add(keyword)
                                 found = True
                             except (ValueError, IndexError):

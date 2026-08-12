@@ -21,6 +21,12 @@ pkgdev 0.2.17 (unreleased)
   being handled, failing that one already keyworded on the arch, failing that
   the ebuild's own first choice (Arthur Zamarin, #225)
 
+- bugs: fix a dependency being requested on an arch it is already stable on.
+  The use deps which made it unsolvable are dropped before matching a version,
+  so the closest match won, although the check had just reported it doesn't
+  solve the dependency there. Versions already stable (or already keyworded,
+  for a keywordreq) on a failing arch are now passed over (Arthur Zamarin, #186)
+
 pkgdev 0.2.16 (2026-07-31)
 --------------------------
 

@@ -396,6 +396,35 @@ class TestAnyOfDependencies:
         assert graph._pick_alternatives(groups, "amd64", deps) == deps
 
 
+class TestSettledVersions:
+    def _mk_pkgs(self, repo, *keywords):
+        for i, kws in enumerate(keywords, start=1):
+            repo.create_ebuild(f"cat/a-{i}", KEYWORDS=kws)
+        return sorted(repo.itermatch(atom("cat/a")))
+
+    def test_stable_versions_are_dropped(self, repo):
+        # a-1 is already stable on amd64, so stabilizing it again solves nothing
+        pkgs = self._mk_pkgs(repo, ["amd64", "~x86"], ["~amd64", "~x86"])
+        assert bugs.DependencyGraph._drop_settled(pkgs, {"amd64"}, True) == pkgs[1:]
+
+    def test_keyworded_versions_are_dropped_for_keywordreqs(self, repo):
+        # keywording only makes sense where the arch is missing entirely
+        pkgs = self._mk_pkgs(repo, ["~amd64"], ["amd64"], ["~x86"])
+        assert bugs.DependencyGraph._drop_settled(pkgs, {"amd64"}, False) == pkgs[2:]
+        # a stablereq still wants the ~amd64 one
+        assert bugs.DependencyGraph._drop_settled(pkgs, {"amd64"}, True) == [pkgs[0], pkgs[2]]
+
+    def test_settled_on_any_arch_is_dropped(self, repo):
+        # the same version has to answer every arch it was reported for
+        pkgs = self._mk_pkgs(repo, ["amd64", "~x86"], ["~amd64", "~x86"])
+        assert bugs.DependencyGraph._drop_settled(pkgs, {"amd64", "x86"}, True) == pkgs[1:]
+
+    def test_all_settled_keeps_the_full_set(self, repo):
+        # the answer is a version that doesn't exist yet, leave the error to the caller
+        pkgs = self._mk_pkgs(repo, ["amd64"], ["amd64"])
+        assert bugs.DependencyGraph._drop_settled(pkgs, {"amd64"}, True) == pkgs
+
+
 class TestObsoletingBugs:
     def _mk_graph(self, repo, monkeypatch, answer=True):
         graph = bugs.DependencyGraph.__new__(bugs.DependencyGraph)
