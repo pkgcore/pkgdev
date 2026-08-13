@@ -5,7 +5,6 @@ import os
 import re
 import shlex
 import subprocess
-import sys
 import tarfile
 import tempfile
 import textwrap
@@ -318,12 +317,13 @@ class HistoricalRepo(UnconfiguredTree):
             error = old_files.stderr.read().decode().strip()
             raise Exception(f"failed populating archive repo: {error}")
         with tarfile.open(mode="r|", fileobj=old_files.stdout) as tar:
-            extra_kwargs = {}
             # see filter in https://docs.python.org/3/library/tarfile.html#tarfile.TarFile.extractall
             # Whilst we trust git archive, we still leave the basic protections on.
-            if sys.version_info >= (3, 12, 0):
-                extra_kwargs["filter"] = "data"
-            tar.extractall(path=self.location, **extra_kwargs)
+            tar.extractall(path=self.location, filter="data")
+
+
+# GLEP 81 categories, mapped to what their packages allocate
+_ACCT_CATEGORIES = {"acct-user": "user", "acct-group": "group"}
 
 
 def change(*statuses):
@@ -461,10 +461,26 @@ class PkgSummary(ChangeSummary):
         """Existing packages in the tree related to the package."""
         return tuple(self.repo.match(next(iter(self.changes)).unversioned_atom))
 
+    @jit_attr
+    def account(self):
+        """Identifier a new GLEP 81 user or group package allocates, if any."""
+        atom = next(iter(self.changes))
+        if (kind := _ACCT_CATEGORIES.get(atom.category)) is None or len(self.changes) != 1:
+            return None
+        # a negative id asks the eclass to allocate dynamically, nothing to name
+        id_re = re.compile(rf"""ACCT_{kind.upper()}_ID=(?P<quot>['"]?)(?P<id>\d+)(?P=quot)""")
+        for pkg in self.repo.match(atom):
+            for line in pkg.ebuild.text_fileobj():
+                if mo := id_re.match(line):
+                    return f"{kind} {mo.group('id')}"
+        return None
+
     @change("A")
     def add(self):
         """Generate summaries for add actions."""
         if len(self.existing) == len(self.changes):
+            if self.account is not None:
+                return f"add {self.account}"
             msg = f"new package, add {', '.join(self.versions)}"
             if len(self.versions) == 1 or len(msg) <= 50:
                 return msg

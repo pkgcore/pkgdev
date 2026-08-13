@@ -489,24 +489,25 @@ class TestPkgdevCommit:
             f.write("# comment\n")
         assert commit() == "msg"
 
+    def _auto_commit(self, capsys, git_repo):
+        with (
+            os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
+            patch("sys.argv", self.args + ["-a"]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
+            self.script()
+        assert excinfo.value.code == 0
+        out, err = capsys.readouterr()
+        assert err == out == ""
+        message = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
+        return message[0]
+
     def test_generated_commit_summaries(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         repo.create_ebuild("cat/pkg-0")
         git_repo.add_all("cat/pkg-0")
-
-        def commit():
-            with (
-                os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
-                patch("sys.argv", self.args + ["-a"]),
-                pytest.raises(SystemExit) as excinfo,
-                chdir(git_repo.path),
-            ):
-                self.script()
-            assert excinfo.value.code == 0
-            out, err = capsys.readouterr()
-            assert err == out == ""
-            message = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
-            return message[0]
+        commit = partial(self._auto_commit, capsys, git_repo)
 
         # initial package import
         repo.create_ebuild("cat/newpkg-0")
@@ -630,9 +631,31 @@ class TestPkgdevCommit:
         shutil.rmtree(pjoin(git_repo.path, "newcat/pkg"))
         assert commit() == "newcat/pkg: treeclean"
 
+    def test_generated_commit_summaries_accounts(self, capsys, repo, make_git_repo):
+        git_repo = make_git_repo(repo.location)
+        repo.create_ebuild("cat/pkg-0")
+        git_repo.add_all("cat/pkg-0")
+        commit = partial(self._auto_commit, capsys, git_repo)
+
+        # GLEP 81 accounts name the identifier they allocate
+        repo.create_ebuild("acct-user/newuser-0", acct_user_id=123)
+        assert commit() == "acct-user/newuser: add user 123"
+
+        repo.create_ebuild("acct-group/newgroup-0", acct_group_id=456)
+        assert commit() == "acct-group/newgroup: add group 456"
+
+        # a dynamically allocated id has nothing to name
+        repo.create_ebuild("acct-user/dynamic-0", acct_user_id=-1)
+        assert commit() == "acct-user/dynamic: new package, add 0"
+
+        # only for a new package, not a version added to an existing one
+        repo.create_ebuild("acct-user/newuser-1", acct_user_id=123)
+        assert commit() == "acct-user/newuser: add 1"
+
     def test_generated_commit_summaries_keywords(self, capsys, make_repo, make_git_repo):
         repo = make_repo(arches=["amd64", "arm64", "ia64", "x86"])
         git_repo = make_git_repo(repo.location)
+        commit = partial(self._auto_commit, capsys, git_repo)
         pkgdir = os.path.dirname(repo.create_ebuild("cat/pkg-0"))
         with open(pjoin(pkgdir, "metadata.xml"), "w") as f:
             f.write(
@@ -647,20 +670,6 @@ class TestPkgdevCommit:
                 )
             )
         git_repo.add_all("cat/pkg-0")
-
-        def commit():
-            with (
-                os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
-                patch("sys.argv", self.args + ["-a"]),
-                pytest.raises(SystemExit) as excinfo,
-                chdir(git_repo.path),
-            ):
-                self.script()
-            assert excinfo.value.code == 0
-            out, err = capsys.readouterr()
-            assert err == out == ""
-            message = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
-            return message[0]
 
         # keyword version
         repo.create_ebuild("cat/pkg-0", keywords=["~amd64"])
@@ -711,6 +720,7 @@ class TestPkgdevCommit:
     def test_metadata_summaries(self, capsys, repo, make_git_repo):
         git_repo = make_git_repo(repo.location)
         pkgdir = os.path.dirname(repo.create_ebuild("cat/pkg-0"))
+        commit = partial(self._auto_commit, capsys, git_repo)
         # stub metadata
         with open(pjoin(pkgdir, "metadata.xml"), "w") as f:
             f.write(
@@ -728,20 +738,6 @@ class TestPkgdevCommit:
                 )
             )
         git_repo.add_all("cat/pkg-0")
-
-        def commit():
-            with (
-                os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
-                patch("sys.argv", self.args + ["-a"]),
-                pytest.raises(SystemExit) as excinfo,
-                chdir(git_repo.path),
-            ):
-                self.script()
-            assert excinfo.value.code == 0
-            out, err = capsys.readouterr()
-            assert err == out == ""
-            message = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
-            return message[0]
 
         # add yourself
         with open(pjoin(pkgdir, "metadata.xml"), "w") as f:

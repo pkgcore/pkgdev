@@ -37,6 +37,12 @@ pkgdev 0.2.17 (unreleased)
   solve the dependency there. Versions already stable (or already keyworded,
   for a keywordreq) on a failing arch are now passed over (Arthur Zamarin, #186)
 
+**pkgdev commit:**
+
+- commit: a new ``acct-user`` or ``acct-group`` package now gets a summary
+  naming the identifier it allocates, ``acct-user/foo: add user 123``, instead
+  of the generic ``new package, add 0`` (Arthur Zamarin, #14)
+
 **pkgdev tatt:**
 
 - tatt: fix ebuild ``IUSE`` defaults overriding the profile when deciding a
