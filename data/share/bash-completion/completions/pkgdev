@@ -46,6 +46,16 @@ _pkgdev() {
         fi
     }
 
+    _list_stabilization_groups() {
+        local base group groups=()
+        base="$(git rev-parse --show-toplevel 2>/dev/null)/metadata/stabilization-groups"
+        [[ -d ${base} ]] || return
+        while IFS= read -r group; do
+            groups+=("@${group%.group}")
+        done < <(find "${base}" -type f -name '*.group' -printf '%P\n' 2>/dev/null)
+        compgen -W "${groups[*]}" -- "${cur}"
+    }
+
     if [[ ${prev} = "--color" ]]; then
         COMPREPLY=($(compgen -W "${boolean_options}" -- "${cur}"))
         return
@@ -292,7 +302,11 @@ _pkgdev() {
                     _filedir
                     ;;
                 *)
-                    COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+                    if [[ ${cur} == @* ]]; then
+                        COMPREPLY+=($(_list_stabilization_groups))
+                    else
+                        COMPREPLY+=($(compgen -W "${subcmd_options}" -- "${cur}"))
+                    fi
                     ;;
             esac
             ;;

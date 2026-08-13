@@ -14,6 +14,9 @@ pkgdev 0.2.17 (unreleased)
 
 **pkgdev bugs:**
 
+- bugs: bash and zsh completion now complete stabilization groups as targets,
+  offered once the leading ``@`` is typed (Arthur Zamarin)
+
 - bugs: fix obsoleting an older bug being a noop when an exact match bug was
   found for the same node, when merging nodes, or when no new bugs were left
   to file (Arthur Zamarin)

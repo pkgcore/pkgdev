@@ -1,5 +1,20 @@
 #compdef pkgdev
 
+(( $+functions[_pkgdev_stabilization_groups] )) ||
+_pkgdev_stabilization_groups() {
+  [[ $PREFIX == '@'* ]] || return 1
+
+  local base
+  base="$(git rev-parse --show-toplevel 2>/dev/null)/metadata/stabilization-groups"
+  [[ -d $base ]] || return 1
+
+  local -a groups
+  groups=( $base/**/*.group(N.:r) )
+  groups=( ${groups#"$base"/} )
+  groups=( "@"${^groups} )
+  _describe -t stabilization-groups 'stabilization group' groups
+}
+
 typeset -a base_options
 local curcontext=$curcontext state state_descr line ret=1
 
@@ -138,6 +153,7 @@ case $state in
           '--stabletime[stable request timeframe in days]:days' \
           {'(--stablereq)-s','(-s)--stablereq'}'[file stable request bugs]' \
           {'(--keywording)-k','(-k)--keywording'}'[file rekeywording bugs]' \
+          '*:target:_pkgdev_stabilization_groups' \
           && ret=0
         ;;
     esac
