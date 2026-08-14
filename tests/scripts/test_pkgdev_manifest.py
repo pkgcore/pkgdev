@@ -1,3 +1,4 @@
+import os
 from contextlib import chdir
 from functools import partial
 from os.path import join as pjoin
@@ -5,6 +6,7 @@ from typing import List, Set
 from unittest.mock import patch
 
 import pytest
+from snakeoil.fileutils import touch
 
 from pkgdev.scripts import run
 
@@ -188,6 +190,24 @@ class TestPkgdevManifest:
         assert excinfo.value.code == 0
         out, err = capsys.readouterr()
         assert out == err == ""
+
+    def test_target_within_pkgdir(self, capsys, repo):
+        """Any file inside a package dir manifests that package."""
+        repo.create_ebuild("cat/pkg-0")
+        pkgdir = os.path.dirname(repo.create_ebuild("cat/pkg-1"))
+        os.makedirs(pjoin(pkgdir, "files"), exist_ok=True)
+        touch(pjoin(pkgdir, "files", "a.patch"))
+        for target in ("files/a.patch", "files", "metadata.xml"):
+            touch(pjoin(pkgdir, "metadata.xml"))
+            with (
+                patch("sys.argv", self.args + [target]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(pkgdir),
+            ):
+                self.script()
+            assert excinfo.value.code == 0
+            out, err = capsys.readouterr()
+            assert err == ""
 
     def test_bad_manifest(self, capsys, repo):
         repo.create_ebuild("cat/pkg-0")

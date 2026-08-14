@@ -85,7 +85,10 @@ def _restrict_targets(repo, targets):
         if os.path.exists(target):
             try:
                 if target in repo:
-                    target = os.path.relpath(target, repo.location)
+                    target = os.path.relpath(os.path.realpath(target), repo.location)
+                    # anything else inside a package dir manifests that package
+                    if len(parts := target.split(os.sep)) > 2 and not target.endswith(".ebuild"):
+                        target = os.sep.join(parts[:2])
                 restrictions.append(repo.path_restrict(target))
             except ValueError as exc:
                 manifest.error(exc)

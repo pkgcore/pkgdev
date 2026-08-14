@@ -12,6 +12,12 @@ pkgdev 0.2.17 (unreleased)
   containers and root shells. Per the XDG basedir spec such values are now
   discarded in favor of ``~/.config`` (Arthur Zamarin, #179)
 
+**pkgdev manifest:**
+
+- manifest: any file inside a package directory now manifests that package,
+  so ``pkgdev manifest files/some.patch`` works rather than failing to parse
+  the path as an atom (Arthur Zamarin, #80)
+
 **pkgdev bugs:**
 
 - bugs: bash and zsh completion now complete stabilization groups as targets,
