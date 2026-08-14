@@ -14,6 +14,10 @@ pkgdev 0.2.17 (unreleased)
 
 **pkgdev manifest:**
 
+- manifest: a run with nothing to do now says so instead of printing nothing
+  at all, and ``-v`` names each package passed over and why (Arthur Zamarin,
+  #80, #108)
+
 - manifest: any file inside a package directory now manifests that package,
   so ``pkgdev manifest files/some.patch`` works rather than failing to parse
   the path as an atom (Arthur Zamarin, #80)

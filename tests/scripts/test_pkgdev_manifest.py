@@ -189,6 +189,37 @@ class TestPkgdevManifest:
             self.script()
         assert excinfo.value.code == 0
         out, err = capsys.readouterr()
+        assert err == ""
+        assert out.strip() == "manifests are up to date"
+
+    def test_target_within_pkgdir(self, capsys, repo):
+        """Any file inside a package dir manifests that package."""
+        repo.create_ebuild("cat/pkg-0")
+        pkgdir = os.path.dirname(repo.create_ebuild("cat/pkg-1"))
+        os.makedirs(pjoin(pkgdir, "files"), exist_ok=True)
+        touch(pjoin(pkgdir, "files", "a.patch"))
+        for target in ("files/a.patch", "files", "metadata.xml"):
+            touch(pjoin(pkgdir, "metadata.xml"))
+            with (
+                patch("sys.argv", self.args + [target]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(pkgdir),
+            ):
+                self.script()
+            assert excinfo.value.code == 0
+            out, err = capsys.readouterr()
+            assert err == ""
+
+    def test_good_manifest_quiet(self, capsys, repo):
+        repo.create_ebuild("cat/pkg-0")
+        with (
+            patch("sys.argv", self.args + ["-q"]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(repo.location),
+        ):
+            self.script()
+        assert excinfo.value.code == 0
+        out, err = capsys.readouterr()
         assert out == err == ""
 
     def test_target_within_pkgdir(self, capsys, repo):

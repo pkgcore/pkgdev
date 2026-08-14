@@ -127,15 +127,33 @@ def _manifest_validate(parser, namespace):
     namespace.restriction = packages.AndRestriction(*restrictions)
 
 
+class _ManifestObserver(observer_mod.formatter_output):
+    """Observer noting whether the operation reported doing anything."""
+
+    def __init__(self, out, verbosity=0):
+        super().__init__(out)
+        self.verbosity = verbosity
+        self.reported = False
+
+    def info(self, msg, *args, **kwds):
+        self.reported = True
+        super().info(msg, *args, **kwds)
+
+
 @manifest.bind_main_func
 def _manifest(options, out, err):
+    observer = _ManifestObserver(out, options.verbosity)
     failed = options.repo.operations.manifest(
         domain=options.domain,
         restriction=options.restriction,
-        observer=observer_mod.formatter_output(out),
+        observer=observer,
         mirrors=options.mirrors,
         force=options.force,
         distdir=options.distdir,
     )
+
+    # a silent run is indistinguishable from one which did nothing at all
+    if not failed and not observer.reported and options.verbosity >= 0:
+        out.write("manifests are up to date")
 
     return int(any(failed))
