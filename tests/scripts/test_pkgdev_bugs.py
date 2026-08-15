@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 from pkgcore.bugzilla import BugCategory, BugzillaError
 from pkgcore.ebuild.atom import atom
+from pkgcore.util import parserestrict
 
 from pkgdev.scripts import pkgdev_bugs as bugs
 
@@ -598,3 +599,52 @@ class TestFilingErrorContext:
         with pytest.raises(BugzillaError) as excinfo:
             node.file_bug(bugzilla_cassette.client(api_key="API"), frozenset(), (), None)
         assert "adding dependencies to bug 200" in str(excinfo.value)
+
+
+class TestFilterStablereqs:
+    """A target matching many packages has a stablereq per package, not one."""
+
+    def mk_stablereq_graph(self, repo, wanted):
+        graph = mk_graph(repo)
+        graph.options.filter_stablereqs = True
+        fed = []
+
+        class Check:
+            def feed(self, pkgs):
+                fed.append(tuple({pkg.key for pkg in pkgs}))
+                for pkg in reversed(pkgs):
+                    if pkg.versioned_atom.cpvstr in wanted:
+                        yield bugs.stablereq.StableRequest(
+                            slot=pkg.slot, keywords=pkg.keywords, age=40, pkg=pkg
+                        )
+
+        graph.stablereq_check = Check()
+        return graph, fed
+
+    def test_every_package_in_the_target_is_checked(self, repo):
+        for name in ("a", "b", "c"):
+            repo.create_ebuild(f"cat/{name}-1", KEYWORDS=["amd64"])
+            repo.create_ebuild(f"cat/{name}-2", KEYWORDS=["~amd64"])
+        repo.sync()
+        graph, fed = self.mk_stablereq_graph(repo, {"cat/a-2", "cat/c-2"})
+
+        graph.load_targets([(None, parserestrict.parse_match("cat/*"), frozenset())])
+
+        assert sorted(str(pkg.versioned_atom) for pkg in graph.targets) == ["=cat/a-2", "=cat/c-2"]
+        # one package per feed, as the check reads a single package's versions
+        assert fed and all(len(keys) == 1 for keys in fed)
+
+    def test_target_without_any_stablereq_is_dropped(self, repo):
+        repo.create_ebuild("cat/a-1", KEYWORDS=["amd64"])
+        repo.sync()
+        graph, _ = self.mk_stablereq_graph(repo, set())
+        graph.load_targets([(None, parserestrict.parse_match("cat/*"), frozenset())])
+        assert graph.targets == ()
+
+    def test_single_package_target_is_unchanged(self, repo):
+        repo.create_ebuild("cat/a-1", KEYWORDS=["amd64"])
+        repo.create_ebuild("cat/a-2", KEYWORDS=["~amd64"])
+        repo.sync()
+        graph, _ = self.mk_stablereq_graph(repo, {"cat/a-2"})
+        graph.load_targets([(None, parserestrict.parse_match("cat/a"), frozenset())])
+        assert [str(pkg.versioned_atom) for pkg in graph.targets] == ["=cat/a-2"]

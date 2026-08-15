@@ -133,6 +133,9 @@ bugs = ArgumentParser(
 
             # ... limited to those with an active StableRequest result
             pkgdev bugs --find-by-maintainer foo@gentoo.org --filter-stablereqs
+
+            # file stablereq bugs for all packages inside category "dev-libs" with an active StableRequest
+            pkgdev bugs --filter-stablereqs "dev-libs/*"
     """,
 )
 BugzillaApiKey.mangle_argparser(bugs)
@@ -676,6 +679,21 @@ class DependencyGraph:
                             )
                 yield from results.items()
 
+    def _stablereqs(self, pkgset) -> list[tuple[atom, list[package]]]:
+        """The stablereq of every package in the set, as a target of its own."""
+        per_pkg: dict[str, list[package]] = defaultdict(list)
+        for pkg in pkgset:
+            per_pkg[pkg.key].append(pkg)
+
+        found = []
+        # the check reads the versions of a single package, so feed one at a time
+        for pkgs in per_pkg.values():
+            for res in self.stablereq_check.feed(sorted(pkgs)):
+                if isinstance(res, stablereq.StableRequest):
+                    found.append((atom(f"={res.category}/{res.package}-{res.version}"), pkgs))
+                    break
+        return found
+
     def load_targets(self, targets: list[tuple[str, object, frozenset[str]]]):
         result = []
         search_repo = self.options.search_repo
@@ -684,23 +702,23 @@ class DependencyGraph:
             try:
                 pkgset = search_repo.match(target)
                 if self.options.filter_stablereqs:
-                    for res in self.stablereq_check.feed(sorted(pkgset)):
-                        if isinstance(res, stablereq.StableRequest):
-                            target = atom(f"={res.category}/{res.package}-{res.version}")
-                            break
-                    else:  # no stablereq
+                    # a target may match many packages, each with its own stablereq
+                    found = self._stablereqs(pkgset)
+                else:
+                    found = [(target, pkgset)]
+
+                for restrict, candidates in found:
+                    if masked.match(restrict):
+                        self.err.write(
+                            self.err.fg("yellow"),
+                            f"Target {restrict} is masked, skipping",
+                            self.err.reset,
+                        )
                         continue
-                if masked.match(target):
-                    self.err.write(
-                        self.err.fg("yellow"),
-                        f"Target {target} is masked, skipping",
-                        self.err.reset,
-                    )
-                    continue
-                match = self.find_best_match([target], pkgset, False)
-                result.append(match)
-                if arches:
-                    self.target_arches[match] = arches
+                    match = self.find_best_match([restrict], candidates, False)
+                    result.append(match)
+                    if arches:
+                        self.target_arches[match] = arches
             except (ValueError, IndexError):
                 bugs.error(f"Restriction {target} has no match in repository", status=3)
         self.targets = tuple(result)

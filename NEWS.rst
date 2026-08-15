@@ -16,6 +16,9 @@ pkgdev 0.2.18 (unreleased)
 - bugs: a bugzilla error while filing now names the bug and packages being
   filed or modified (Arthur Zamarin, #229)
 
+- bugs: fix ``--filter-stablereqs`` collapsing a target which matches several
+  packages down to a single one (Arthur Zamarin)
+
 pkgdev 0.2.17 (2026-08-14)
 --------------------------
 
