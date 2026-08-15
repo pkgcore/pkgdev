@@ -2,6 +2,20 @@
 Release Notes
 =============
 
+pkgdev 0.2.18 (unreleased)
+--------------------------
+
+**pkgdev bugs:**
+
+- bugs: fix a "circular dependency" error part way through filing, when one
+  existing bug was matched by several nodes and a dependency path ran between
+  them, which made that bug depend on a bug depending on it. Nodes matched to
+  the same bug are now merged into one, and a bug kept as a node's own bug is
+  no longer obsoleted by another (Arthur Zamarin, #229)
+
+- bugs: a bugzilla error while filing now names the bug and packages being
+  filed or modified (Arthur Zamarin, #229)
+
 pkgdev 0.2.17 (2026-08-14)
 --------------------------
 

@@ -26,6 +26,7 @@ from pkgcore.bugzilla import (
     BugQuery,
     BugUpdate,
     Bugzilla,
+    BugzillaError,
     ListChange,
     NewBug,
     PackageList,
@@ -289,6 +290,15 @@ def parse_atom(pkg: str):
             raise exc
 
 
+@contextlib.contextmanager
+def _naming(what: str):
+    """Say what was being filed when bugzilla rejects a change."""
+    try:
+        yield
+    except BugzillaError as exc:
+        raise BugzillaError(f"{what}: {exc}") from exc
+
+
 class GraphNode:
     __slots__ = ("bugno", "category", "cc_arches", "edges", "obsoletes", "pkgs", "summary")
 
@@ -387,7 +397,8 @@ class GraphNode:
         if self.bugno is not None:
             # an already existing bug may still be missing deps, and may supersede older bugs
             if deps := self.file_missing_deps(bugzilla, auto_cc_arches, modified_repo, observer):
-                bugzilla.update(self.bugno, BugUpdate(depends_on=ListChange.adding(*deps)))
+                with _naming(f"adding dependencies to bug {self.bugno} for {self}"):
+                    bugzilla.update(self.bugno, BugUpdate(depends_on=ListChange.adding(*deps)))
             self.obsolete_bugs(bugzilla)
             return self.bugno
         self.file_missing_deps(bugzilla, auto_cc_arches, modified_repo, observer)
@@ -403,18 +414,19 @@ class GraphNode:
                         f" {pkg.versioned_atom.cpvstr}: no change for {days_old} days, since {modified:%Y-%m-%d}"
                     )
 
-        self.bugno = bugzilla.create(
-            NewBug.arch_request(
-                self.category,
-                self.package_list,
-                maintainers=tuple(self.node_maintainers),
-                cc_arches=self.should_cc_arches(auto_cc_arches),
-                summary=self.bug_summary,
-                description="\n".join(description).strip(),
-                depends_on=tuple({dep.bugno for dep in self.edges}),
-                blocks=tuple(block_bugs),
+        with _naming(f"filing bug for {self}"):
+            self.bugno = bugzilla.create(
+                NewBug.arch_request(
+                    self.category,
+                    self.package_list,
+                    maintainers=tuple(self.node_maintainers),
+                    cc_arches=self.should_cc_arches(auto_cc_arches),
+                    summary=self.bug_summary,
+                    description="\n".join(description).strip(),
+                    depends_on=tuple({dep.bugno for dep in self.edges}),
+                    blocks=tuple(block_bugs),
+                )
             )
-        )
         if observer is not None:
             observer(self)
         self.obsolete_bugs(bugzilla)
@@ -438,7 +450,8 @@ class GraphNode:
         if not self.obsoletes:
             return
         assert self.bugno is not None
-        bugzilla.update(sorted(self.obsoletes), BugUpdate.obsoleted_by(self.bugno))
+        with _naming(f"obsoleting bugs by {self.bugno} for {self}"):
+            bugzilla.update(sorted(self.obsoletes), BugUpdate.obsoleted_by(self.bugno))
         self.obsoletes.clear()  # don't repeat the update if visited again
 
 
@@ -901,16 +914,26 @@ class DependencyGraph:
     def merge_nodes(self, nodes: tuple[GraphNode, ...]) -> GraphNode:
         categories = {node.category for node in nodes}
         assert len(categories) == 1, f"refusing to merge nodes of mixed categories: {categories}"
+        bugnos = {node.bugno for node in nodes if node.bugno is not None}
+        if len(bugnos) > 1:
+            bugs.error(
+                "cannot merge nodes matched to different existing bugs: "
+                + ", ".join(f"https://bugs.gentoo.org/{bugno}" for bugno in sorted(bugnos)),
+                status=3,
+            )
         self.nodes.difference_update(nodes)
         is_start = bool(self.starting_nodes.intersection(nodes))
         self.starting_nodes.difference_update(nodes)
         new_node = GraphNode(
-            list(chain.from_iterable(n.pkgs for n in nodes)), category=categories.pop()
+            list(chain.from_iterable(n.pkgs for n in nodes)),
+            category=categories.pop(),
+            bugno=next(iter(bugnos), None),
         )
 
         for node in nodes:
             new_node.edges.update(node.edges.difference(nodes))
             new_node.obsoletes.update(node.obsoletes)  # inherit pending obsoletions
+        new_node.obsoletes.discard(new_node.bugno)  # never obsolete our own bug
 
         for node in self.nodes:
             if node.edges.intersection(nodes):
@@ -921,6 +944,30 @@ class DependencyGraph:
         if is_start:
             self.starting_nodes.add(new_node)
         return new_node
+
+    def merge_matched_bugs(self):
+        """Merge the nodes which matched the same existing bug."""
+        shared: dict[int, list[GraphNode]] = defaultdict(list)
+        for node in self.nodes:
+            if node.bugno is not None:
+                shared[node.bugno].append(node)
+
+        for bugno, nodes in sorted(shared.items()):
+            if len(nodes) > 1:
+                self.out.write(
+                    f"Merging {len(nodes)} nodes matched to bug {bugno}: ",
+                    ", ".join(map(str, nodes)),
+                )
+                self.merge_nodes(tuple(nodes))
+
+        # a bug still in use can't also be resolved as obsolete
+        in_use = {node.bugno for node in self.nodes if node.bugno is not None}
+        for node in self.nodes:
+            for bugno in sorted(node.obsoletes.intersection(in_use)):
+                self.out.warn(
+                    f"not obsoleting bug {bugno}, it is the bug of another node in the graph"
+                )
+            node.obsoletes.difference_update(in_use)
 
     @staticmethod
     def _find_cycles(nodes: tuple[GraphNode, ...], stack: list[GraphNode]) -> tuple[GraphNode, ...]:
@@ -1123,6 +1170,7 @@ def main(options, out: Formatter, err: Formatter):
             out.flush()
             has_output = True
 
+    d.merge_matched_bugs()
     if not d.merge_stabilization_groups(out, err):
         out.write(out.fg("red"), "Aborted", out.reset)
         return 1

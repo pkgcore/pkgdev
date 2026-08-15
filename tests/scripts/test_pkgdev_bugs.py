@@ -4,7 +4,7 @@ from os.path import join as pjoin
 from types import SimpleNamespace
 
 import pytest
-from pkgcore.bugzilla import BugCategory
+from pkgcore.bugzilla import BugCategory, BugzillaError
 from pkgcore.ebuild.atom import atom
 
 from pkgdev.scripts import pkgdev_bugs as bugs
@@ -142,7 +142,9 @@ def mk_graph(repo, category=BugCategory.STABLEREQ):
     # build a DependencyGraph without running its heavy __init__
     graph = bugs.DependencyGraph.__new__(bugs.DependencyGraph)
     graph.options = SimpleNamespace(repo=repo, search_repo=repo, category=category)
-    graph.out = SimpleNamespace(write=lambda *a, **k: None, flush=lambda: None)
+    graph.out = SimpleNamespace(
+        write=lambda *a, **k: None, warn=lambda *a, **k: None, flush=lambda: None
+    )
     graph.err = graph.out
     graph.nodes = set()
     graph.starting_nodes = set()
@@ -509,3 +511,90 @@ class TestObsoletingBugs:
 
         merged = graph.merge_nodes((first, second))
         assert merged.obsoletes == {100, 101}
+
+
+class TestSharedExistingBug:
+    """Several nodes matching one existing bug must not make it depend on itself."""
+
+    def mk_shared(self, repo):
+        """A dependency path whose ends matched the same existing bug."""
+        pkg = max(repo.itermatch(atom("=cat/u-0")))
+        graph = mk_graph(repo)
+        top = bugs.GraphNode((), bugno=597)
+        middle = bugs.GraphNode(((pkg, {"*"}),))
+        bottom = bugs.GraphNode((), bugno=597)
+        top.edges.add(middle)
+        middle.edges.add(bottom)
+        graph.nodes.update((top, middle, bottom))
+        graph.starting_nodes.add(top)
+        return graph, middle
+
+    def test_shared_bug_is_merged(self, repo):
+        mk_repo(repo)
+        graph, middle = self.mk_shared(repo)
+        graph.merge_matched_bugs()
+
+        merged = [node for node in graph.nodes if node.bugno == 597]
+        assert len(merged) == 1, "nodes sharing a bug must become one node"
+        # the path collapsed into a cycle, which merge_cycles then folds together
+        assert merged[0].edges == {middle}
+        assert middle.edges == {merged[0]}
+        graph.merge_cycles()
+        assert len(graph.nodes) == 1
+        assert next(iter(graph.nodes)).bugno == 597, "the existing bug must be kept"
+
+    def test_no_self_dependency_is_filed(self, repo, bugzilla_cassette):
+        mk_repo(repo)
+        graph, _ = self.mk_shared(repo)
+        graph.merge_matched_bugs()
+        graph.merge_cycles()
+
+        node = next(iter(graph.nodes))
+        node.file_bug(bugzilla_cassette.client(api_key="API"), frozenset(), (), None)
+        # nothing to file: the existing bug covers the whole cycle, and 597 was
+        # never made to depend on a bug which depends on it
+        assert bugzilla_cassette.calls == []
+
+    def test_bug_in_use_is_not_obsoleted(self, repo):
+        mk_repo(repo)
+        graph, middle = self.mk_shared(repo)
+        middle.obsoletes.add(597)
+        graph.merge_matched_bugs()
+
+        assert not any(node.obsoletes for node in graph.nodes), (
+            "a bug kept as another node's bug must not also be resolved obsolete"
+        )
+
+    def test_merging_different_bugs_errors(self, repo, capsys):
+        mk_repo(repo)
+        graph = mk_graph(repo)
+        nodes = (bugs.GraphNode((), bugno=1), bugs.GraphNode((), bugno=2))
+        graph.nodes.update(nodes)
+        with pytest.raises(SystemExit) as excinfo:
+            graph.merge_nodes(nodes)
+        assert excinfo.value.code == 3
+        assert "different existing bugs" in capsys.readouterr().err
+
+
+class TestFilingErrorContext:
+    """A rejected change must name what was being filed."""
+
+    def test_creation_error_names_the_node(self, repo, bugzilla_cassette):
+        mk_repo(repo)
+        pkg = max(repo.itermatch(atom("=cat/u-0")))
+        node = bugs.GraphNode(((pkg, {"*"}),))
+        bugzilla_cassette.expect_error(116, "circular dependency")
+        with pytest.raises(BugzillaError) as excinfo:
+            node.file_bug(bugzilla_cassette.client(api_key="API"), frozenset(), (), None)
+        assert "filing bug for =cat/u-0" in str(excinfo.value)
+        assert "circular dependency" in str(excinfo.value)
+
+    def test_dependency_update_error_names_the_bug(self, repo, bugzilla_cassette):
+        mk_repo(repo)
+        pkg = max(repo.itermatch(atom("=cat/u-0")))
+        node = bugs.GraphNode((), bugno=200)
+        node.edges.add(bugs.GraphNode(((pkg, {"*"}),)))
+        bugzilla_cassette.expect_created(300).expect_error(116, "circular dependency")
+        with pytest.raises(BugzillaError) as excinfo:
+            node.file_bug(bugzilla_cassette.client(api_key="API"), frozenset(), (), None)
+        assert "adding dependencies to bug 200" in str(excinfo.value)
