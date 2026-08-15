@@ -9,6 +9,7 @@ from itertools import islice
 from pathlib import Path
 from typing import NamedTuple
 
+from pkgcore.bugzilla import Bug, BugCategory, Bugzilla
 from pkgcore.bugzilla.apikey import BugzillaApiKey
 from pkgcore.restrictions import boolean, packages, values
 from pkgcore.restrictions.required_use import find_constraint_satisfaction, iter_flags
@@ -266,22 +267,11 @@ def _validate_args(parser, namespace):
 
 
 def _get_bugzilla_packages(namespace):
-    from nattka.package import match_package_list
-
-    try:
-        from nattka.bugzilla import BugCategory, NattkaBugzilla
-
-        nattka_bugzilla = NattkaBugzilla(api_key=namespace.api_key)
-        bug = next(iter(nattka_bugzilla.find_bugs(bugs=[namespace.bug]).values()))
-    except ImportError:
-        from pkgcore.bugzilla import BugCategory, Bugzilla
-
-        bug = Bugzilla(api_key=namespace.api_key).get(namespace.bug)
-
+    bug: Bug = Bugzilla(namespace.api_key).get(namespace.bug)
     namespace.keywording = bug.category == BugCategory.KEYWORDREQ
     repo = namespace.domain.repos["gentoo"].raw_repo
     src_repo = namespace.domain.source_repos_raw
-    for pkg, _ in match_package_list(repo, bug, only_new=True, filter_arch=[namespace.domain.arch]):
+    for pkg, _ in bug.match_packages(repo, only_new=True, filter_arch=[namespace.domain.arch]):
         yield src_repo.match(pkg.versioned_atom)[0]
 
 

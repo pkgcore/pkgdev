@@ -121,19 +121,21 @@ class TestBugFiling:
 
 
 class TestSuggestedKeywords:
+    """pkgcore owns the rule; these pin the semantics pkgdev relies on."""
+
     def test_stablereq(self, repo):
         repo.create_ebuild("cat/a-1", KEYWORDS=["amd64", "x86"])
         repo.create_ebuild("cat/a-2", KEYWORDS=["amd64", "~x86"])
         pkg = max(repo.itermatch(atom("=cat/a-2")))
         # only ~arch keywords here that are stable on another version may be stabilized
-        assert bugs._get_suggested_keywords(repo, pkg, streq=True) == frozenset({"x86"})
+        assert bugs.suggested_keywords(repo, pkg, stable=True) == frozenset({"x86"})
 
     def test_keywordreq(self, repo):
         repo.create_ebuild("cat/a-1", KEYWORDS=["~amd64", "~x86"])
         repo.create_ebuild("cat/a-2", KEYWORDS=["~amd64"])
         pkg = max(repo.itermatch(atom("=cat/a-2")))
         # keywords present on other versions but missing here are suggested
-        assert bugs._get_suggested_keywords(repo, pkg, streq=False) == frozenset({"x86"})
+        assert bugs.suggested_keywords(repo, pkg, stable=False) == frozenset({"x86"})
 
 
 def mk_graph(repo, category=BugCategory.STABLEREQ):

@@ -29,7 +29,7 @@ dynamic = ["version"]
 
 dependencies = [
 	"snakeoil~=0.11.1",
-	"pkgcore~=0.12.38",
+	"pkgcore@git+https://github.com/pkgcore/pkgcore.git#master",
 	"pkgcheck~=0.10.42",
 ]
 
@@ -42,7 +42,6 @@ doc = [
 	"sphinx",
 ]
 tatt = [
-	"nattka",
 	"Jinja2",
 ]
 

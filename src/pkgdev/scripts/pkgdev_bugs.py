@@ -35,6 +35,7 @@ from pkgcore.bugzilla.changes import summarise
 from pkgcore.ebuild.atom import atom
 from pkgcore.ebuild.ebuild_src import package
 from pkgcore.ebuild.errors import MalformedAtom
+from pkgcore.ebuild.keywording import suggested_keywords
 from pkgcore.ebuild.misc import sort_keywords
 from pkgcore.ebuild.repo_objs import LocalMetadataXml, ProjectsXml
 from pkgcore.package.mutated import MutatedPkg
@@ -57,7 +58,7 @@ class StoreTargetArches(commandline.StoreTarget):
     """``StoreTarget`` variant accepting trailing arches after each atom.
 
     A target may carry a whitespace separated list of arches after the atom,
-    nattka-style, e.g. ``=cat/pkg-1.0 amd64 x86``. This produces 3-tuples
+    as a bug's package list does, e.g. ``=cat/pkg-1.0 amd64 x86``. This produces 3-tuples
     ``(token, restriction, arches)`` instead of the usual ``(token, restriction)``.
 
     Note: this reimplements ``StoreTarget.__call__`` (it cannot inject the arch
@@ -278,27 +279,6 @@ def _validate_args(parser, namespace):
     namespace.bugzilla = Bugzilla(namespace.api_key, user_agent=f"pkgdev-bugs/{__version__}")
 
 
-def _get_suggested_keywords(repo, pkg: package, streq: bool = True):
-    # for stablereq only consider already stable keywords on other versions, for
-    # keywordreq also consider ~arch keywords (those can be propagated as new keywords)
-    disallow_prefix = "-~" if streq else "-"
-    match_keywords = {
-        x.lstrip("~")
-        for pkgver in repo.match(pkg.unversioned_atom)
-        for x in pkgver.keywords
-        if x[0] not in disallow_prefix
-    }
-
-    if streq:
-        # limit stablereq to whatever is ~arch right now
-        match_keywords.intersection_update(x.lstrip("~") for x in pkg.keywords if x[0] == "~")
-    else:
-        # limit keywordreq to missing keywords (strip all keywords already present)
-        match_keywords.difference_update(x.lstrip("~-") for x in pkg.keywords)
-
-    return frozenset({x for x in match_keywords if "-" not in x})
-
-
 def parse_atom(pkg: str):
     try:
         return atom(pkg)
@@ -369,7 +349,7 @@ class GraphNode:
                 previous = frozenset(keywords)
 
         for pkg, keywords in self.pkgs:
-            suggested = _get_suggested_keywords(repo, pkg, streq=not self.is_keywordreq)
+            suggested = suggested_keywords(repo, pkg, stable=not self.is_keywordreq)
             if keywords == set(suggested):
                 keywords.clear()
                 keywords.add("*")
@@ -780,7 +760,7 @@ class DependencyGraph:
             streq = category is STABLEREQ
             verb = category.verb
             if streq:
-                keywords.update(_get_suggested_keywords(self.options.repo, pkg, streq=True))
+                keywords.update(suggested_keywords(self.options.repo, pkg, stable=True))
                 if not keywords:
                     # nothing left to stabilize (already stable or never keyworded)
                     self.out.write(f"Nothing to stable for {pkg.unversioned_atom}")
@@ -789,7 +769,7 @@ class DependencyGraph:
                 # explicit (command line) or dependency-driven arches are authoritative;
                 # only fall back to the other-versions heuristic when none were given
                 if not keywords:
-                    keywords.update(_get_suggested_keywords(self.options.repo, pkg, streq=False))
+                    keywords.update(suggested_keywords(self.options.repo, pkg, stable=False))
                 if not keywords:
                     # keywordreq with no derivable arches: the user must specify them
                     bugs.error(
