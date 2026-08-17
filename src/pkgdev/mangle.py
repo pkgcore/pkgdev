@@ -8,6 +8,7 @@ import signal
 import traceback
 from datetime import datetime
 
+from pkgcore.ebuild.misc import sort_keywords
 from snakeoil.cli.exceptions import UserException
 from snakeoil.mappings import OrderedSet
 
@@ -71,15 +72,10 @@ class Mangler:
     @mangle("keywords")
     def _keywords(self, change):
         """Fix keywords order."""
-
-        def keywords_sort_key(kw):
-            return tuple(reversed(kw.lstrip("-~").partition("-")))
-
         lines = change.data.splitlines()
         for i, line in enumerate(lines):
             if mo := keywords_regex.match(line):
-                kw = sorted(mo.group("keywords").split(), key=keywords_sort_key)
-                new_kw = " ".join(kw)
+                new_kw = " ".join(sort_keywords(mo.group("keywords").split()))
                 if not mo.group("quote"):
                     new_kw = f'"{new_kw}"'
                 lines[i] = f"{mo.group('pre')}{new_kw}{mo.group('post')}"

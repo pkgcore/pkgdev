@@ -52,6 +52,22 @@ class TestMangler:
         assert list(Mangler([fake_change(path)])) == [str(path)]
         assert path.read_text() == "# comment\n"
 
+    @pytest.mark.parametrize(
+        ("original", "expected"),
+        (
+            # glob-arches first, then arches, then prefix-arches
+            ('KEYWORDS="~x86-macos amd64 -* ~alpha"', '"-* ~alpha amd64 ~x86-macos"'),
+            # unquoted keywords gain quotes
+            ("KEYWORDS=sparc", '"sparc"'),
+            ("KEYWORDS='sparc ~arm64 alpha'", "'alpha ~arm64 sparc'"),
+        ),
+    )
+    def test_keywords_order(self, tmp_path, original, expected):
+        path = tmp_path / "pkg-1.ebuild"
+        path.write_text(f"# comment\n{original}\n")
+        assert list(Mangler([fake_change(path)])) == [str(path)]
+        assert path.read_text() == f"# comment\nKEYWORDS={expected}\n"
+
     def test_iterator_exceptions(self, tmp_path):
         """Test parallelized iterator against unhandled exceptions."""
         path = tmp_path / "file"
