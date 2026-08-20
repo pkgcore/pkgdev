@@ -142,7 +142,9 @@ class TestSuggestedKeywords:
 def mk_graph(repo, category=BugCategory.STABLEREQ):
     # build a DependencyGraph without running its heavy __init__
     graph = bugs.DependencyGraph.__new__(bugs.DependencyGraph)
-    graph.options = SimpleNamespace(repo=repo, search_repo=repo, category=category)
+    graph.options = SimpleNamespace(
+        repo=repo, search_repo=repo, category=category, filter_stablereqs=False
+    )
     graph.out = SimpleNamespace(
         write=lambda *a, **k: None, warn=lambda *a, **k: None, flush=lambda: None
     )
@@ -151,6 +153,8 @@ def mk_graph(repo, category=BugCategory.STABLEREQ):
     graph.starting_nodes = set()
     graph.targets = ()
     graph.target_arches = {}
+    graph.stablereq_check = SimpleNamespace(feed=lambda pkgs: iter(()))
+    graph._stablereq_due = {}
     return graph
 
 
@@ -648,3 +652,123 @@ class TestFilterStablereqs:
         graph, _ = self.mk_stablereq_graph(repo, {"cat/a-2"})
         graph.load_targets([(None, parserestrict.parse_match("cat/a"), frozenset())])
         assert [str(pkg.versioned_atom) for pkg in graph.targets] == ["=cat/a-2"]
+
+
+STABLE_THEN_UNSTABLE = {
+    "1": {"KEYWORDS": ["amd64"]},
+    "2": {"KEYWORDS": ["~amd64"]},
+    "3": {"KEYWORDS": ["~amd64"]},
+}
+
+
+class TestFindBestMatch:
+    """Each step of the preference chain deciding which version gets filed."""
+
+    def mk(self, repo, versions=None, masks=(), due=()):
+        for ver, kwargs in (versions or STABLE_THEN_UNSTABLE).items():
+            repo.create_ebuild(f"cat/dep-{ver}", **kwargs)
+        if masks:
+            with open(pjoin(repo.location, "profiles", "package.mask"), "w") as f:
+                f.write("\n".join(masks) + "\n")
+        repo.sync()
+
+        graph = mk_graph(repo)
+        if due:
+
+            def feed(pkgs):
+                for pkg in pkgs:
+                    if pkg.versioned_atom.cpvstr in due:
+                        yield bugs.stablereq.StableRequest(
+                            slot=pkg.slot, keywords=pkg.keywords, age=40, pkg=pkg
+                        )
+
+            graph.stablereq_check = SimpleNamespace(feed=feed)
+            graph.options.filter_stablereqs = True
+        return graph, repo.match(atom("cat/dep"))
+
+    @staticmethod
+    def pick(graph, pkgset, **kwargs):
+        return str(graph.find_best_match([atom("cat/dep")], pkgset, **kwargs).versioned_atom)
+
+    @staticmethod
+    def version(pkgset, fullver):
+        return next(pkg for pkg in pkgset if pkg.fullver == fullver)
+
+    def test_a_user_selected_target_wins(self, repo):
+        graph, pkgset = self.mk(repo)
+        graph.targets = (self.version(pkgset, "2"),)
+        assert self.pick(graph, pkgset) == "=cat/dep-2"
+
+    def test_the_newest_user_selected_target_wins(self, repo):
+        graph, pkgset = self.mk(repo)
+        graph.targets = (self.version(pkgset, "1"), self.version(pkgset, "2"))
+        assert self.pick(graph, pkgset) == "=cat/dep-2"
+
+    def test_a_package_already_in_the_graph_wins(self, repo):
+        graph, pkgset = self.mk(repo)
+        graph.nodes = {bugs.GraphNode(((self.version(pkgset, "2"), {"*"}),))}
+        assert self.pick(graph, pkgset) == "=cat/dep-2"
+
+    def test_a_user_target_beats_the_graph(self, repo):
+        graph, pkgset = self.mk(repo)
+        graph.targets = (self.version(pkgset, "1"),)
+        graph.nodes = {bugs.GraphNode(((self.version(pkgset, "3"), {"*"}),))}
+        assert self.pick(graph, pkgset) == "=cat/dep-1"
+
+    def test_the_stablereq_due_version_wins(self, repo):
+        graph, pkgset = self.mk(repo, due={"cat/dep-2"})
+        assert self.pick(graph, pkgset) == "=cat/dep-2"
+
+    def test_the_graph_beats_the_stablereq_due_version(self, repo):
+        graph, pkgset = self.mk(repo, due={"cat/dep-2"})
+        graph.nodes = {bugs.GraphNode(((self.version(pkgset, "3"), {"*"}),))}
+        assert self.pick(graph, pkgset) == "=cat/dep-3"
+
+    def test_the_stablereq_step_needs_filter_stablereqs(self, repo):
+        graph, pkgset = self.mk(repo, due={"cat/dep-2"})
+        graph.options.filter_stablereqs = False
+        assert self.pick(graph, pkgset) == "=cat/dep-1"
+
+    def test_a_due_version_outside_the_candidates_is_passed_over(self, repo):
+        graph, pkgset = self.mk(repo, due={"cat/dep-3"})
+        candidates = [pkg for pkg in pkgset if pkg.fullver != "3"]
+        assert self.pick(graph, candidates) == "=cat/dep-1"
+
+    def test_the_stablereq_answer_is_cached_per_package(self, repo):
+        graph, pkgset = self.mk(repo, due={"cat/dep-2"})
+        calls = []
+        inner = graph.stablereq_check.feed
+        graph.stablereq_check = SimpleNamespace(feed=lambda pkgs: (calls.append(1), inner(pkgs))[1])
+        self.pick(graph, pkgset)
+        self.pick(graph, pkgset)
+        assert len(calls) == 1
+
+    def test_a_semi_stable_version_beats_a_newer_unstable_one(self, repo):
+        graph, pkgset = self.mk(repo)
+        assert self.pick(graph, pkgset) == "=cat/dep-1"
+
+    def test_the_newest_wins_when_semi_stable_is_not_preferred(self, repo):
+        graph, pkgset = self.mk(repo)
+        assert self.pick(graph, pkgset, prefer_semi_stable=False) == "=cat/dep-3"
+
+    def test_versions_without_keywords_are_passed_over(self, repo):
+        versions = dict(STABLE_THEN_UNSTABLE, **{"3": {"KEYWORDS": []}})
+        graph, pkgset = self.mk(repo, versions)
+        assert self.pick(graph, pkgset, prefer_semi_stable=False) == "=cat/dep-2"
+
+    def test_the_newest_is_the_last_resort(self, repo):
+        versions = {ver: {"KEYWORDS": []} for ver in ("1", "2", "3")}
+        graph, pkgset = self.mk(repo, versions)
+        assert self.pick(graph, pkgset) == "=cat/dep-3"
+
+    def test_live_versions_are_excluded(self, repo):
+        # keyworded, so only the live filter can keep it out of the running
+        versions = dict(
+            STABLE_THEN_UNSTABLE, **{"9999": {"PROPERTIES": "live", "KEYWORDS": ["~amd64"]}}
+        )
+        graph, pkgset = self.mk(repo, versions)
+        assert self.pick(graph, pkgset, prefer_semi_stable=False) == "=cat/dep-3"
+
+    def test_masked_versions_are_excluded(self, repo):
+        graph, pkgset = self.mk(repo, masks=("=cat/dep-3",))
+        assert self.pick(graph, pkgset, prefer_semi_stable=False) == "=cat/dep-2"

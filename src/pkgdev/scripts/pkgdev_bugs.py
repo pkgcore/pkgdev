@@ -476,10 +476,24 @@ class DependencyGraph:
         self.added_repo = git_addon.cached_repo(GitAddedRepo)
         self.modified_repo = git_addon.cached_repo(GitModifiedRepo)
         self.stablereq_check = stablereq.StableRequestCheck(self.options, git_addon=git_addon)
+        self._stablereq_due: dict[str, tuple[str, ...]] = {}
 
     def mk_fake_pkg(self, pkg: package, keywords: set[str], stable: bool = True):
         kws = tuple(keywords) if stable else tuple(f"~{kw}" for kw in keywords)
         return MutatedPkg(pkg, {"keywords": kws})
+
+    def stablereq_versions(self, unversioned: atom) -> tuple[str, ...]:
+        """The versions of a package the stablereq check flags as due."""
+        if (due := self._stablereq_due.get(unversioned.key)) is None:
+            # the check reads every version, to tell which of them are stable
+            pkgset = self.options.search_repo.match(unversioned)
+            due = tuple(
+                f"{res.category}/{res.package}-{res.version}"
+                for res in self.stablereq_check.feed(sorted(pkgset))
+                if isinstance(res, stablereq.StableRequest)
+            )
+            self._stablereq_due[unversioned.key] = due
+        return due
 
     def find_best_match(self, restrict, pkgset: list[package], prefer_semi_stable=True) -> package:
         restrict = boolean.AndRestriction(
@@ -495,6 +509,12 @@ class DependencyGraph:
         if intersect := tuple(filter(restrict.match, all_pkgs)):
             return max(intersect)
         matches = sorted(filter(restrict.match, pkgset), reverse=True)
+        # prefer the version the stablereq check considers due for stabilization
+        if self.options.filter_stablereqs and len(matches) > 1:
+            by_cpv = {match.versioned_atom.cpvstr: match for match in matches}
+            for cpvstr in self.stablereq_versions(matches[0].unversioned_atom):
+                if match := by_cpv.get(cpvstr):
+                    return match
         # prefer package with any stable keyword
         if prefer_semi_stable:
             for match in matches:
