@@ -1,14 +1,15 @@
-import os
 import multiprocessing
+import os
 import re
 import signal
 from functools import partial
 from unittest.mock import patch
 
-from pkgdev.mangle import Mangler
-from pkgdev.scripts.pkgdev_commit import Change
 import pytest
 from snakeoil.cli.exceptions import UserException
+
+from pkgdev.mangle import Mangler
+from pkgdev.scripts.pkgdev_commit import Change
 
 
 def fake_change(s):

@@ -14,6 +14,7 @@ from enum import Enum
 from functools import partial
 from itertools import chain
 from os.path import join as pjoin
+from typing import ClassVar
 
 from pkgcheck import reporters, scan
 from pkgcore.ebuild.atom import MalformedAtom
@@ -384,7 +385,7 @@ class ChangeSummary:
 class MetadataSummary(ChangeSummary):
     """Summary generation support for metadata.xml changes."""
 
-    status_funcs = {}
+    status_funcs: ClassVar[dict[str, callable]] = {}
 
     def __init__(self, options, changes):
         super().__init__(options)
@@ -440,7 +441,7 @@ class MetadataSummary(ChangeSummary):
 class PkgSummary(ChangeSummary):
     """Summary generation support for single package ebuild changes."""
 
-    status_funcs = {}
+    status_funcs: ClassVar[dict[str, callable]] = {}
 
     def __init__(self, options, changes):
         super().__init__(options)

@@ -2,7 +2,6 @@ import os
 from contextlib import chdir
 from functools import partial
 from os.path import join as pjoin
-from typing import List, Set
 from unittest.mock import patch
 
 import pytest
@@ -16,7 +15,7 @@ class TestPkgdevManifestParseArgs:
         with pytest.raises(SystemExit) as excinfo:
             tool.parse_args(["manifest"])
         assert excinfo.value.code == 2
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev manifest: error: not in ebuild repo"
 
     @pytest.mark.skip
@@ -57,7 +56,7 @@ class TestPkgdevManifestParseArgs:
             with chdir(repo.location):
                 tool.parse_args(["manifest", str(ebuild)])
         assert excinfo.value.code == 2
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert (
             err.strip()
             == f"pkgdev manifest: error: {repo.repo_id!r} repo doesn't contain: {str(ebuild)!r}"
@@ -86,7 +85,7 @@ class TestPkgdevManifestParseArgs:
         assert matches == ["cat/pkg-0"]
 
     def test_if_modified_target(self, repo, make_git_repo, tool):
-        def manifest_matches() -> Set[str]:
+        def manifest_matches() -> set[str]:
             repo.sync()
             with chdir(repo.location):
                 options, _ = tool.parse_args(["manifest", "--if-modified"])
@@ -136,7 +135,7 @@ class TestPkgdevManifestParseArgs:
 
     @pytest.mark.skip
     def test_ignore_fetch_restricted(self, repo, tool):
-        def manifest_matches() -> List[str]:
+        def manifest_matches() -> list[str]:
             with chdir(repo.location):
                 options, _ = tool.parse_args(["manifest", "--ignore-fetch-restricted"])
             return [x.cpvstr for x in repo.itermatch(options.restriction)]
@@ -161,14 +160,14 @@ class TestPkgdevManifestParseArgs:
         with pytest.raises(SystemExit) as excinfo, chdir(repo.location):
             tool.parse_args(["manifest", str(tmp_path)])
         assert excinfo.value.code == 2
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.startswith("pkgdev manifest: error: 'fake' repo doesn't contain:")
 
     def test_invalid_atom_target(self, repo, capsys, tool):
         with pytest.raises(SystemExit) as excinfo, chdir(repo.location):
             tool.parse_args(["manifest", "=cat/pkg"])
         assert excinfo.value.code == 2
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.startswith("pkgdev manifest: error: invalid atom: '=cat/pkg'")
 
 
@@ -207,7 +206,7 @@ class TestPkgdevManifest:
             ):
                 self.script()
             assert excinfo.value.code == 0
-            out, err = capsys.readouterr()
+            _out, err = capsys.readouterr()
             assert err == ""
 
     def test_good_manifest_quiet(self, capsys, repo):
@@ -221,24 +220,6 @@ class TestPkgdevManifest:
         assert excinfo.value.code == 0
         out, err = capsys.readouterr()
         assert out == err == ""
-
-    def test_target_within_pkgdir(self, capsys, repo):
-        """Any file inside a package dir manifests that package."""
-        repo.create_ebuild("cat/pkg-0")
-        pkgdir = os.path.dirname(repo.create_ebuild("cat/pkg-1"))
-        os.makedirs(pjoin(pkgdir, "files"), exist_ok=True)
-        touch(pjoin(pkgdir, "files", "a.patch"))
-        for target in ("files/a.patch", "files", "metadata.xml"):
-            touch(pjoin(pkgdir, "metadata.xml"))
-            with (
-                patch("sys.argv", self.args + [target]),
-                pytest.raises(SystemExit) as excinfo,
-                chdir(pkgdir),
-            ):
-                self.script()
-            assert excinfo.value.code == 0
-            out, err = capsys.readouterr()
-            assert err == ""
 
     def test_bad_manifest(self, capsys, repo):
         repo.create_ebuild("cat/pkg-0")

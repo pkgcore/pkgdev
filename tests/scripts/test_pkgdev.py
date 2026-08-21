@@ -19,7 +19,7 @@ def test_script_run(capsys):
             with pytest.raises(SystemExit) as excinfo:
                 script()
             assert excinfo.value.code == 1
-            out, err = capsys.readouterr()
+            _out, err = capsys.readouterr()
             err = err.strip().split("\n")
             assert len(err) == 3
             assert err[0] == "Failed importing: baz module doesn't exist!"
@@ -30,7 +30,7 @@ def test_script_run(capsys):
         with patch("sys.argv", [project, "--debug"]):
             with pytest.raises(ImportError):
                 script()
-            out, err = capsys.readouterr()
+            _out, err = capsys.readouterr()
             err = err.strip().split("\n")
             assert len(err) == 2
             assert err[0] == "Failed importing: baz module doesn't exist!"
@@ -47,5 +47,5 @@ class TestPkgdev:
             with pytest.raises(SystemExit) as excinfo:
                 self.script()
             assert excinfo.value.code == 0
-            out, err = capsys.readouterr()
+            out, _err = capsys.readouterr()
             assert out.startswith(project)

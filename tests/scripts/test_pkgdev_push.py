@@ -15,13 +15,13 @@ class TestPkgdevPushParseArgs:
     def test_non_repo_cwd(self, capsys, tool):
         with pytest.raises(SystemExit):
             tool.parse_args(["push"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev push: error: not in ebuild repo"
 
     def test_non_git_repo_cwd(self, repo, capsys, tool):
         with pytest.raises(SystemExit), chdir(repo.location):
             tool.parse_args(["push"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev push: error: not in git repo"
 
     def test_non_ebuild_git_repo_cwd(self, make_repo, git_repo, capsys, tool):
@@ -29,7 +29,7 @@ class TestPkgdevPushParseArgs:
         repo = make_repo(pjoin(git_repo.path, "repo"))
         with pytest.raises(SystemExit), chdir(repo.location):
             tool.parse_args(["push"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev push: error: not in ebuild git repo"
 
     def test_git_push_args_passthrough(self, repo, make_git_repo, tool):
@@ -111,7 +111,7 @@ class TestPkgdevPush:
         ):
             self.script()
         assert excinfo.value.code == 1
-        out, err = capsys.readouterr()
+        out, _err = capsys.readouterr()
         assert out == textwrap.dedent(
             """\
                 cat/pkg
@@ -149,7 +149,7 @@ class TestPkgdevPush:
         ):
             self.script()
         assert excinfo.value.code == 1
-        out, err = capsys.readouterr()
+        out, _err = capsys.readouterr()
         assert "EmptyFile" in out
 
         # but without "--ask" it still pushes

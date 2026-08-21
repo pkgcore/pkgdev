@@ -71,6 +71,12 @@ exclude = [
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+	"C408", # Unnecessary `dict()` call"
+	"SIM117", # multiple-with-statements
+]
+
 [tool.black]
 line-length = 100
 

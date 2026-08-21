@@ -2,7 +2,7 @@ import os
 import sys
 import textwrap
 from contextlib import chdir
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from os.path import join as pjoin
 from pathlib import Path
@@ -19,13 +19,13 @@ class TestPkgdevMaskParseArgs:
     def test_non_repo_cwd(self, capsys, tool):
         with pytest.raises(SystemExit):
             tool.parse_args(["mask"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: not in ebuild repo"
 
     def test_non_git_repo_cwd(self, repo, capsys, tool):
         with pytest.raises(SystemExit), chdir(repo.location):
             tool.parse_args(["mask"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: not in git repo"
 
     def test_non_ebuild_git_repo_cwd(self, make_repo, git_repo, capsys, tool):
@@ -33,7 +33,7 @@ class TestPkgdevMaskParseArgs:
         repo = make_repo(pjoin(git_repo.path, "repo"))
         with pytest.raises(SystemExit), chdir(repo.location):
             tool.parse_args(["mask"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: not in ebuild git repo"
 
     def test_cwd_target(self, repo, make_git_repo, capsys, tool):
@@ -41,7 +41,7 @@ class TestPkgdevMaskParseArgs:
         # empty repo
         with pytest.raises(SystemExit), chdir(repo.location):
             tool.parse_args(["mask"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: not in a package directory"
 
         # not in package dir
@@ -49,7 +49,7 @@ class TestPkgdevMaskParseArgs:
         git_repo.add_all("cat/pkg-0")
         with pytest.raises(SystemExit), chdir(repo.location):
             tool.parse_args(["mask"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: not in a package directory"
 
         # masking CWD package
@@ -63,13 +63,13 @@ class TestPkgdevMaskParseArgs:
         # invalid atom
         with pytest.raises(SystemExit), chdir(repo.location):
             tool.parse_args(["mask", "pkg"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: invalid atom: 'pkg'"
 
         # nonexistent pkg
         with pytest.raises(SystemExit), chdir(repo.location):
             tool.parse_args(["mask", "cat/nonexistent"])
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: no repo matches: 'cat/nonexistent'"
 
         # masked pkg
@@ -100,7 +100,7 @@ class TestPkgdevMask:
         self.args = ["pkgdev", "mask"]
         self.repo = make_repo(arches=["amd64"])
         self.git_repo = make_git_repo(self.repo.location)
-        self.today = datetime.now(timezone.utc)
+        self.today = datetime.now(UTC)
 
         # add stub pkg
         self.repo.create_ebuild("cat/pkg-0")
@@ -116,7 +116,7 @@ class TestPkgdevMask:
 
     @property
     def profile(self):
-        profile = list(self.repo.config.profiles)[0]
+        profile = next(iter(self.repo.config.profiles))
         return self.repo.config.profiles.create_profile(profile)
 
     def test_empty_repo(self):
@@ -130,7 +130,7 @@ class TestPkgdevMask:
             chdir(pjoin(self.repo.path)),
         ):
             self.script()
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: nonexistent editor: '12345'"
 
     def test_nonexistent_visual(self, capsys):
@@ -141,7 +141,7 @@ class TestPkgdevMask:
             chdir(pjoin(self.repo.path)),
         ):
             self.script()
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: nonexistent editor: '12345'"
 
     def test_failed_editor(self, capsys):
@@ -152,7 +152,7 @@ class TestPkgdevMask:
             chdir(pjoin(self.repo.path)),
         ):
             self.script()
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: failed writing mask comment"
 
     def test_empty_mask_comment(self, capsys):
@@ -163,7 +163,7 @@ class TestPkgdevMask:
             chdir(pjoin(self.repo.path)),
         ):
             self.script()
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: empty mask comment"
 
     def test_mask_cwd(self):
@@ -366,5 +366,5 @@ class TestPkgdevMask:
         for arg, expected in [("-1", "must be >= 1"), ("foo", "invalid integer value")]:
             with pytest.raises(SystemExit), chdir(pjoin(self.repo.path)):
                 tool.parse_args(["mask", "--bug", arg])
-            out, err = capsys.readouterr()
+            _out, err = capsys.readouterr()
             assert err.strip() == f"pkgdev mask: error: argument -b/--bug: {expected}"

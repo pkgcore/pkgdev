@@ -353,14 +353,13 @@ def _mask(options, out, err):
     email = p.stdout.strip()
 
     message = get_comment()
-    if options.file_bug:
-        if bug_no := file_last_rites_bug(options, message):
-            out.write(out.fg("green"), f"filed bug https://bugs.gentoo.org/{bug_no}", out.reset)
-            out.flush()
-            if not update_bugs_pmasked(options.bugzilla, options.bugs):
-                err.write(err.fg("red"), "failed to update referenced bugs", err.reset)
-                err.flush()
-            options.bugs.insert(0, bug_no)
+    if options.file_bug and (bug_no := file_last_rites_bug(options, message)):
+        out.write(out.fg("green"), f"filed bug https://bugs.gentoo.org/{bug_no}", out.reset)
+        out.flush()
+        if not update_bugs_pmasked(options.bugzilla, options.bugs):
+            err.write(err.fg("red"), "failed to update referenced bugs", err.reset)
+            err.flush()
+        options.bugs.insert(0, bug_no)
     if removal := message_removal_notice(options.bugs, options.rites):
         message.append(removal)
 

@@ -6,7 +6,8 @@ import os
 import re
 import signal
 import traceback
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import ClassVar
 
 from pkgcore.ebuild.misc import sort_keywords
 from snakeoil.cli.exceptions import UserException
@@ -41,7 +42,7 @@ class Mangler:
     """File-mangling iterator using path-based parallelism."""
 
     # mapping of mangling types to functions
-    _mangle_funcs = {}
+    _mangle_funcs: ClassVar[dict[str, callable]] = {}
 
     def __init__(self, changes, skip_regex=None):
         self.jobs = os.cpu_count()
@@ -52,7 +53,7 @@ class Mangler:
         # setup for parallelizing the mangling procedure across files
         self._mp_ctx = multiprocessing.get_context("fork")
         self._mangled_paths_q = self._mp_ctx.SimpleQueue()
-        self._current_year = str(datetime.today().year)
+        self._current_year = str(datetime.now(tz=UTC).year)
 
         # initialize settings used by iterator support
         self._runner = self._mp_ctx.Process(target=self._run)

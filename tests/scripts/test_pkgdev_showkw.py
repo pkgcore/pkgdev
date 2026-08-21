@@ -1,7 +1,7 @@
 import textwrap
 from contextlib import chdir
 from functools import partial
-from typing import List, NamedTuple
+from typing import NamedTuple
 from unittest.mock import patch
 
 import pytest
@@ -17,7 +17,7 @@ class Profile(NamedTuple):
     arch: str
     status: str = "stable"
     deprecated: bool = False
-    defaults: List[str] = None
+    defaults: list[str] = None
     eapi: str = "5"
 
 
@@ -99,7 +99,7 @@ class TestPkgdevShowkw:
         table_columns = [s.strip() for s in lines[1].split("|")][1:]
         return {
             ver: dict(zip(table_columns, values))
-            for ver, *values in map(lambda s: map(str.strip, s.split("|")), lines[3:-1])
+            for ver, *values in (map(str.strip, s.split("|")) for s in lines[3:-1])
         }
 
     def test_match(self, capsys, make_repo):

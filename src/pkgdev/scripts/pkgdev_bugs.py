@@ -9,7 +9,7 @@ import tempfile
 import tomllib
 import urllib.request as urllib
 from collections import defaultdict
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import partial
 from itertools import chain
 from os.path import join as pjoin
@@ -77,7 +77,7 @@ class StoreTargetArches(commandline.StoreTarget):
             if not sys.stdin.isatty():
                 values = [x.strip() for x in sys.stdin.readlines() if x.strip()]
                 # reassign stdin to allow interactivity (currently only works for unix)
-                sys.stdin = open("/dev/tty")
+                sys.stdin = open("/dev/tty")  # noqa: SIM115
             else:
                 parser.error("'-' is only valid when piping data in")
 
@@ -408,11 +408,12 @@ class GraphNode:
 
         description = [f"Please {self.category.verb}", ""]
         if modified_repo is not None:
+            now = datetime.now(tz=UTC)
             for pkg, _ in self.pkgs:
                 with contextlib.suppress(StopIteration):
                     match = next(modified_repo.itermatch(pkg.versioned_atom))
-                    modified = datetime.fromtimestamp(match.time)
-                    days_old = (datetime.today() - modified).days
+                    modified = datetime.fromtimestamp(match.time, tz=UTC)
+                    days_old = (now - modified).days
                     description.append(
                         f" {pkg.versioned_atom.cpvstr}: no change for {days_old} days, since {modified:%Y-%m-%d}"
                     )
@@ -889,19 +890,20 @@ class DependencyGraph:
             ):
                 toml.write(f"blocks = [{node_blocks}]\n")
             toml.write(f"obsoletes = {sorted(node.obsoletes)}\n")
+            now = datetime.now(tz=UTC)
             for pkg, arches in node.pkgs:
                 try:
                     match = next(self.modified_repo.itermatch(pkg.versioned_atom))
-                    modified = datetime.fromtimestamp(match.time)
-                    age = (datetime.today() - modified).days
+                    modified = datetime.fromtimestamp(match.time, tz=UTC)
+                    age = (now - modified).days
                     modified_text = f"{modified:%Y-%m-%d} (age {age} days)"
                 except StopIteration:
                     modified_text = "<unknown>"
 
                 try:
                     match = next(self.added_repo.itermatch(pkg.versioned_atom))
-                    added = datetime.fromtimestamp(match.time)
-                    age = (datetime.today() - added).days
+                    added = datetime.fromtimestamp(match.time, tz=UTC)
+                    age = (now - added).days
                     added_text = f"{added:%Y-%m-%d} (age {age} days)"
                 except StopIteration:
                     added_text = "<unknown>"
@@ -1177,7 +1179,7 @@ def _load_from_stdin(out: Formatter):
                 atom_str, *arches = line.split()
                 yield atom_str, parserestrict.parse_match(atom_str), frozenset(arches)
         # reassign stdin to allow interactivity (currently only works for unix)
-        sys.stdin = open("/dev/tty")
+        sys.stdin = open("/dev/tty")  # noqa: SIM115
     else:
         bugs.error("reading from stdin is only valid when piping data in")
 
@@ -1237,7 +1239,7 @@ def main(options, out: Formatter, err: Formatter):
             try:
                 subprocess.run(editor + [toml.name], check=True)
             except subprocess.CalledProcessError:
-                bugs.error("failed writing mask comment")
+                bugs.error("failed opening editor, aborting")
             except FileNotFoundError:
                 bugs.error(f"nonexistent editor: {editor[0]!r}")
             try:

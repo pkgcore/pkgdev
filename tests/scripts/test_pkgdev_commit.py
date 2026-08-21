@@ -2,7 +2,7 @@ import os
 import shutil
 import textwrap
 from contextlib import chdir
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import partial
 from io import StringIO
 from os.path import join as pjoin
@@ -20,7 +20,7 @@ class TestPkgdevCommitParseArgs:
         with pytest.raises(SystemExit) as excinfo:
             tool.parse_args(["commit"])
         assert excinfo.value.code == 2
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev commit: error: not in ebuild repo"
 
     def test_bad_repo_cwd(self, make_repo, capsys, tool):
@@ -28,14 +28,14 @@ class TestPkgdevCommitParseArgs:
         with pytest.raises(SystemExit) as excinfo, chdir(repo.location):
             tool.parse_args(["commit"])
         assert excinfo.value.code == 2
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip().startswith("pkgdev commit: error: repo init failed")
 
     def test_non_git_repo_cwd(self, repo, capsys, tool):
         with pytest.raises(SystemExit) as excinfo, chdir(repo.location):
             tool.parse_args(["commit"])
         assert excinfo.value.code == 2
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev commit: error: not in git repo"
 
     def test_non_ebuild_git_repo_cwd(self, make_repo, git_repo, capsys, tool):
@@ -44,7 +44,7 @@ class TestPkgdevCommitParseArgs:
         with pytest.raises(SystemExit) as excinfo, chdir(repo.location):
             tool.parse_args(["commit"])
         assert excinfo.value.code == 2
-        out, err = capsys.readouterr()
+        _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev commit: error: not in ebuild git repo"
 
     def test_commit_signing(self, repo, make_git_repo, tool):
@@ -1039,7 +1039,7 @@ class TestPkgdevCommit:
             with open(ebuild_path) as f:
                 lines = f.read().splitlines()
                 mo = copyright_regex.match(lines[0])
-                assert mo.group("end") == str(datetime.today().year)
+                assert mo.group("end") == str(datetime.now(tz=UTC).year)
                 assert mo.group("begin") == years[:4] + "-"
                 assert mo.group("holder") == "Gentoo Authors"
 

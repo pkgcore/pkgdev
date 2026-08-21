@@ -11,7 +11,6 @@ from snakeoil.strings import pluralism
 from .. import cli
 from .._vendor.tabulate import tabulate, tabulate_formats
 
-
 showkw = cli.ArgumentParser(prog="pkgdev showkw", description="show package keywords")
 showkw.add_argument(
     "targets",
@@ -123,7 +122,7 @@ def _setup_arches(namespace, attr):
         if disabled_arches:
             arches = arches - disabled_arches
 
-    prefix_arches = set(x for x in arches if "-" in x)
+    prefix_arches = {x for x in arches if "-" in x}
     native_arches = arches.difference(prefix_arches)
     arches = native_arches
     if namespace.prefix:
