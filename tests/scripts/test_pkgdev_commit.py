@@ -562,6 +562,16 @@ class TestPkgdevCommit:
         )
         assert commit() == "cat/pkg: update DESCRIPTION, HOMEPAGE"
 
+        # a declare line differing only in its attributes is not an update:
+        # exporting the var leaves its value alone
+        repo.create_ebuild(
+            "cat/pkg-7",
+            description="another something",
+            homepage="https://gentoo.org",
+            data="export DESCRIPTION\n",
+        )
+        assert commit() == "cat/pkg: summary"
+
         # update string_targets (USE_RUBY)
         os.mkdir(pjoin(repo.location, "profiles", "desc"))
         with open(pjoin(repo.path, "profiles", "desc", "ruby_targets.desc"), "w") as file:

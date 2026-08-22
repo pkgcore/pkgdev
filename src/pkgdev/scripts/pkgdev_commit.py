@@ -586,7 +586,9 @@ class PkgSummary(ChangeSummary):
                 }
                 targets = array_targets | string_targets
 
-                updated_vars = drop.keys() & add.keys()
+                updated_vars = {
+                    name for name in drop.keys() & add.keys() if drop[name] != add[name]
+                }
                 if updated := sorted(watch_vars & updated_vars):
                     summaries.add(f"update {', '.join(updated)}")
                 elif (target := targets & updated_vars) and len(target) == 1:
