@@ -1,15 +1,20 @@
 """display package keywords"""
 
 import os
+import re
+from collections.abc import Iterable
 from functools import partial
 
 from pkgcore.ebuild import restricts
 from pkgcore.util import commandline
 from pkgcore.util import packages as pkgutils
 from snakeoil.strings import pluralism
+from tabulate import tabulate, tabulate_formats
 
 from .. import cli
-from .._vendor.tabulate import tabulate, tabulate_formats
+
+_SHOWKW_FORMAT = "showkw"
+_TABLE_FORMATS = (_SHOWKW_FORMAT, *tabulate_formats)
 
 showkw = cli.ArgumentParser(prog="pkgdev showkw", description="show package keywords")
 showkw.add_argument(
@@ -24,15 +29,15 @@ output_opts = showkw.add_argument_group("output options")
 output_opts.add_argument(
     "-f",
     "--format",
-    default="showkw",
+    default=_SHOWKW_FORMAT,
     metavar="FORMAT",
-    choices=tabulate_formats,
+    choices=_TABLE_FORMATS,
     help="keywords table format",
     docs=f"""
         Output table using specified tabular format (defaults to compressed,
         custom format).
 
-        Available formats: {", ".join(tabulate_formats)}
+        Available formats: {", ".join(_TABLE_FORMATS)}
     """,
 )
 output_opts.add_argument(
@@ -154,7 +159,7 @@ def _validate_args(parser, namespace):
     namespace.pkg_dir = False
 
     # disable colors when not using the native output format
-    if namespace.format != "showkw":
+    if namespace.format != _SHOWKW_FORMAT:
         namespace.color = False
 
     if namespace.color:
@@ -216,11 +221,39 @@ def _collapse_arches(options, pkgs):
     )
 
 
+_ansi_escapes = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _visible_len(string):
+    """Length of a string ignoring color escapes."""
+    return len(_ansi_escapes.sub("", string))
+
+
+def _render_showkw(headers: list[str], rows: Iterable[list[str]]):
+    """Render a table in the compressed, custom format.
+
+    Headers are rotated to run vertically so they don't widen the single
+    character keyword state columns they label.
+    """
+    rows = [[str(cell).strip() for cell in row] for row in rows]
+    widths = [max([1, *map(_visible_len, col)]) for col in zip(*rows)]
+
+    lines = []
+    depth = max(map(len, headers))
+    for chars in zip(*(header.rjust(depth) for header in headers)):
+        lines.append("".join(f" {c:<{w}}" for c, w in zip(chars, widths)).rstrip())
+    lines.append("-" * (sum(widths) + len(widths)))
+    for row in rows:
+        line = (f" {cell}{' ' * (w - _visible_len(cell))}" for cell, w in zip(row, widths))
+        lines.append("".join(line).rstrip())
+    return "\n".join(lines)
+
+
 def _render_rows(options, pkgs, arches):
     """Build rows for tabular data output."""
     for pkg in sorted(pkgs):
         keywords = set(pkg.keywords)
-        row = [pkg.fullver]
+        row: list[str] = [pkg.fullver]
         for arch in arches:
             if arch in keywords:
                 line = "+"
@@ -255,9 +288,12 @@ def main(options, out, err):
                     pkgs = list(pkgs)
                     out.write(f"keywords for {pkgs[0].unversioned_atom}:")
                 data = _render_rows(options, pkgs, arches)
-                table = tabulate(
-                    data, headers=headers, tablefmt=options.format, disable_numparse=True
-                )
+                if options.format == _SHOWKW_FORMAT:
+                    table = _render_showkw(headers, data)
+                else:
+                    table = tabulate(
+                        data, headers=headers, tablefmt=options.format, disable_numparse=True
+                    )
                 out.write(table)
             continued = True
 

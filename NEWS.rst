@@ -23,6 +23,11 @@ pkgdev 0.2.18 (unreleased)
   version the stablereq check considers due for stabilization if possible
   (Arthur Zamarin)
 
+**pkgdev showkw:**
+
+- showkw: drop the vendored copy of tabulate in favor of a dependency on
+  ``tabulate>=0.9.0`` (Arthur Zamarin)
+
 pkgdev 0.2.17 (2026-08-14)
 --------------------------
 
