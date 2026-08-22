@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #
 # pkgdev documentation build configuration file, created by
 # sphinx-quickstart on Thu Apr  9 00:50:08 2015.
@@ -329,5 +328,5 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
 }
 intersphinx_mapping.update(
-    (x, (f"https://pkgcore.github.io/{x}", None)) for x in "pkgcheck pkgcore snakeoil".split()
+    (x, (f"https://pkgcore.github.io/{x}", None)) for x in ("pkgcheck", "pkgcore", "snakeoil")
 )

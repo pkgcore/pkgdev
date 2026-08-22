@@ -148,7 +148,7 @@ class ArgumentParser(arghparse.ArgumentParser):
             )
             if repo is not None:
                 namespace = config_parser.parse_config_sections(namespace, repo.aliases)
-        except (repo_errors.InitializationError, IOError) as exc:
+        except (OSError, repo_errors.InitializationError) as exc:
             self.error(str(exc))
 
         if os.getenv("NOCOLOR"):
