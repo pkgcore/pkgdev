@@ -31,9 +31,9 @@ def mangle(name: str):
         def __init__(self, func):
             self.func = func
 
-        def __set_name__(self, owner, name):
+        def __set_name__(self, owner, attr):
             owner._mangle_funcs[name] = self.func
-            setattr(owner, name, self.func)
+            setattr(owner, attr, self.func)
 
     return decorator
 
@@ -69,6 +69,17 @@ class Mangler:
     def _eof(self, change):
         """Drop EOF whitespace and forcibly add EOF newline."""
         return change.update(change.data.rstrip() + "\n")
+
+    @mangle("eapi-blank-line")
+    def _eapi_blank_line(self, change):
+        """Add the blank line after the EAPI assignment."""
+        lines = change.data.splitlines()
+        for i, line in enumerate(lines):
+            if line.startswith("EAPI="):
+                if i + 1 < len(lines) and lines[i + 1] != "":
+                    lines.insert(i + 1, "")
+                break
+        return change.update("\n".join(lines) + "\n")
 
     @mangle("keywords")
     def _keywords(self, change):

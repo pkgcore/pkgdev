@@ -30,6 +30,9 @@ pkgdev 0.2.18 (unreleased)
   and having its caches invalidated through a pkgcore internal meant for
   mutable repositories (Arthur Zamarin, #172)
 
+- commit: the mangler now adds the blank line after the ``EAPI=`` assignment
+  (Arthur Zamarin, #127)
+
 **pkgdev showkw:**
 
 - showkw: drop the vendored copy of tabulate in favor of a dependency on

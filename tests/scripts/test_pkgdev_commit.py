@@ -1046,6 +1046,27 @@ class TestPkgdevCommit:
                 assert mo.group("begin") == years[:4] + "-"
                 assert mo.group("holder") == "Gentoo Authors"
 
+        # keep the rest of the ebuild, only the spacing after EAPI= varies
+        with open(ebuild_path) as f:
+            lines = f.read().splitlines()
+        eapi_lineno = next(i for i, line in enumerate(lines) if line.startswith("EAPI="))
+        head, rest = lines[: eapi_lineno + 1], [x for x in lines[eapi_lineno + 1 :] if x]
+
+        for original, expected in (
+            (["# comment"], ["", "# comment"]),
+            (["", "# comment"], ["", "# comment"]),
+            # a line which merely looks empty isn't one
+            ([" ", "# comment"], ["", " ", "# comment"]),
+        ):
+            # munge the lines after the EAPI assignment
+            with open(ebuild_path, "w") as f:
+                f.write("\n".join(head + original + rest) + "\n")
+            commit(["-n", "-u", "-m", "mangling"])
+            # verify the blank line after EAPI= is there
+            with open(ebuild_path) as f:
+                mangled = f.read().splitlines()
+                assert mangled[eapi_lineno + 1 : eapi_lineno + 1 + len(expected)] == expected
+
         for original, expected in (
             ('"arm64 amd64 x86"', "amd64 arm64 x86"),
             ('"arm64 amd64 ~x86"', "amd64 arm64 ~x86"),
