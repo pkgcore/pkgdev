@@ -6,12 +6,15 @@ from datetime import UTC, datetime
 from functools import partial
 from io import StringIO
 from os.path import join as pjoin
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+from pkgcore.ebuild.atom import atom as atom_cls
 from snakeoil.contexts import os_environ
 
 from pkgdev.mangle import copyright_regex, keywords_regex
+from pkgdev.scripts import pkgdev_commit as commit
 from pkgdev.scripts import run
 
 
@@ -1194,3 +1197,33 @@ class TestPkgdevCommit:
         out, err = capsys.readouterr()
         assert not err
         assert out == " * cat/pkg-1: invalid EAPI '-1'\n"
+
+
+class TestHistoricalRepo:
+    def mk(self, repo, git_repo, tool, pkgs):
+        for cpvstr in pkgs:
+            repo.create_ebuild(cpvstr, description="old")
+        git_repo.add_all("initial")
+        for cpvstr in pkgs:
+            repo.create_ebuild(cpvstr, description="new")
+        with chdir(repo.location):
+            options, _ = tool.parse_args(["commit", "-a"])
+        changes = [SimpleNamespace(atom=atom_cls(f"={cpvstr}"), status="M") for cpvstr in pkgs]
+        return commit.MetadataSummary(options, changes)
+
+    def test_populated_without_being_told(self, repo, make_git_repo, tool):
+        git_repo = make_git_repo(repo.location)
+        summary = self.mk(repo, git_repo, tool, ["cat/pkg-1"])
+        # no add_pkgs call: the directory is filled before the repo is built
+        old_pkg = summary.old_repo.match(atom_cls("=cat/pkg-1"))[0]
+        assert old_pkg.description == "old"
+
+    def test_covers_every_changed_package(self, repo, make_git_repo, tool):
+        git_repo = make_git_repo(repo.location)
+        summary = self.mk(repo, git_repo, tool, ["cat/a-1", "cat/b-1"])
+        # a second package must not need the repo's caches invalidated
+        for cpvstr in ("cat/a-1", "cat/b-1"):
+            assert summary.old_repo.match(atom_cls(f"={cpvstr}"))[0].description == "old"
+
+    def test_no_reliance_on_the_mutable_repo_backchannel(self):
+        assert not hasattr(commit.HistoricalRepo, "add_pkgs")

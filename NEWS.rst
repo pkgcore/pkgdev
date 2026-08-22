@@ -23,6 +23,13 @@ pkgdev 0.2.18 (unreleased)
   version the stablereq check considers due for stabilization if possible
   (Arthur Zamarin)
 
+**pkgdev commit:**
+
+- commit: the repository of pre-change packages is now built over an already
+  filled directory, instead of being populated underneath a live repository
+  and having its caches invalidated through a pkgcore internal meant for
+  mutable repositories (Arthur Zamarin, #172)
+
 **pkgdev showkw:**
 
 - showkw: drop the vendored copy of tabulate in favor of a dependency on

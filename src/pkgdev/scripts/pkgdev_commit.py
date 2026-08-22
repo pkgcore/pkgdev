@@ -9,6 +9,7 @@ import tarfile
 import tempfile
 import textwrap
 from collections import UserDict, defaultdict, deque
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from functools import partial
@@ -292,35 +293,26 @@ add_actions.add_argument(
 class HistoricalRepo(UnconfiguredTree):
     """Repository of historical packages stored in a temporary directory."""
 
-    def __init__(self, parent_repo, tmpdir, *args, **kwargs):
-        self.__parent_repo = parent_repo
+    def __init__(self, tmpdir, *args, **kwargs):
         # cache tmpdir to delay cleanup until exit
         self.__tmpdir = tmpdir
         super().__init__(*args, **kwargs)
 
-    def add_pkgs(self, pkgs):
-        """Update the repo with a given sequence of packages."""
-        self._populate(pkgs)
-        # notify the repo object that new pkgs were added
-        for pkg in pkgs:
-            self.notify_add_package(pkg)
 
-    def _populate(self, pkgs):
-        """Populate the repo with a given sequence of historical packages."""
-        paths = {pkg.key for pkg in pkgs}
-        old_files = subprocess.Popen(
-            ["git", "archive", "HEAD"] + list(paths),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=self.__parent_repo.location,
-        )
-        if old_files.poll():  # pragma: no cover
-            error = old_files.stderr.read().decode().strip()
-            raise Exception(f"failed populating archive repo: {error}")
-        with tarfile.open(mode="r|", fileobj=old_files.stdout) as tar:
-            # see filter in https://docs.python.org/3/library/tarfile.html#tarfile.TarFile.extractall
-            # Whilst we trust git archive, we still leave the basic protections on.
-            tar.extractall(path=self.location, filter="data")
+def _extract_historical(repo, path: str, keys: Iterable[str]):
+    """Extract the packages as they are in HEAD into a directory."""
+    old_files = subprocess.Popen(
+        ["git", "archive", "HEAD", *keys],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=repo.location,
+    )
+    if old_files.poll():  # pragma: no cover
+        error = old_files.stderr.read().decode().strip()
+        raise RuntimeError(f"failed populating archive repo: {error}")
+    with tarfile.open(mode="r|", fileobj=old_files.stdout) as tar:
+        # Whilst we trust git archive, we still leave the basic protections on.
+        tar.extractall(path=path, filter="data")
 
 
 # GLEP 81 categories, mapped to what their packages allocate
@@ -349,13 +341,14 @@ class ChangeSummary:
     # mapping of handled statuses to functions
     status_funcs = None
 
-    def __init__(self, options):
+    def __init__(self, options, changes: "Iterable[PkgChange]"):
         self.options = options
         self.repo = options.repo
+        self.changes = {x.atom: x for x in changes}
 
     @jit_attr
     def old_repo(self):
-        """Create a repository of historical packages removed from git."""
+        """Create a repository of the changed packages as they are in HEAD."""
         tmpdir = tempfile.TemporaryDirectory()
         repo_dir = tmpdir.name
 
@@ -367,8 +360,10 @@ class ChangeSummary:
         with open(pjoin(repo_dir, "profiles", "repo_name"), "w") as f:
             f.write(f"{self.repo.repo_id}-old\n")
 
+        _extract_historical(self.repo, repo_dir, {atom.key for atom in self.changes})
+
         repo_config = RepoConfig(repo_dir)
-        tree_cls = partial(HistoricalRepo, self.repo, tmpdir)
+        tree_cls = partial(HistoricalRepo, tmpdir)
         return tree(self.options.config, repo_config, tree_cls=tree_cls)
 
     def __str__(self):
@@ -387,16 +382,11 @@ class MetadataSummary(ChangeSummary):
 
     status_funcs: ClassVar[dict[str, callable]] = {}
 
-    def __init__(self, options, changes):
-        super().__init__(options)
-        self.changes = {x.atom: x for x in changes}
-
     @change("M")
     def modify(self):
         """Generate summaries for modify actions."""
         atom = next(iter(self.changes))
         pkgs = self.repo.match(atom)
-        self.old_repo.add_pkgs(pkgs)
         try:
             old_pkg = self.old_repo.match(atom)[0]
             new_pkg = pkgs[0]
@@ -442,10 +432,6 @@ class PkgSummary(ChangeSummary):
     """Summary generation support for single package ebuild changes."""
 
     status_funcs: ClassVar[dict[str, callable]] = {}
-
-    def __init__(self, options, changes):
-        super().__init__(options)
-        self.changes = {x.atom: x for x in changes}
 
     @jit_attr
     def versions(self):
@@ -535,7 +521,6 @@ class PkgSummary(ChangeSummary):
         summaries = set()
         for atom in self.changes:
             pkgs = self.repo.match(atom)
-            self.old_repo.add_pkgs(pkgs)
             try:
                 old_pkg = self.old_repo.match(atom)[0]
                 new_pkg = pkgs[0]
