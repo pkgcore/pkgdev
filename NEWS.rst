@@ -37,6 +37,9 @@ pkgdev 0.2.18 (unreleased)
   only its ``declare`` line differs, as when it gains the export attribute
   while its value stays put (Arthur Zamarin, #115)
 
+- mangler: mangles in a single process, which is faster for any number of
+  changed files (Arthur Zamarin)
+
 **pkgdev showkw:**
 
 - showkw: drop the vendored copy of tabulate in favor of a dependency on

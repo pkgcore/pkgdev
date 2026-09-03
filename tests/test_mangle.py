@@ -1,9 +1,4 @@
-import multiprocessing
-import os
 import re
-import signal
-from functools import partial
-from unittest.mock import patch
 
 import pytest
 from snakeoil.cli.exceptions import UserException
@@ -14,6 +9,13 @@ from pkgdev.scripts.pkgdev_commit import Change
 
 def fake_change(s):
     return Change("/repo", "A", str(s))
+
+
+class FailingMangler(Mangler):
+    """Mangler whose mangling always fails."""
+
+    def _mangle(self, change):
+        raise Exception("func failed")
 
 
 class TestMangler:
@@ -70,51 +72,9 @@ class TestMangler:
         assert path.read_text() == f"# comment\nKEYWORDS={expected}\n"
 
     def test_iterator_exceptions(self, tmp_path):
-        """Test parallelized iterator against unhandled exceptions."""
+        """Test the iterator against unhandled exceptions."""
         path = tmp_path / "file"
         path.write_text("# comment\n")
 
-        def _mangle_func(self, data):
-            raise Exception("func failed")
-
-        with patch("pkgdev.mangle.Mangler._mangle", _mangle_func):
-            with pytest.raises(UserException, match="Exception: func failed"):
-                list(Mangler([fake_change(path)]))
-
-    def test_sigint_handling(self, tmp_path):
-        """Verify SIGINT is properly handled by the parallelized pipeline."""
-        path = tmp_path / "file"
-        path.write_text("# comment\n")
-
-        def run(queue):
-            """Mangler run in a separate process that gets interrupted."""
-            import sys
-            import time
-            from unittest.mock import patch
-
-            from pkgdev.mangle import Mangler
-
-            def sleep():
-                """Notify testing process then sleep."""
-                queue.put("ready")
-                time.sleep(100)
-
-            with patch("pkgdev.mangle.Mangler.__iter__") as fake_iter:
-                fake_iter.side_effect = partial(sleep)
-                try:
-                    iter(Mangler([fake_change(path)]))
-                except KeyboardInterrupt:
-                    queue.put(None)
-                    sys.exit(0)
-                queue.put(None)
-                sys.exit(1)
-
-        mp_ctx = multiprocessing.get_context("fork")
-        queue = mp_ctx.SimpleQueue()
-        p = mp_ctx.Process(target=run, args=(queue,))
-        p.start()
-        # wait for pipeline object to be fully initialized then send SIGINT
-        for _ in iter(queue.get, None):
-            os.kill(p.pid, signal.SIGINT)
-            p.join()
-            assert p.exitcode == 0
+        with pytest.raises(UserException, match="Exception: func failed"):
+            list(FailingMangler([fake_change(path)]))

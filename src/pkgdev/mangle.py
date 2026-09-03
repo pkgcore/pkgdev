@@ -1,10 +1,6 @@
 """Formatting and file mangling support."""
 
-import functools
-import multiprocessing
-import os
 import re
-import signal
 import traceback
 from datetime import UTC, datetime
 from typing import ClassVar
@@ -39,31 +35,16 @@ def mangle(name: str):
 
 
 class Mangler:
-    """File-mangling iterator using path-based parallelism."""
+    """File-mangling iterator, yielding the path of every change it mangles."""
 
     # mapping of mangling types to functions
     _mangle_funcs: ClassVar[dict[str, callable]] = {}
 
     def __init__(self, changes, skip_regex=None):
-        self.jobs = os.cpu_count()
         if skip_regex is not None:
             changes = (c for c in changes if not skip_regex.match(c.full_path))
         self.changes = OrderedSet(changes)
-
-        # setup for parallelizing the mangling procedure across files
-        self._mp_ctx = multiprocessing.get_context("fork")
-        self._mangled_paths_q = self._mp_ctx.SimpleQueue()
         self._current_year = str(datetime.now(tz=UTC).year)
-
-        # initialize settings used by iterator support
-        self._runner = self._mp_ctx.Process(target=self._run)
-        signal.signal(signal.SIGINT, self._kill_pipe)
-        self._mangled_paths = iter(self._mangled_paths_q.get, None)
-
-        # construct composed mangling function
-        self.composed_func = functools.reduce(
-            lambda f, g: lambda x: f(g(self, x)), self._mangle_funcs.values(), lambda x: x
-        )
 
     @mangle("EOF")
     def _eof(self, change):
@@ -94,71 +75,24 @@ class Mangler:
                 break
         return change.update("\n".join(lines) + "\n")
 
-    def _kill_pipe(self, *args, error=None):
-        """Handle terminating the mangling process group."""
-        if self._runner.is_alive():
-            os.killpg(self._runner.pid, signal.SIGKILL)
-        if error is not None:
-            # propagate exception raised during parallelized mangling
-            raise UserException(error)
-        raise KeyboardInterrupt
-
     def __iter__(self):
-        # start running the mangling processes
-        self._runner.start()
-        return self
-
-    def __next__(self):
         try:
-            path = next(self._mangled_paths)
-        except StopIteration:
-            self._runner.join()
-            raise
-
-        # Catch propagated, serialized exceptions, output their
-        # traceback, and signal the scanning process to end.
-        if isinstance(path, list):
-            self._kill_pipe(error=path[0])
-
-        return path
+            for change in self.changes:
+                if mangled_change := self._mangle(change):
+                    yield mangled_change.path
+        except Exception:
+            # report the failure as a user error rather than a traceback
+            raise UserException(traceback.format_exc()) from None
 
     def _mangle(self, change):
-        """Run composed mangling function across a given change."""
+        """Run every registered mangling function across a given change."""
         if orig_data := change.read():
-            change = self.composed_func(change)
+            # mangling functions run in reverse registration order
+            for func in reversed(self._mangle_funcs.values()):
+                change = func(self, change)
             if change.data != orig_data:
                 change.sync()
                 return change
-
-    def _run_manglers(self, paths_q):
-        """Consumer that runs mangling functions, queuing mangled paths for output."""
-        try:
-            for change in iter(paths_q.get, None):
-                if mangled_change := self._mangle(change):
-                    self._mangled_paths_q.put(mangled_change.path)
-        except Exception:  # pragma: no cover
-            # traceback can't be pickled so serialize it
-            tb = traceback.format_exc()
-            self._mangled_paths_q.put([tb])
-
-    def _run(self):
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
-        os.setpgrp()
-
-        paths_q = self._mp_ctx.SimpleQueue()
-        pool = self._mp_ctx.Pool(self.jobs, self._run_manglers, (paths_q,))
-        pool.close()
-
-        # queue paths for processing
-        for change in self.changes:
-            paths_q.put(change)
-        # notify consumers that no more work exists
-        for i in range(self.jobs):
-            paths_q.put(None)
-
-        pool.join()
-        # notify iterator that no more results exist
-        self._mangled_paths_q.put(None)
 
 
 class GentooMangler(Mangler):
