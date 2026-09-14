@@ -174,11 +174,12 @@ bugs.add_argument(
     action=arghparse.CommaSeparatedNegationsAppend,
     default=([], []),
     metavar="EMAIL",
-    help="automatically add CC-ARCHES for the listed email addresses",
+    help="Set CC-ARCHES if the package lists EMAIL as maintainer (or is maintainer-needed)",
     docs="""
-        Comma separated list of email addresses, for which automatically add
-        CC-ARCHES if one of the maintainers matches the email address. If the
-        package is maintainer-needed, always add CC-ARCHES.
+        Comma-separated list of maintainer email addresses.  If one of these
+        email addresses is listed as a maintainer for a package (or the package
+        is maintainer-needed) for which a bug is being filed, it will
+        automatically set CC-ARCHES keyword on the bug report.
     """,
 )
 bugs.add_argument(
