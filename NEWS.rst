@@ -2,6 +2,15 @@
 Release Notes
 =============
 
+pkgdev 0.2.19 (unreleased)
+--------------------------
+
+**pkgdev bugs:**
+
+- bugs: a bug matching the package but not the version can now be left alone
+  while a new bug is filed, alongside obsoleting it or reusing it (Arthur
+  Zamarin, #230)
+
 pkgdev 0.2.18 (2026-09-05)
 --------------------------
 

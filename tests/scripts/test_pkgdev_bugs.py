@@ -445,7 +445,10 @@ class TestObsoletingBugs:
         graph.nodes = set()
         graph.starting_nodes = set()
         graph.modified_repo = None
-        monkeypatch.setattr(bugs, "userquery", lambda *a, **k: answer)
+        query = lambda *a, **k: (
+            ("obsolete" if answer else "reuse") if k.get("responses") else answer
+        )
+        monkeypatch.setattr(bugs, "userquery", query)
         return graph
 
     @staticmethod

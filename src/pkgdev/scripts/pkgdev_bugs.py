@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from functools import partial
 from itertools import chain
 from os.path import join as pjoin
+from typing import Literal
 
 from pkgcheck import const as pkgcheck_const
 from pkgcheck.addons import ArchesAddon, init_addon
@@ -1101,6 +1102,19 @@ class DependencyGraph:
                 self.merge_nodes(mergable)
         return True
 
+    def _query_atom_match(self) -> Literal["obsolete", "reuse", "new"]:
+        return userquery(
+            "Not an exact match. Obsolete it, reuse it, or file a new bug?",
+            self.out,
+            self.err,
+            responses={
+                "obsolete": ("obsolete", self.out.fg("red"), "Obsolete"),
+                "reuse": ("reuse", self.out.fg("green"), "Reuse"),
+                "new": ("new", self.out.fg("yellow"), "New"),
+            },
+            default_answer="reuse",
+        )
+
     def scan_existing_bugs(self, bugzilla: Bugzilla) -> bool:
         all_packages = list({pkg[0].unversioned_atom for node in self.nodes for pkg in node.pkgs})
         has_output = False
@@ -1137,16 +1151,19 @@ class DependencyGraph:
                 self.out.write(" -> bug summary: ", bug.summary)
                 if is_exact_match and node.bugno is None:
                     node.bugno = bug.id
-                elif userquery(
-                    f"{'Duplicate of the matched bug' if is_exact_match else 'Not an exact match'}."
-                    " Do you want to obsolete?",
-                    self.out,
-                    self.err,
-                    default_answer=False,
-                ):
+                elif is_exact_match:
+                    if userquery(
+                        "Duplicate of the matched bug. Do you want to obsolete?",
+                        self.out,
+                        self.err,
+                        default_answer=False,
+                    ):
+                        node.obsoletes.add(bug.id)
+                elif (answer := self._query_atom_match()) == "obsolete":
                     node.obsoletes.add(bug.id)
-                elif node.bugno is None:
+                elif answer == "reuse" and node.bugno is None:
                     node.bugno = bug.id
+                # "new" leaves the matched bug alone and files our own
                 has_output = True
         return has_output
 
