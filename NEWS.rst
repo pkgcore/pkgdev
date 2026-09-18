@@ -11,6 +11,9 @@ pkgdev 0.2.19 (unreleased)
   while a new bug is filed, alongside obsoleting it or reusing it (Arthur
   Zamarin, #230)
 
+- bugs: fix a package being filed as its own dependency, when an unsolvable
+  ``|| ( ... )`` is answered by the package's own slot (Arthur Zamarin, #208)
+
 pkgdev 0.2.18 (2026-09-05)
 --------------------------
 

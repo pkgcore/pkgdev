@@ -647,6 +647,12 @@ class DependencyGraph:
         return [pkg for pkg in pkgset if not settled.intersection(pkg.keywords)] or pkgset
 
     def _find_dependencies(self, pkg: package, keywords: set[str], stable: bool = True):
+        """The unsolvable dependencies of ``pkg``, minus ``pkg`` itself."""
+        for match, arches in self._unsolvable_deps(pkg, keywords, stable):
+            if match != pkg:
+                yield match, arches
+
+    def _unsolvable_deps(self, pkg: package, keywords: set[str], stable: bool = True):
         check = visibility.VisibilityCheck(self.options, profile_addon=self.profile_addon)
         # the fake pkgs fed here aren't parsed ebuild sources (no .tree), so skip the
         # optfeature check, which requires a tree-sitter parse tree to run

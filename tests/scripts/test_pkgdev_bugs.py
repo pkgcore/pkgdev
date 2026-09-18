@@ -405,6 +405,21 @@ class TestAnyOfDependencies:
         assert graph._pick_alternatives(groups, "amd64", deps) == deps
 
 
+def test_own_slot_is_not_a_dependency(repo):
+    repo.create_ebuild("dev-lang/rust-1", KEYWORDS=["amd64"], slot="1")
+    repo.create_ebuild("dev-lang/rust-2", KEYWORDS=["~amd64"], slot="2")
+    pkg = max(repo.itermatch(atom("=dev-lang/rust-2")))
+
+    graph = mk_graph(repo)
+    graph.targets = (pkg,)
+    graph.target_arches = {pkg: {"amd64"}}
+    graph._unsolvable_deps = lambda p, keywords, stable=True: iter(((p, {"amd64"}),))
+    graph.build_full_graph()
+
+    (node,) = graph.nodes
+    assert node.edges == set()
+
+
 class TestSettledVersions:
     def _mk_pkgs(self, repo, *keywords):
         for i, kws in enumerate(keywords, start=1):
