@@ -103,7 +103,13 @@ def _restrict_targets(repo, targets):
 def _restrict_modified_files(repo):
     ebuild_re = re.compile(r"^[ MTARC?]{2} (?P<path>[^/]+/[^/]+/[^/]+\.ebuild)$")
     p = git.run(
-        "status", "--porcelain=v1", "-z", "*.ebuild", cwd=repo.location, stdout=subprocess.PIPE
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--",
+        "*.ebuild",
+        cwd=repo.location,
+        stdout=subprocess.PIPE,
     )
 
     restrictions = []

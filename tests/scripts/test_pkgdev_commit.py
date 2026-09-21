@@ -240,6 +240,24 @@ class TestPkgdevCommit:
         assert not out
         assert err.strip() == "pkgdev commit: error: no staged changes exist"
 
+    def test_path_matching_ref_name(self, repo, make_git_repo):
+        """A path argument sharing its name with a ref is still a path."""
+        git_repo = make_git_repo(repo.location, commit=True)
+        # 'main' names both the branch and the file being committed
+        path = pjoin(git_repo.path, "main")
+        with open(path, "w") as f:
+            f.write("data\n")
+        git_repo.add_all("main", commit=False)
+
+        with (
+            patch("sys.argv", self.args + ["-m", "add main", "main"]),
+            pytest.raises(SystemExit) as excinfo,
+            chdir(git_repo.path),
+        ):
+            self.script()
+        assert excinfo.value.code == 0
+        assert git_repo.log(["--pretty=tformat:%s", "-1"]) == ["main: add main"]
+
     def test_git_message_opts(self, repo, make_git_repo, tmp_path):
         """Verify message-related options are passed through to `git commit`."""
         git_repo = make_git_repo(repo.location, commit=True)

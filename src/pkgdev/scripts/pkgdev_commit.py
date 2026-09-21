@@ -302,7 +302,7 @@ class HistoricalRepo(UnconfiguredTree):
 def _extract_historical(repo, path: str, keys: Iterable[str]):
     """Extract the packages as they are in HEAD into a directory."""
     old_files = subprocess.Popen(
-        ["git", "archive", "HEAD", *keys],
+        ["git", "archive", "--end-of-options", "HEAD", *keys],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         cwd=repo.location,
@@ -637,7 +637,7 @@ class GitChanges(UserDict):
         """Generate mapping for staged changes."""
         # stage changes as requested
         if self._options.git_add_arg:
-            git.run("add", self._options.git_add_arg, self._options.cwd)
+            git.run("add", self._options.git_add_arg, "--", self._options.cwd)
 
         # determine staged changes forcing rename search
         p = git.run(
@@ -647,7 +647,9 @@ class GitChanges(UserDict):
             "--name-status",
             "--cached",
             "-z",
+            "--end-of-options",
             "HEAD",
+            "--",
             *self._options.git_args_paths,
             stdout=subprocess.PIPE,
         )
@@ -922,6 +924,7 @@ def update_manifests(options, out, err, changes):
                 "--porcelain=v1",
                 "-u",
                 "-z",
+                "--",
                 "*.ebuild",
                 cwd=repo.location,
                 stdout=subprocess.PIPE,
@@ -972,7 +975,7 @@ def _commit(options, out, err):
 
     # stage modified files
     if options.git_add_files:
-        git.run("add", *options.git_add_files, cwd=repo.location)
+        git.run("add", "--", *options.git_add_files, cwd=repo.location)
 
     # scan staged changes for QA issues if requested
     if options.scan:
