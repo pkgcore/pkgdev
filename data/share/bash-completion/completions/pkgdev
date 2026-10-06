@@ -282,6 +282,7 @@ _pkgdev() {
         bugs)
             subcmd_options="
                 --api-key
+                --dry-run
                 --edit-graph
                 --auto-cc-arches
                 --find-by-maintainer

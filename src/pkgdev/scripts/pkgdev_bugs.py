@@ -1,6 +1,7 @@
 """Automatic bugs filer"""
 
 import contextlib
+import dataclasses
 import os
 import shlex
 import subprocess
@@ -11,7 +12,7 @@ import urllib.request as urllib
 from collections import defaultdict
 from datetime import UTC, datetime
 from functools import partial
-from itertools import chain
+from itertools import chain, count
 from os.path import join as pjoin
 from typing import Literal
 
@@ -159,6 +160,17 @@ bugs.add_argument(
     help="path file where to save the graph in dot format",
 )
 bugs.add_argument(
+    "--dry-run",
+    action="store_true",
+    help="print the bugs instead of filing them",
+    docs="""
+        Do everything up to filing, including searching for open bugs, but
+        print the bugs which would be filed and the updates to existing bugs,
+        instead of sending them to Bugzilla. Bugs not yet filed are numbered
+        ``new-1``, ``new-2``, ... in the output. No API key is required.
+    """,
+)
+bugs.add_argument(
     "--edit-graph",
     action="store_true",
     help="open editor to modify the graph before filing bugs",
@@ -302,6 +314,69 @@ def _naming(what: str):
         yield
     except BugzillaError as exc:
         raise BugzillaError(f"{what}: {exc}") from exc
+
+
+class DryRunBugzilla:
+    """Bugzilla client which searches as usual, but prints any change instead."""
+
+    def __init__(self, bugzilla: Bugzilla, out: Formatter):
+        self.bugzilla = bugzilla
+        self.out = out
+        self._new_ids = (f"new-{i}" for i in count(1))
+
+    def search(self, query: BugQuery):
+        return self.bugzilla.search(query)
+
+    def _field(self, name: str, value):
+        if value:
+            self.out.write(f"  {name + ':':<12}{value}")
+
+    def create(self, bug: NewBug) -> str:
+        bugno = next(self._new_ids)
+        out = self.out
+        out.write(out.fg("green"), f"Would file {bugno}: ", out.reset, bug.summary)
+        self._field("component", f"{bug.product} / {bug.component}")
+        self._field("assignee", bug.assigned_to)
+        self._field("CC", ", ".join(bug.cc))
+        self._field("keywords", ", ".join(bug.keywords))
+        self._field("depends on", ", ".join(sorted(map(str, bug.depends_on))))
+        self._field("blocks", ", ".join(sorted(map(str, bug.blocks))))
+        out.write("  packages:")
+        for line in str(bug.package_list).splitlines():
+            out.write(f"    {line}")
+        out.write("  description:")
+        for line in bug.description.splitlines():
+            out.write(f"    {line}".rstrip())
+        out.write()
+        out.flush()
+        return bugno
+
+    def update(self, bugs, update: BugUpdate):
+        ids = [bugs] if isinstance(bugs, int) else list(bugs)
+        out = self.out
+        out.write(
+            out.fg("yellow"),
+            "Would update bugs " if len(ids) > 1 else "Would update bug ",
+            out.reset,
+            ", ".join(map(str, ids)),
+        )
+        for field in dataclasses.fields(update):
+            value = getattr(update, field.name)
+            if isinstance(value, ListChange):
+                value = " ".join(
+                    chain(
+                        (f"+{x}" for x in value.add),
+                        (f"-{x}" for x in value.remove),
+                        (f"={x}" for x in value.replace or ()),
+                    )
+                )
+            elif isinstance(value, tuple):
+                value = ", ".join(map(str, value))
+            elif value is not None:
+                value = str(value)
+            self._field(field.name.replace("_", " "), value)
+        out.write()
+        out.flush()
 
 
 class GraphNode:
@@ -1184,8 +1259,9 @@ class DependencyGraph:
             )
             self.out.flush()
 
+        observer = None if isinstance(bugzilla, DryRunBugzilla) else observe
         for node in self.starting_nodes:
-            node.file_bug(bugzilla, auto_cc_arches, block_bugs, self.modified_repo, observe)
+            node.file_bug(bugzilla, auto_cc_arches, block_bugs, self.modified_repo, observer)
         self.obsolete_bugs(bugzilla)
 
     def obsolete_bugs(self, bugzilla: Bugzilla):
@@ -1210,7 +1286,9 @@ def _load_from_stdin(out: Formatter):
 
 @bugs.bind_main_func
 def main(options, out: Formatter, err: Formatter):
-    if options.api_key is None:
+    if options.dry_run:
+        options.bugzilla = DryRunBugzilla(options.bugzilla, out)
+    elif options.api_key is None:
         err.write(out.fg("red"), "No API key provided, exiting", out.reset)
         return 1
 
@@ -1286,11 +1364,14 @@ def main(options, out: Formatter, err: Formatter):
     pending = [node for node in d.nodes if node.bugno is None]
     if not pending:
         # no bugs to file, but obsoletions of matched bugs may still be pending
-        if (obsoletes := {bugno for node in d.nodes for bugno in node.obsoletes}) and userquery(
-            f"No bugs to file, still obsolete {len(obsoletes)} bugs?",
-            out,
-            err,
-            default_answer=False,
+        if (obsoletes := {bugno for node in d.nodes for bugno in node.obsoletes}) and (
+            options.dry_run
+            or userquery(
+                f"No bugs to file, still obsolete {len(obsoletes)} bugs?",
+                out,
+                err,
+                default_answer=False,
+            )
         ):
             d.obsolete_bugs(options.bugzilla)
             return 0
@@ -1302,7 +1383,9 @@ def main(options, out: Formatter, err: Formatter):
     }
     summary = ", ".join(f"{count} {suffix}" for suffix, count in counts.items() if count)
 
-    if not userquery(
+    if options.dry_run:
+        out.write(f"Dry run, would create {len(pending)} bugs ({summary}):\n")
+    elif not userquery(
         f"Continue and create {len(pending)} bugs ({summary})?", out, err, default_answer=False
     ):
         return 1

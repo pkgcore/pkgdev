@@ -14,6 +14,10 @@ pkgdev 0.2.19 (unreleased)
 - bugs: fix a package being filed as its own dependency, when an unsolvable
   ``|| ( ... )`` is answered by the package's own slot (Arthur Zamarin, #208)
 
+- bugs: add ``--dry-run``, printing the bugs which would be filed and the
+  updates to existing bugs instead of sending them. It needs no API key
+  (Arthur Zamarin)
+
 **pkgdev commit:**
 
 - commit: a path argument sharing its name with a ref, e.g. ``pkgdev commit

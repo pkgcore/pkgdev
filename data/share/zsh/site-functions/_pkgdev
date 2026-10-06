@@ -144,6 +144,7 @@ case $state in
           $base_options \
           '--api-key[Bugzilla API key]:api key' \
           '--dot[path file where to save the graph in dot format]:file:_files' \
+          '--dry-run[print the bugs instead of filing them]' \
           '--edit-graph[open editor to modify the graph before filing bugs]' \
           '--auto-cc-arches[automatically add CC-ARCHES for listed email addresses]:emails' \
           '--find-by-maintainer[collect all packages maintained by listed email addresses]:emails' \

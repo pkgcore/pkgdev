@@ -1218,3 +1218,46 @@ class TestMain:
         create = bugzilla_cassette.calls[-1].body
         assert create["summary"] == "cat/a-2: stablereq"
         assert create["cf_stabilisation_atoms"] == "=cat/a-2 *"
+
+    def test_dry_run_files_nothing(self, repo, bugs_options, bugzilla_cassette, monkeypatch):
+        self.mk_target(repo)
+        set_userquery(monkeypatch, yesno=True)
+        bugzilla_cassette.expect_bugs()
+        out = mk_out()
+        # no api key needed, searching is read only
+        bugs.main(bugs_options("--dry-run", "=cat/a-2"), out, out)
+
+        assert [call.method for call in bugzilla_cassette.calls] == ["GET"]
+        assert "Would file new-1: cat/a-2: stablereq" in out.lines
+        assert "  component:  Gentoo Linux / Stabilization" in out.lines
+        assert "    =cat/a-2 *" in out.lines
+
+
+def test_dry_run_prints_new_bugs_and_updates(repo, bugzilla_cassette):
+    mk_repo(repo)
+    pkgU = max(repo.itermatch(atom("=cat/u-0")))
+    pkgX = max(repo.itermatch(atom("=cat/x-0")))
+    pkgY = max(repo.itermatch(atom("=cat/y-0")))
+    node = bugs.GraphNode((), bugno=200)
+    dep = bugs.GraphNode(((pkgX, {"*"}), (pkgY, {"*"})))
+    dep.edges.add(bugs.GraphNode(((pkgU, {"*"}),)))
+    dep.obsoletes.add(100)
+    node.edges.add(dep)
+
+    out = mk_out()
+    dry_run = bugs.DryRunBugzilla(bugzilla_cassette.client(), out)
+    assert node.file_bug(dry_run, frozenset(), (), None) == 200
+    assert bugzilla_cassette.calls == []
+    assert dep.bugno == "new-2"
+
+    lines = out.lines
+    assert "Would file new-1: cat/u-0: stablereq" in lines
+    assert "Would file new-2: cat/x-0, cat/y-0: stablereq" in lines
+    assert "  assignee:   dev3@gentoo.org" in lines
+    assert "  CC:         dev1@gentoo.org" in lines
+    assert "  depends on: new-1" in lines
+    assert "Would update bug 100" in lines
+    assert "  resolution: OBSOLETE" in lines
+    assert "  see also:   +https://bugs.gentoo.org/new-2" in lines
+    assert "Would update bug 200" in lines
+    assert "  depends on: +new-2" in lines
