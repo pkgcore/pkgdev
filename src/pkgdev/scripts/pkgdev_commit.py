@@ -27,7 +27,7 @@ from pkgcore.restrictions import packages
 from snakeoil.cli import arghparse
 from snakeoil.cli.input import userquery
 from snakeoil.klass import jit_attr
-from snakeoil.mappings import OrderedFrozenSet, OrderedSet
+from snakeoil.mappings import OrderedSet
 
 from .. import cli, git
 from ..mangle import GentooMangler, Mangler
@@ -700,18 +700,18 @@ class GitChanges(UserDict):
 
     @jit_attr
     def all(self):
-        """Ordered set of all change objects."""
-        return OrderedFrozenSet(chain.from_iterable(self.data.values()))
+        """All change objects, in order, without duplicates."""
+        return tuple(dict.fromkeys(chain.from_iterable(self.data.values())))
 
     @jit_attr
     def pkg_changes(self):
-        """Ordered set of all package change objects."""
-        return OrderedFrozenSet(self.data.get(PkgChange, ()))
+        """All package change objects, in order, without duplicates."""
+        return tuple(dict.fromkeys(self.data.get(PkgChange, ())))
 
     @jit_attr
     def ebuild_changes(self):
-        """Ordered set of all ebuild change objects."""
-        return OrderedFrozenSet(x for x in self.pkg_changes if x.ebuild)
+        """All ebuild change objects, in order."""
+        return tuple(x for x in self.pkg_changes if x.ebuild)
 
     @jit_attr
     def prefix(self):
