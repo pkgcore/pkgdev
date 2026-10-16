@@ -5,7 +5,6 @@ from typing import NamedTuple
 from unittest.mock import patch
 
 import pytest
-from snakeoil.contexts import os_environ
 
 from pkgdev.scripts import run
 
@@ -41,7 +40,7 @@ class TestPkgdevShowkwParseArgs:
             "pkgdev showkw: error: unknown arch: 'unknown' (choices: amd64)"
         )
 
-    def test_no_color(self, tool, make_repo, tmp_path):
+    def test_no_color(self, tool, make_repo, tmp_path, monkeypatch):
         repo = make_repo(arches=["amd64"])
         repo.create_ebuild("foo/bar-0", keywords=("x86"))
 
@@ -60,14 +59,14 @@ class TestPkgdevShowkwParseArgs:
             )
             return options
 
-        with os_environ("NOCOLOR"):
-            assert parse().color is True
-        with os_environ(NOCOLOR="1"):
-            # NOCOLOR overrides config file
-            assert parse().color is False
-            # cmd line option overrides NOCOLOR
-            assert parse("--color", "n").color is False
-            assert parse("--color", "y").color is True
+        monkeypatch.delenv("NOCOLOR", raising=False)
+        assert parse().color is True
+        monkeypatch.setenv("NOCOLOR", "1")
+        # NOCOLOR overrides config file
+        assert parse().color is False
+        # cmd line option overrides NOCOLOR
+        assert parse("--color", "n").color is False
+        assert parse("--color", "y").color is True
 
 
 class TestPkgdevShowkw:

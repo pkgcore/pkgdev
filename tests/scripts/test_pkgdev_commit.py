@@ -11,7 +11,6 @@ from unittest.mock import patch
 
 import pytest
 from pkgcore.ebuild.atom import atom as atom_cls
-from snakeoil.contexts import os_environ
 
 from pkgdev.mangle import copyright_regex, keywords_regex
 from pkgdev.scripts import pkgdev_commit as commit
@@ -258,7 +257,7 @@ class TestPkgdevCommit:
         assert excinfo.value.code == 0
         assert git_repo.log(["--pretty=tformat:%s", "-1"]) == ["main: add main"]
 
-    def test_git_message_opts(self, repo, make_git_repo, tmp_path):
+    def test_git_message_opts(self, repo, make_git_repo, tmp_path, monkeypatch):
         """Verify message-related options are passed through to `git commit`."""
         git_repo = make_git_repo(repo.location, commit=True)
         repo.create_ebuild("cat/pkg-0")
@@ -279,8 +278,8 @@ class TestPkgdevCommit:
 
         repo.create_ebuild("cat/pkg-1")
         git_repo.add_all("cat/pkg-1", commit=False)
+        monkeypatch.setenv("GIT_EDITOR", "sed -i '1s/1/2/'")
         with (
-            os_environ(GIT_EDITOR="sed -i '1s/1/2/'"),
             patch("sys.argv", self.args + ["-u", "-t", path]),
             pytest.raises(SystemExit) as excinfo,
             chdir(git_repo.path),
@@ -404,15 +403,15 @@ class TestPkgdevCommit:
         commit_msg = git_repo.log(["-1", "--pretty=tformat:%B", "HEAD"])
         assert commit_msg == ["prefix: msg"]
 
-    def test_edited_commit_message(self, capsys, repo, make_git_repo):
+    def test_edited_commit_message(self, capsys, repo, make_git_repo, monkeypatch):
         git_repo = make_git_repo(repo.location)
         ebuild_path = repo.create_ebuild("cat/pkg-0")
         git_repo.add_all("cat/pkg-0")
         with open(ebuild_path, "a+") as f:
             f.write("# comment\n")
 
+        monkeypatch.setenv("GIT_EDITOR", "sed -i '1s/$/commit/'")
         with (
-            os_environ(GIT_EDITOR="sed -i '1s/$/commit/'"),
             patch("sys.argv", self.args + ["-u"]),
             pytest.raises(SystemExit) as excinfo,
             chdir(git_repo.path),
@@ -511,13 +510,14 @@ class TestPkgdevCommit:
         assert commit() == "msg"
 
     def _auto_commit(self, capsys, git_repo):
-        with (
-            os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
-            patch("sys.argv", self.args + ["-a"]),
-            pytest.raises(SystemExit) as excinfo,
-            chdir(git_repo.path),
-        ):
-            self.script()
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setenv("GIT_EDITOR", "sed -i '1s/$/summary/'")
+            with (
+                patch("sys.argv", self.args + ["-a"]),
+                pytest.raises(SystemExit) as excinfo,
+                chdir(git_repo.path),
+            ):
+                self.script()
         assert excinfo.value.code == 0
         out, err = capsys.readouterr()
         assert err == out == ""
@@ -949,13 +949,14 @@ class TestPkgdevCommit:
         git_repo.add_all("cat/pkg-0")
 
         def commit(args):
-            with (
-                os_environ(GIT_EDITOR="sed -i '1s/$/summary/'"),
-                patch("sys.argv", self.args + args),
-                pytest.raises(SystemExit) as excinfo,
-                chdir(git_repo.path),
-            ):
-                self.script()
+            with pytest.MonkeyPatch.context() as mp:
+                mp.setenv("GIT_EDITOR", "sed -i '1s/$/summary/'")
+                with (
+                    patch("sys.argv", self.args + args),
+                    pytest.raises(SystemExit) as excinfo,
+                    chdir(git_repo.path),
+                ):
+                    self.script()
             assert excinfo.value.code == 0
             out, err = capsys.readouterr()
             assert err == out == ""

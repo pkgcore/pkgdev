@@ -10,7 +10,6 @@ from unittest.mock import patch
 
 import pytest
 from pkgcore.ebuild.atom import atom as atom_cls
-from snakeoil.contexts import os_environ
 
 from pkgdev.scripts import run
 
@@ -122,9 +121,10 @@ class TestPkgdevMask:
     def test_empty_repo(self):
         assert self.profile.masks == frozenset()
 
-    def test_nonexistent_editor(self, capsys):
+    def test_nonexistent_editor(self, capsys, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "12345")
         with (
-            os_environ("VISUAL", EDITOR="12345"),
             patch("sys.argv", self.args + ["cat/pkg"]),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path)),
@@ -133,9 +133,10 @@ class TestPkgdevMask:
         _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: nonexistent editor: '12345'"
 
-    def test_nonexistent_visual(self, capsys):
+    def test_nonexistent_visual(self, capsys, monkeypatch):
+        monkeypatch.delenv("EDITOR", raising=False)
+        monkeypatch.setenv("VISUAL", "12345")
         with (
-            os_environ("EDITOR", VISUAL="12345"),
             patch("sys.argv", self.args + ["cat/pkg"]),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path)),
@@ -144,9 +145,10 @@ class TestPkgdevMask:
         _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: nonexistent editor: '12345'"
 
-    def test_failed_editor(self, capsys):
+    def test_failed_editor(self, capsys, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i 's///'")
         with (
-            os_environ("VISUAL", EDITOR="sed -i 's///'"),
             patch("sys.argv", self.args + ["cat/pkg"]),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path)),
@@ -155,9 +157,10 @@ class TestPkgdevMask:
         _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: failed writing mask comment"
 
-    def test_empty_mask_comment(self, capsys):
+    def test_empty_mask_comment(self, capsys, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i 's/#/#/'")
         with (
-            os_environ("VISUAL", EDITOR="sed -i 's/#/#/'"),
             patch("sys.argv", self.args + ["cat/pkg"]),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path)),
@@ -166,9 +169,10 @@ class TestPkgdevMask:
         _out, err = capsys.readouterr()
         assert err.strip() == "pkgdev mask: error: empty mask comment"
 
-    def test_mask_cwd(self):
+    def test_mask_cwd(self, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
         with (
-            os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'"),
             patch("sys.argv", self.args),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path, "cat/pkg")),
@@ -176,9 +180,10 @@ class TestPkgdevMask:
             self.script()
         assert self.profile.masks == frozenset([atom_cls("cat/pkg")])
 
-    def test_mask_target(self):
+    def test_mask_target(self, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
         with (
-            os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'"),
             patch("sys.argv", self.args + ["cat/pkg"]),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path)),
@@ -186,9 +191,10 @@ class TestPkgdevMask:
             self.script()
         assert self.profile.masks == frozenset([atom_cls("cat/pkg")])
 
-    def test_mask_ebuild_path(self):
+    def test_mask_ebuild_path(self, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
         with (
-            os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'"),
             patch("sys.argv", self.args + ["cat/pkg/pkg-0.ebuild"]),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path)),
@@ -196,7 +202,7 @@ class TestPkgdevMask:
             self.script()
         assert self.profile.masks == frozenset([atom_cls("=cat/pkg-0")])
 
-    def test_existing_masks(self):
+    def test_existing_masks(self, monkeypatch):
         self.masks_path.write_text(
             textwrap.dedent(
                 """\
@@ -207,8 +213,9 @@ class TestPkgdevMask:
             )
         )
 
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
         with (
-            os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'"),
             patch("sys.argv", self.args + ["=cat/pkg-0"]),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path)),
@@ -216,7 +223,7 @@ class TestPkgdevMask:
             self.script()
         assert self.profile.masks == frozenset([atom_cls("cat/masked"), atom_cls("=cat/pkg-0")])
 
-    def test_invalid_header(self, capsys):
+    def test_invalid_header(self, capsys, monkeypatch):
         self.masks_path.write_text(
             textwrap.dedent(
                 """\
@@ -235,8 +242,9 @@ class TestPkgdevMask:
             )
         )
 
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
         with (
-            os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'"),
             patch("sys.argv", self.args + ["=cat/pkg-0"]),
             pytest.raises(SystemExit),
             chdir(pjoin(self.repo.path)),
@@ -245,7 +253,9 @@ class TestPkgdevMask:
         _, err = capsys.readouterr()
         assert "invalid mask entry header, lineno 9" in err
 
-    def test_invalid_author(self, capsys):
+    def test_invalid_author(self, capsys, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
         for line in (
             "# Random Dev <random.dev@email.com>",
             "# Random Dev <random.dev@email.com) (2021-03-24)",
@@ -268,7 +278,6 @@ class TestPkgdevMask:
             )
 
             with (
-                os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'"),
                 patch("sys.argv", self.args + ["=cat/pkg-0"]),
                 pytest.raises(SystemExit),
                 chdir(pjoin(self.repo.path)),
@@ -277,11 +286,12 @@ class TestPkgdevMask:
             _, err = capsys.readouterr()
             assert "pkgdev mask: error: invalid author, lineno 5" in err
 
-    def test_last_rites(self):
+    def test_last_rites(self, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
         for rflag in ("-r", "--rites"):
             for args in ([rflag], [rflag, "14"]):
                 with (
-                    os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'"),
                     patch("sys.argv", self.args + ["cat/pkg"] + args),
                     pytest.raises(SystemExit),
                     chdir(pjoin(self.repo.path)),
@@ -303,13 +313,13 @@ class TestPkgdevMask:
                 self.masks_path.write_text("")  # Reset the contents of package.mask
 
     @pytest.mark.skipif(sys.platform == "darwin", reason="no xdg-email on mac os")
-    def test_last_rites_with_email(self, tmp_path):
+    def test_last_rites_with_email(self, tmp_path, monkeypatch):
         output_file = tmp_path / "mail.txt"
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
+        monkeypatch.setenv("MAILER", f"> {output_file} echo")
         for rflag in ("-r", "--rites"):
             with (
-                os_environ(
-                    "VISUAL", EDITOR="sed -i '1s/$/mask comment/'", MAILER=f"> {output_file} echo"
-                ),
                 patch("sys.argv", self.args + ["cat/pkg", rflag, "--email"]),
                 pytest.raises(SystemExit),
                 chdir(pjoin(self.repo.path)),
@@ -321,10 +331,12 @@ class TestPkgdevMask:
             self.masks_path.write_text("")  # Reset the contents of package.mask
 
     @pytest.mark.skipif(sys.platform == "darwin", reason="no xdg-email on mac os")
-    def test_last_email_bad_mailer(self, capsys):
+    def test_last_email_bad_mailer(self, capsys, monkeypatch):
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
+        monkeypatch.setenv("MAILER", "false")
         for rflag in ("-r", "--rites"):
             with (
-                os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'", MAILER="false"),
                 patch("sys.argv", self.args + ["cat/pkg", rflag, "--email"]),
                 pytest.raises(SystemExit),
                 chdir(pjoin(self.repo.path)),
@@ -333,8 +345,10 @@ class TestPkgdevMask:
             _, err = capsys.readouterr()
             assert err.strip() == "pkgdev mask: error: failed opening email composer"
 
-    def test_mask_bugs(self):
+    def test_mask_bugs(self, monkeypatch):
         today = self.today.strftime("%Y-%m-%d")
+        monkeypatch.delenv("VISUAL", raising=False)
+        monkeypatch.setenv("EDITOR", "sed -i '1s/$/mask comment/'")
         for bflag in ("-b", "--bug"):
             for bug_nums, expected in [
                 (["42"], "Bug #42."),
@@ -345,7 +359,6 @@ class TestPkgdevMask:
                 for bug_num in bug_nums:
                     args += [bflag, bug_num]
                 with (
-                    os_environ("VISUAL", EDITOR="sed -i '1s/$/mask comment/'"),
                     patch("sys.argv", self.args + ["cat/pkg"] + args),
                     pytest.raises(SystemExit),
                     chdir(pjoin(self.repo.path)),
