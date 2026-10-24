@@ -2,7 +2,7 @@
 Release Notes
 =============
 
-pkgdev 0.2.19 (unreleased)
+pkgdev 0.2.19 (2026-10-24)
 --------------------------
 
 **pkgdev bugs:**
